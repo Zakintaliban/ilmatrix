@@ -9,8 +9,6 @@ import { extractPptxText } from "./extract/pptx.js";
 import {
   generateAnswer,
   generateChat,
-  generateQuizTrainerQuestions,
-  scoreQuizTrainer,
   generateQuizTrainerMCQ,
   scoreQuizTrainerMCQ,
   generateFlashcards,
@@ -51,6 +49,17 @@ api.post("/upload", async (c) => {
       else pushIfFile(v);
     }
 
+    // Parse flags/ids for append/merge
+    const scalar = (x: any) => (Array.isArray(x) ? x[0] : x);
+    const appendRaw = scalar((body as any).append);
+    const mergeToRaw =
+      scalar((body as any).mergeTo) ?? scalar((body as any).materialId);
+    const doAppend =
+      typeof appendRaw === "string"
+        ? /^(true|1|yes|on)$/i.test(appendRaw)
+        : !!appendRaw;
+    const targetId = doAppend ? String(mergeToRaw || "") : "";
+
     if (!files.length) {
       return c.json(
         {
@@ -61,19 +70,19 @@ api.post("/upload", async (c) => {
       );
     }
 
-    // Total upload size limit: 10 MB
+    // Total upload size limit: 10 MB (applies to batch; when appending we also check aggregate)
     const LIMIT = 10 * 1024 * 1024;
-    let totalBytes = 0;
+
+    let batchBytes = 0;
     for (const f of files) {
-      if (typeof (f as any).size === "number") totalBytes += (f as any).size;
-      if (totalBytes > LIMIT) {
+      if (typeof (f as any).size === "number") batchBytes += (f as any).size;
+      if (batchBytes > LIMIT) {
         return c.json({ error: "Total upload size exceeded 10 MB" }, 413);
       }
     }
 
-    const id = randomUUID();
+    // Extract text from each file in the batch
     let combined = "";
-
     for (const f of files) {
       const name: string = (f as any).name ?? "file";
       const type: string = (f as any).type ?? "";
@@ -108,8 +117,8 @@ api.post("/upload", async (c) => {
         const ab = await f.arrayBuffer();
         text = await extractPptxText(Buffer.from(ab));
       } else if (type.includes("text") || name.toLowerCase().endsWith(".txt")) {
-        if (typeof f.text === "function") {
-          text = await f.text();
+        if (typeof (f as any).text === "function") {
+          text = await (f as any).text();
         } else {
           const ab = await f.arrayBuffer();
           text = Buffer.from(ab).toString("utf8");
@@ -127,11 +136,59 @@ api.post("/upload", async (c) => {
     }
 
     combined = combined.trim();
-    await fs.writeFile(join(uploadsDir, `${id}.txt`), combined, "utf8");
+    const sizeAdded = Buffer.byteLength(combined, "utf8");
+
+    let materialId = "";
+    let finalText = "";
+
+    if (doAppend) {
+      if (!targetId) {
+        return c.json(
+          {
+            error:
+              "append=true requires 'mergeTo' or 'materialId' to be provided",
+          },
+          400
+        );
+      }
+      const path = join(uploadsDir, `${targetId}.txt`);
+      let existing = "";
+      try {
+        existing = await fs.readFile(path, "utf8");
+      } catch (e: any) {
+        if (e?.code === "ENOENT") {
+          return c.json(
+            { error: `materialId '${targetId}' not found for append` },
+            404
+          );
+        }
+        throw e;
+      }
+      const existingBytes = Buffer.byteLength(existing, "utf8");
+      if (existingBytes + sizeAdded > LIMIT) {
+        return c.json(
+          { error: "Total material size would exceed 10 MB", limit: "10MB" },
+          413
+        );
+      }
+      const stamp = new Date().toISOString();
+      finalText = `${existing}\n\n===== APPEND BATCH ${stamp} =====\n${combined}`;
+      await fs.writeFile(path, finalText, "utf8");
+      materialId = targetId;
+    } else {
+      materialId = randomUUID();
+      const path = join(uploadsDir, `${materialId}.txt`);
+      finalText = combined;
+      await fs.writeFile(path, finalText, "utf8");
+    }
+
+    const totalSize = Buffer.byteLength(finalText, "utf8");
     return c.json({
-      materialId: id,
-      size: combined.length,
+      materialId,
+      appended: !!doAppend,
       files: files.length,
+      size: totalSize,
+      sizeAdded,
       limit: "10MB",
     });
   } catch (err: any) {
@@ -225,52 +282,8 @@ api.post("/chat", async (c) => {
 });
 
 // Quiz Trainer: generate questions (no answers)
-api.post("/quiz/trainer/start", async (c) => {
-  try {
-    const { materialId, materialText, numQuestions } = await c.req.json();
-    const text =
-      materialId || materialText
-        ? await readMaterial(materialId, materialText)
-        : "";
-    const result = await generateQuizTrainerQuestions({
-      materialText: text,
-      numQuestions: Number(numQuestions || 5),
-    });
-    return c.json(result);
-  } catch (err: any) {
-    console.error(err);
-    return c.json({ error: "Trainer start failed", detail: err?.message }, 500);
-  }
-});
 
 // Quiz Trainer: submit answers for scoring + weakness analysis
-api.post("/quiz/trainer/score", async (c) => {
-  try {
-    const {
-      materialId,
-      materialText,
-      questions,
-      answers,
-      questionsText,
-      answersText,
-    } = await c.req.json();
-    const text =
-      materialId || materialText
-        ? await readMaterial(materialId, materialText)
-        : "";
-    const analysis = await scoreQuizTrainer({
-      materialText: text,
-      questions: Array.isArray(questions) ? questions : [],
-      answers: Array.isArray(answers) ? answers : [],
-      questionsText,
-      answersText,
-    });
-    return c.json({ analysis });
-  } catch (err: any) {
-    console.error(err);
-    return c.json({ error: "Trainer score failed", detail: err?.message }, 500);
-  }
-});
 
 // Peer feature removed
 
@@ -341,5 +354,12 @@ api.post("/flashcards", async (c) => {
     );
   }
 });
+
+api.get("/health", (c) =>
+  c.json({
+    ok: true,
+    uptime: Math.round(process.uptime()),
+  })
+);
 
 export default api;

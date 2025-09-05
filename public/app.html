@@ -227,9 +227,27 @@
               type="file"
               id="file"
               aria-label="Material file"
+              multiple
               accept=".pdf,.txt,.png,.jpg,.jpeg,.docx,.pptx,image/*,application/pdf,text/plain,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.presentationml.presentation"
             />
           </div>
+          <div class="mt-2 flex items-center gap-2">
+            <input
+              id="appendToggle"
+              type="checkbox"
+              class="h-4 w-4 rounded border-gray-300"
+              disabled
+              aria-describedby="appendHelp"
+            />
+            <label for="appendToggle" class="text-sm text-gray-700">
+              Append to current material
+            </label>
+            <span id="currentMaterial" class="text-xs text-gray-500"></span>
+          </div>
+          <p id="appendHelp" class="mt-1 text-xs text-gray-500">
+            You can select multiple files. After first upload, toggle to append
+            to the same materialId. Total limit 10 MB.
+          </p>
           <div class="mt-4 flex gap-3 items-center">
             <button
               id="btnUpload"
@@ -562,25 +580,41 @@
 
       // Upload
       $("btnUpload").onclick = async () => {
-        const f = $("file").files[0];
-        if (!f) {
-          alert("Choose a file first");
+        const list = $("file").files;
+        if (!list || list.length === 0) {
+          alert("Choose at least one file");
           return;
         }
         const fd = new FormData();
-        fd.append("file", f);
-        $("uploadInfo").textContent = "Uploading...";
+        for (const f of list) fd.append("file", f);
+
+        const appendEl = $("appendToggle");
+        const doAppend = !!materialId && appendEl && appendEl.checked;
+        if (doAppend) {
+          fd.append("append", "true");
+          fd.append("mergeTo", materialId);
+        }
+
+        const count = list.length;
+        $(
+          "uploadInfo"
+        ).textContent = `Uploading ${count} file(s)... append=${doAppend}`;
         try {
           const res = await fetch("/api/upload", { method: "POST", body: fd });
           const data = await res.json();
           if (data.materialId) {
             materialId = data.materialId;
-            $("uploadInfo").textContent =
-              "Uploaded. materialId=" +
-              materialId +
-              " (chars: " +
-              data.size +
-              ")";
+            // enable append toggle and show current id
+            const el = $("appendToggle");
+            const cur = $("currentMaterial");
+            if (el) el.disabled = false;
+            if (cur) cur.textContent = `(current: ${materialId})`;
+
+            $("uploadInfo").textContent = `Uploaded ${
+              data.files
+            } file(s). materialId=${materialId} size=${data.size} ${
+              data.sizeAdded ? "(+" + data.sizeAdded + ")" : ""
+            } limit=${data.limit} appended=${!!data.appended}`;
           } else {
             $("uploadInfo").textContent =
               "Upload error: " + JSON.stringify(data);
