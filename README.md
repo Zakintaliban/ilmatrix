@@ -60,12 +60,13 @@ Server (default): http://localhost:8787
 
 Base: /api
 
-- GET /api/health → { "ok": true, "model": "...", "time": ... }
+- GET /api/health → { "ok": true, "uptime": number }
 
 - POST /api/upload (multipart/form-data)
 
-  - Field "file": PDF/TXT/PNG/JPG/DOCX/PPTX
-  - Response: { "materialId": "uuid", "size": number }
+  - Field "file": may appear multiple times to upload multiple files in one batch (PDF/TXT/PNG/JPG/DOCX/PPTX)
+  - Optional when appending to an existing material: append=true, mergeTo=<materialId> (or materialId=<id>)
+  - Response: { "materialId": "uuid", "appended": boolean, "files": number, "size": number, "sizeAdded": number, "limit": "10MB" }
 
 - POST /api/explain (application/json)
 
@@ -104,8 +105,11 @@ Base: /api
 ## cURL examples
 
 ```bash
-# Upload a file
-curl -F "file=@notes.pdf" http://localhost:8787/api/upload
+# Upload multiple files (new material)
+curl -F "file=@notes.pdf" -F "file=@slides.pptx" http://localhost:8787/api/upload
+
+# Append to existing material
+curl -F "append=true" -F "mergeTo=UUID" -F "file=@more.docx" http://localhost:8787/api/upload
 
 # Explain with uploaded material
 curl -H "Content-Type: application/json" \
@@ -136,7 +140,7 @@ curl -H "Content-Type: application/json" \
 ## Frontend usage
 
 - Open http://localhost:8787/app.html
-- Step 1: Upload a PDF/TXT/Image/DOCX/PPTX (get materialId)
+- Step 1: Upload one or more files. After first upload, the "Append to current material" toggle becomes available to merge more files into the same materialId (total cap 10 MB).
 - Step 2: Use tabs:
   - Explain: prompt and run
   - Quiz (MCQ): generate; answer with “1 a”, “2 b”, …; submit & grade

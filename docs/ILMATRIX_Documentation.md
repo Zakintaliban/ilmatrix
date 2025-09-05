@@ -64,7 +64,7 @@ UI color scheme:
   - Only for wrong ones: shows per-question Explanation, Weakness analysis (bullets), and Study plan (bullets)
   - Ends with “Jawaban” listing the correct letters
 
-  3.3 Flashcards
+    3.3 Flashcards
 
 - Set number of cards; click Generate Flashcards
 - Cards appear as flip cards; click or press Enter/Space to flip front/back
@@ -200,14 +200,15 @@ sequenceDiagram
 
 Base: /api
 
-- POST /api/health
+- GET /api/health
 
-  - Response: { ok: true, model: "...", time: ... }
+  - Response: { ok: true, uptime: number }
 
 - POST /api/upload
 
-  - Form-data: file (PDF/TXT/PNG/JPG/DOCX/PPTX)
-  - Response: { materialId: string, size: number }
+  - Form-data: file may appear multiple times for batch upload (PDF/TXT/PNG/JPG/DOCX/PPTX)
+  - To append to an existing material: append=true, mergeTo=<materialId> (or materialId=<id>)
+  - Response: { materialId: string, appended: boolean, files: number, size: number, sizeAdded: number, limit: "10MB" }
 
 - POST /api/explain
 
@@ -324,7 +325,7 @@ Performance tips:
 
 - UploadResponse
 
-  - { materialId: string, size: number }
+  - { materialId: string, appended: boolean, files: number, size: number, sizeAdded: number, limit: "10MB" }
 
 - ChatMessage
 
@@ -346,14 +347,21 @@ Performance tips:
 14.1 Upload (curl)
 
 ```
+# New material, multiple files
 curl -X POST http://localhost:8787/api/upload \
-  -F "file=@/path/to/file.pdf"
+  -F "file=@/path/to/file.pdf" \
+  -F "file=@/path/to/slides.pptx"
+
+# Append to an existing material
+curl -X POST http://localhost:8787/api/upload \
+  -F "append=true" -F "mergeTo=a1b2c3d4" \
+  -F "file=@/path/to/more.docx"
 ```
 
 Response:
 
 ```
-{ "materialId": "a1b2c3d4", "size": 42037 }
+{ "materialId": "a1b2c3d4", "appended": true, "files": 1, "size": 123456, "sizeAdded": 7890, "limit": "10MB" }
 ```
 
 14.2 Explain
