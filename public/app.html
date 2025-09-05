@@ -1,0 +1,896 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <link rel="icon" type="image/svg+xml" href="./logo.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>ILMATRIX — App</title>
+
+    <!-- Tailwind CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            colors: {
+              primary: "#0f0e85",
+              secondary: "#e44c99",
+              tertiary: "#1b612f",
+            },
+          },
+        },
+      };
+    </script>
+    <style>
+      html {
+        scroll-behavior: smooth;
+      }
+      /* Flashcard flip styles */
+      .fc-scene {
+        perspective: 1000px;
+      }
+      .fc-card {
+        position: relative;
+        width: 100%;
+        height: 11rem; /* ~h-44 */
+        transform-style: preserve-3d;
+        transition: transform 0.6s;
+        cursor: pointer;
+        -webkit-user-select: none;
+        user-select: none;
+      }
+      @media (min-width: 640px) {
+        .fc-card {
+          height: 12rem;
+        } /* sm:h-48 */
+      }
+      .fc-card.is-flipped {
+        transform: rotateY(180deg);
+      }
+      .fc-face {
+        position: absolute;
+        inset: 0;
+        backface-visibility: hidden;
+        -webkit-backface-visibility: hidden;
+        border-radius: 0.75rem; /* rounded-xl */
+        border: 1px solid rgb(229 231 235); /* ring-gray-200 */
+        background: white;
+        padding: 0.75rem; /* p-3 */
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+      }
+      .fc-front {
+        color: rgb(17 24 39); /* gray-900 */
+        font-weight: 600;
+      }
+      .fc-back {
+        transform: rotateY(180deg);
+        color: rgb(31 41 55); /* gray-800 */
+      }
+      .fc-hint {
+        position: absolute;
+        bottom: 0.5rem;
+        left: 0.5rem;
+        right: 0.5rem;
+        font-size: 0.75rem;
+        color: rgb(107 114 128); /* gray-500 */
+        opacity: 0.85;
+      }
+    </style>
+  </head>
+  <body class="bg-gray-50 text-gray-900">
+    <!-- Header -->
+    <header class="bg-primary text-white">
+      <div
+        class="container mx-auto max-w-6xl px-4 py-4 flex items-center justify-between"
+      >
+        <a href="/" class="text-xl sm:text-2xl font-bold tracking-tight"
+          >ILMATRIX</a
+        >
+        <div class="flex items-center gap-2">
+          <nav class="hidden sm:flex items-center gap-2">
+            <a
+              href="/app.html"
+              class="text-xs sm:text-sm px-3 py-2 rounded-md hover:bg-indigo-900"
+              >App</a
+            >
+            <a
+              href="/about.html"
+              class="text-xs sm:text-sm px-3 py-2 rounded-md hover:bg-indigo-900"
+              >About</a
+            >
+          </nav>
+          <button
+            id="btnHealth"
+            class="text-xs sm:text-sm bg-secondary hover:bg-pink-500 transition text-white px-3 py-2 rounded-md"
+          >
+            Check API
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <!-- Nav -->
+    <nav class="bg-white border-b border-gray-200 sticky top-0 z-10">
+      <div class="container mx-auto max-w-6xl px-4 overflow-x-auto">
+        <ul class="flex gap-2 sm:gap-3 py-2 text-sm">
+          <li>
+            <button
+              data-tab="chat"
+              class="tab-btn px-3 py-2 rounded-md bg-primary text-white hover:bg-indigo-900"
+            >
+              Chat
+            </button>
+          </li>
+          <li>
+            <button
+              data-tab="upload"
+              class="tab-btn px-3 py-2 rounded-md bg-secondary text-white hover:bg-pink-500"
+            >
+              Upload
+            </button>
+          </li>
+          <li>
+            <button
+              data-tab="explain"
+              class="tab-btn px-3 py-2 rounded-md bg-tertiary text-white hover:bg-green-700"
+            >
+              Explain
+            </button>
+          </li>
+          <li>
+            <button
+              data-tab="quiz"
+              class="tab-btn px-3 py-2 rounded-md bg-tertiary text-white hover:bg-green-700"
+            >
+              Quiz
+            </button>
+          </li>
+          <li>
+            <button
+              data-tab="forum"
+              class="tab-btn px-3 py-2 rounded-md bg-tertiary text-white hover:bg-green-700"
+            >
+              Forum
+            </button>
+          </li>
+          <li>
+            <button
+              data-tab="exam"
+              class="tab-btn px-3 py-2 rounded-md bg-tertiary text-white hover:bg-green-700"
+            >
+              Exam
+            </button>
+          </li>
+          <li>
+            <button
+              data-tab="flashcards"
+              class="tab-btn px-3 py-2 rounded-md bg-tertiary text-white hover:bg-green-700"
+            >
+              Flashcards
+            </button>
+          </li>
+        </ul>
+      </div>
+    </nav>
+
+    <!-- Main -->
+    <main class="container mx-auto max-w-6xl px-4 py-6 space-y-6">
+      <!-- Chat (General) -->
+      <section
+        id="sec-chat"
+        class="card bg-white rounded-xl shadow-sm ring-1 ring-gray-200"
+      >
+        <div class="p-5 sm:p-6">
+          <h2 class="text-lg sm:text-xl font-semibold text-primary mb-4">
+            Chat (General)
+          </h2>
+          <div
+            id="chat"
+            class="w-full rounded-md border border-gray-200 bg-gray-50 p-3 sm:p-4 min-h-[120px] max-h-[300px] overflow-auto text-sm"
+          ></div>
+          <div class="mt-3 flex gap-2">
+            <input
+              id="chatInput"
+              type="text"
+              placeholder="Tulis pesan..."
+              aria-label="Chat input"
+              class="flex-1 rounded-md border border-gray-300 bg-white px-3 py-2 text-sm"
+            />
+            <button
+              id="btnSend"
+              class="inline-flex items-center justify-center px-4 py-2 rounded-md bg-primary text-white font-medium hover:bg-indigo-900 transition"
+            >
+              Send
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <!-- Upload -->
+      <section
+        id="sec-upload"
+        class="card bg-white rounded-xl shadow-sm ring-1 ring-gray-200"
+      >
+        <div class="p-5 sm:p-6">
+          <h2 class="text-lg sm:text-xl font-semibold text-primary mb-4">
+            Upload Material (PDF / TXT / PNG / JPG / DOCX / PPTX)
+          </h2>
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-3 items-center">
+            <label for="file" class="text-sm font-medium text-gray-700"
+              >Material file</label
+            >
+            <input
+              class="md:col-span-2 block w-full text-sm text-gray-900 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-secondary file:text-white hover:file:bg-pink-500 bg-white border border-gray-300 rounded-md"
+              type="file"
+              id="file"
+              aria-label="Material file"
+              accept=".pdf,.txt,.png,.jpg,.jpeg,.docx,.pptx,image/*,application/pdf,text/plain,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.presentationml.presentation"
+            />
+          </div>
+          <div class="mt-4 flex gap-3 items-center">
+            <button
+              id="btnUpload"
+              class="inline-flex items-center justify-center px-4 py-2 rounded-md bg-tertiary text-white font-medium hover:bg-green-700 transition"
+            >
+              Upload
+            </button>
+            <span id="uploadInfo" class="text-sm text-gray-600"></span>
+          </div>
+        </div>
+      </section>
+
+      <!-- Explain -->
+      <section
+        id="sec-explain"
+        class="card hidden bg-white rounded-xl shadow-sm ring-1 ring-gray-200"
+      >
+        <div class="p-5 sm:p-6">
+          <h2 class="text-lg sm:text-xl font-semibold text-primary mb-4">
+            Explain Material
+          </h2>
+          <label
+            for="promptExplain"
+            class="block text-sm font-medium text-gray-700 mb-1"
+            >Prompt / Notes</label
+          >
+          <textarea
+            id="promptExplain"
+            rows="4"
+            class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+            placeholder="Jelaskan bab 2..."
+          ></textarea>
+          <div class="mt-3">
+            <button
+              id="btnExplain"
+              class="px-4 py-2 rounded-md bg-secondary text-white hover:bg-pink-500"
+            >
+              Run Explain
+            </button>
+          </div>
+          <div
+            id="explainResult"
+            class="mt-4 text-sm bg-gray-50 border border-gray-200 rounded-md p-3 whitespace-pre-wrap"
+          ></div>
+        </div>
+      </section>
+
+      <!-- Quiz (Merged: generate + answer + grade) -->
+      <section
+        id="sec-quiz"
+        class="card hidden bg-white rounded-xl shadow-sm ring-1 ring-gray-200"
+      >
+        <div class="p-5 sm:p-6 space-y-4">
+          <h2 class="text-lg sm:text-xl font-semibold text-primary mb-2">
+            Quiz (MCQ) — Generate • Answer • Grade
+          </h2>
+
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div class="flex flex-col">
+              <label
+                for="numQuestions"
+                class="block text-sm font-medium text-gray-700 mb-1"
+                >Number of questions</label
+              >
+              <input
+                id="numQuestions"
+                type="number"
+                min="1"
+                max="20"
+                value="5"
+                class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+                placeholder="5"
+                aria-label="Number of generated quiz questions"
+              />
+            </div>
+            <div class="flex items-end">
+              <button
+                id="btnGenerateQuizMCQ"
+                class="px-4 py-2 rounded-md bg-secondary text-white hover:bg-pink-500"
+              >
+                Generate MCQ
+              </button>
+            </div>
+          </div>
+
+          <div id="quizMCQ" class="space-y-4"></div>
+
+          <div class="space-y-2">
+            <label
+              for="quizAnswers"
+              class="block text-sm font-medium text-gray-700"
+              >Your Answers (format per line: 1 a, 2 b, ...)</label
+            >
+            <textarea
+              id="quizAnswers"
+              rows="4"
+              class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+              placeholder="1 a&#10;2 b&#10;3 c&#10;4 d&#10;5 e"
+            ></textarea>
+            <div>
+              <button
+                id="btnSubmitQuizMCQ"
+                class="px-4 py-2 rounded-md bg-tertiary text-white hover:bg-green-700"
+              >
+                Submit & Grade
+              </button>
+            </div>
+          </div>
+
+          <div
+            id="quizResult"
+            class="text-sm bg-gray-50 border border-gray-200 rounded-md p-3 whitespace-pre-wrap"
+          ></div>
+        </div>
+      </section>
+
+      <!-- Forum -->
+      <section
+        id="sec-forum"
+        class="card hidden bg-white rounded-xl shadow-sm ring-1 ring-gray-200"
+      >
+        <div class="p-5 sm:p-6">
+          <h2 class="text-lg sm:text-xl font-semibold text-primary mb-4">
+            Forum Reply
+          </h2>
+          <label
+            for="promptForum"
+            class="block text-sm font-medium text-gray-700 mb-1"
+            >Prompt</label
+          >
+          <textarea
+            id="promptForum"
+            rows="4"
+            class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+            placeholder="Pertanyaan/Topik forum..."
+          ></textarea>
+          <div class="mt-3">
+            <button
+              id="btnForum"
+              class="px-4 py-2 rounded-md bg-secondary text-white hover:bg-pink-500"
+            >
+              Draft Reply
+            </button>
+          </div>
+          <div
+            id="forumResult"
+            class="mt-4 text-sm bg-gray-50 border border-gray-200 rounded-md p-3 whitespace-pre-wrap"
+          ></div>
+        </div>
+      </section>
+
+      <!-- Exam -->
+      <section
+        id="sec-exam"
+        class="card hidden bg-white rounded-xl shadow-sm ring-1 ring-gray-200"
+      >
+        <div class="p-5 sm:p-6">
+          <h2 class="text-lg sm:text-xl font-semibold text-primary mb-4">
+            Exam Helper
+          </h2>
+          <label
+            for="promptExam"
+            class="block text-sm font-medium text-gray-700 mb-1"
+            >Prompt</label
+          >
+          <textarea
+            id="promptExam"
+            rows="4"
+            class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+            placeholder="Petunjuk / pertanyaan terkait exam..."
+          ></textarea>
+          <div class="mt-3">
+            <button
+              id="btnExam"
+              class="px-4 py-2 rounded-md bg-secondary text-white hover:bg-pink-500"
+            >
+              Run Exam Helper
+            </button>
+          </div>
+          <div
+            id="examResult"
+            class="mt-4 text-sm bg-gray-50 border border-gray-200 rounded-md p-3 whitespace-pre-wrap"
+          ></div>
+        </div>
+      </section>
+
+      <!-- Flashcards -->
+      <section
+        id="sec-flashcards"
+        class="card hidden bg-white rounded-xl shadow-sm ring-1 ring-gray-200"
+      >
+        <div class="p-5 sm:p-6 space-y-4">
+          <h2 class="text-lg sm:text-xl font-semibold text-primary">
+            Flashcards
+          </h2>
+
+          <div class="flex flex-wrap gap-3 items-end">
+            <div>
+              <label for="numCards" class="block text-xs text-gray-600"
+                >Number of flashcards</label
+              >
+              <input
+                id="numCards"
+                type="number"
+                min="1"
+                max="50"
+                value="5"
+                class="w-28 rounded-md border border-gray-300 px-2 py-2 text-sm"
+                placeholder="5"
+                aria-label="Number of flashcards"
+              />
+            </div>
+            <button
+              id="btnGenerateCards"
+              class="px-3 py-2 rounded-md bg-secondary text-white hover:bg-pink-500"
+            >
+              Generate Flashcards
+            </button>
+          </div>
+
+          <div
+            id="flashcardsList"
+            class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4"
+          ></div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="border-t border-gray-200">
+      <div class="container mx-auto max-w-6xl px-4 py-6 text-xs text-gray-500">
+        Theme colors:
+        <span class="font-medium text-primary">Resistance Blue</span> ·
+        <span class="font-medium text-secondary">Brave Pink</span> ·
+        <span class="font-medium text-tertiary">Hero Green</span>
+      </div>
+      <div class="container mx-auto max-w-6xl px-4 py-6 text-xs text-gray-500">
+        <p>Made with ❤️ by ILMATRIX</p>
+      </div>
+    </footer>
+
+    <script>
+      // State
+      let materialId = null;
+      let chat = [];
+      let mcqQuestions = [];
+
+      // Helpers
+      const $ = (id) => document.getElementById(id);
+      const escapeHtml = (s) =>
+        String(s).replace(
+          /[&<>]/g,
+          (c) => ({ "&": "&", "<": "<", ">": ">" }[c])
+        );
+
+      // Tabs
+      const tabs = [
+        "chat",
+        "upload",
+        "explain",
+        "quiz",
+        "forum",
+        "exam",
+        "flashcards",
+      ];
+      function setActive(tab) {
+        tabs.forEach((t) => {
+          const sec = $("sec-" + t);
+          const btns = document.querySelectorAll(
+            '.tab-btn[data-tab="' + t + '"]'
+          );
+          if (sec) sec.classList.toggle("hidden", t !== tab);
+          // active decoration (no color override)
+          btns.forEach((b) => b.classList.toggle("ring-2", t === tab));
+          btns.forEach((b) => b.classList.toggle("ring-offset-2", t === tab));
+          btns.forEach((b) => b.classList.toggle("ring-gray-300", t === tab));
+          btns.forEach((b) => b.classList.toggle("font-semibold", t === tab));
+        });
+        // Focus on first focusable inside section
+        const firstFocus = document.querySelector(
+          "#sec-" +
+            tab +
+            " input, #sec-" +
+            tab +
+            " textarea, #sec-" +
+            tab +
+            " select, #sec-" +
+            tab +
+            " button"
+        );
+        if (firstFocus) firstFocus.focus({ preventScroll: true });
+      }
+      document.querySelectorAll(".tab-btn").forEach((btn) => {
+        btn.addEventListener("click", () => setActive(btn.dataset.tab));
+      });
+
+      // Renderers
+      function renderChat() {
+        const out = chat
+          .map((m) => {
+            const who =
+              m.role === "assistant"
+                ? "AI"
+                : m.role === "system"
+                ? "System"
+                : "You";
+            return (
+              '<div class="my-1"><strong>' +
+              who +
+              ":</strong> " +
+              escapeHtml(m.content) +
+              "</div>"
+            );
+          })
+          .join("");
+        $("chat").innerHTML =
+          out || "<em>Mulai chat dengan mengetik pesan…</em>";
+        $("chat").scrollTop = $("chat").scrollHeight;
+      }
+
+      // Health
+      $("btnHealth").onclick = async () => {
+        try {
+          const res = await fetch("/api/health");
+          const data = await res.json().catch(() => ({}));
+          alert("Health: " + JSON.stringify(data));
+        } catch (e) {
+          alert("Health request failed: " + e.message);
+        }
+      };
+
+      // Upload
+      $("btnUpload").onclick = async () => {
+        const f = $("file").files[0];
+        if (!f) {
+          alert("Choose a file first");
+          return;
+        }
+        const fd = new FormData();
+        fd.append("file", f);
+        $("uploadInfo").textContent = "Uploading...";
+        try {
+          const res = await fetch("/api/upload", { method: "POST", body: fd });
+          const data = await res.json();
+          if (data.materialId) {
+            materialId = data.materialId;
+            $("uploadInfo").textContent =
+              "Uploaded. materialId=" +
+              materialId +
+              " (chars: " +
+              data.size +
+              ")";
+          } else {
+            $("uploadInfo").textContent =
+              "Upload error: " + JSON.stringify(data);
+          }
+        } catch (e) {
+          $("uploadInfo").textContent = "Upload failed: " + e.message;
+        }
+      };
+
+      // Shared runner to show JSON or answer into a target element
+      async function runAndShow(endpoint, payload, targetId) {
+        const el = $(targetId);
+        if (!el) return;
+        el.innerHTML = '<em class="text-gray-500">Processing...</em>';
+        try {
+          const res = await fetch(endpoint, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+          });
+          const data = await res.json();
+          el.innerHTML = data.answer
+            ? "<pre class='whitespace-pre-wrap break-words text-sm sm:text-base'><code>" +
+              escapeHtml(data.answer) +
+              "</code></pre>"
+            : "<pre class='whitespace-pre-wrap break-words text-sm sm:text-base'><code>" +
+              escapeHtml(JSON.stringify(data, null, 2)) +
+              "</code></pre>";
+        } catch (e) {
+          el.innerHTML =
+            "<pre class='whitespace-pre-wrap break-words text-sm sm:text-base text-red-700'><code>" +
+            escapeHtml(e.message) +
+            "</code></pre>";
+        }
+      }
+
+      // Render MCQ UI into a given container
+      function renderMCQ(questions, containerId) {
+        const container = $(containerId);
+        if (!container) return;
+        if (!questions || !questions.length) {
+          container.innerHTML =
+            "<em class='text-gray-500'>No questions yet.</em>";
+          return;
+        }
+        const letters = ["A", "B", "C", "D", "E"];
+        const html = questions
+          .map((q, qi) => {
+            const opts = (q.options || [])
+              .slice(0, 5)
+              .map((opt, oi) => {
+                const letter = letters[oi];
+                return (
+                  '<div class="pl-1 text-sm"><strong>' +
+                  letter +
+                  ".</strong> " +
+                  escapeHtml(opt) +
+                  "</div>"
+                );
+              })
+              .join("");
+            return (
+              '<div class="rounded-md border border-gray-200 bg-white p-3">' +
+              '<div class="font-medium">' +
+              (qi + 1) +
+              ") " +
+              escapeHtml(q.question) +
+              "</div>" +
+              '<div class="mt-1 grid gap-1">' +
+              opts +
+              "</div></div>"
+            );
+          })
+          .join("");
+        container.innerHTML = html;
+      }
+
+      // Explain
+      $("btnExplain").onclick = async () => {
+        if (!materialId) {
+          alert("Upload material first");
+          setActive("upload");
+          return;
+        }
+        const prompt = $("promptExplain").value || "";
+        await runAndShow(
+          "/api/explain",
+          { materialId, prompt },
+          "explainResult"
+        );
+      };
+
+      // QUIZ — Generate MCQ
+      $("btnGenerateQuizMCQ").onclick = async () => {
+        if (!materialId) {
+          alert("Upload material first");
+          setActive("upload");
+          return;
+        }
+        const n = Number($("numQuestions").value || 5);
+        const containerId = "quizMCQ";
+        $(containerId).innerHTML =
+          "<em class='text-gray-500'>Generating...</em>";
+        $("quizResult").textContent = "";
+        $("quizAnswers").value = "";
+        mcqQuestions = [];
+        try {
+          const res = await fetch("/api/quiz/trainer/mcq/start", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ materialId, numQuestions: n }),
+          });
+          const data = await res.json();
+          mcqQuestions = Array.isArray(data.questions) ? data.questions : [];
+          renderMCQ(mcqQuestions, containerId);
+        } catch (e) {
+          $(containerId).innerHTML = "Error: " + e.message;
+        }
+      };
+
+      // QUIZ — Submit simple text answers: "1 a", "2 b", ...
+      $("btnSubmitQuizMCQ").onclick = async () => {
+        if (!materialId) {
+          alert("Upload material first");
+          setActive("upload");
+          return;
+        }
+        if (!mcqQuestions || mcqQuestions.length === 0) {
+          alert("Generate quiz first");
+          return;
+        }
+        const raw = ($("quizAnswers").value || "").trim();
+        if (!raw) {
+          alert("Isi jawaban dulu, contoh:\n1 a\n2 b\n3 c");
+          return;
+        }
+        // Parse lines: "<index> <letter>"
+        const lines = raw.split(/\r?\n/);
+        const userAnswers = {};
+        const missing = [];
+        for (let i = 0; i < mcqQuestions.length; i++) {
+          const idx = i + 1; // displayed number
+          const q = mcqQuestions[i];
+          const line = lines.find((ln) =>
+            new RegExp("^\\s*" + idx + "\\s+([a-eA-E])\\s*$").test(ln)
+          );
+          if (!line) {
+            missing.push(idx);
+            continue;
+          }
+          const m = line.match(/([a-eA-E])/);
+          if (m) userAnswers[q.id] = m[1].toUpperCase();
+        }
+        if (missing.length) {
+          alert("Jawab semua nomor: " + missing.join(", "));
+          return;
+        }
+        $("quizResult").textContent = "Scoring...";
+        try {
+          const res = await fetch("/api/quiz/trainer/mcq/score", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              materialId,
+              questions: mcqQuestions,
+              userAnswers,
+            }),
+          });
+          const data = await res.json();
+          $("quizResult").textContent = data.analysis || JSON.stringify(data);
+        } catch (e) {
+          $("quizResult").textContent = "Error: " + e.message;
+        }
+      };
+
+      // Forum
+      $("btnForum").onclick = async () => {
+        if (!materialId) {
+          alert("Upload material first");
+          setActive("upload");
+          return;
+        }
+        const prompt = $("promptForum").value || "";
+        await runAndShow("/api/forum", { materialId, prompt }, "forumResult");
+      };
+
+      // Exam
+      $("btnExam").onclick = async () => {
+        if (!materialId) {
+          alert("Upload material first");
+          setActive("upload");
+          return;
+        }
+        const prompt = $("promptExam").value || "";
+        await runAndShow("/api/exam", { materialId, prompt }, "examResult");
+      };
+
+      // Flashcards
+      $("btnGenerateCards").onclick = async () => {
+        if (!materialId) {
+          alert("Upload material first");
+          setActive("upload");
+          return;
+        }
+        const n = Number($("numCards").value || 5);
+        const list = $("flashcardsList");
+        list.innerHTML = "<em class='text-gray-500'>Generating...</em>";
+        try {
+          const res = await fetch("/api/flashcards", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ materialId, numCards: n }),
+          });
+          const data = await res.json();
+          const cards = Array.isArray(data.cards) ? data.cards : [];
+          renderFlashcards(cards);
+        } catch (e) {
+          list.innerHTML = "Error: " + e.message;
+        }
+      };
+
+      function renderFlashcards(cards) {
+        const list = $("flashcardsList");
+        if (!cards || !cards.length) {
+          list.innerHTML = "<em class='text-gray-500'>No flashcards.</em>";
+          return;
+        }
+        const html = cards
+          .map((c, i) => {
+            const idx = i + 1;
+            const q = (c.front || c.q || "").toString();
+            const a = (c.back || c.a || "").toString();
+            const id = "fc-" + (c.id || idx);
+            return (
+              '<div class="fc-scene">' +
+              '<div class="fc-card" id="' +
+              id +
+              '" role="button" aria-label="Flip flashcard ' +
+              idx +
+              '" tabindex="0" ' +
+              "onclick=\"flipCard('" +
+              id +
+              "')\" " +
+              "onkeypress=\"if(event.key==='Enter'||event.key===' ') flipCard('" +
+              id +
+              "')\" >" +
+              '<div class="fc-face fc-front">' +
+              '<div class="text-sm sm:text-base"><span class="font-semibold text-primary">' +
+              idx +
+              ")</span> " +
+              escapeHtml(q) +
+              "</div>" +
+              '<div class="fc-hint">Click / Press Enter to flip</div>' +
+              "</div>" +
+              '<div class="fc-face fc-back">' +
+              '<div class="text-sm sm:text-base">' +
+              escapeHtml(a) +
+              "</div>" +
+              '<div class="fc-hint">Click again to flip back</div>' +
+              "</div>" +
+              "</div>" +
+              "</div>"
+            );
+          })
+          .join("");
+        list.innerHTML = html;
+      }
+      function flipCard(id) {
+        const el = document.getElementById(id);
+        if (el) el.classList.toggle("is-flipped");
+      }
+
+      // Chat (General)
+      $("btnSend").onclick = sendChat;
+      $("chatInput").addEventListener("keydown", (e) => {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          sendChat();
+        }
+      });
+      async function sendChat() {
+        const input = $("chatInput");
+        const text = (input.value || "").trim();
+        if (!text) return;
+        chat.push({ role: "user", content: text });
+        input.value = "";
+        renderChat();
+        try {
+          const payload = {
+            materialId: materialId || undefined,
+            messages: chat,
+          };
+          const res = await fetch("/api/chat", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+          });
+          const data = await res.json();
+          const answer = data.answer || JSON.stringify(data);
+          chat.push({ role: "assistant", content: answer });
+          renderChat();
+        } catch (e) {
+          chat.push({ role: "system", content: "Chat error: " + e.message });
+          renderChat();
+        }
+      }
+
+      // Init (Chat first)
+      setActive("chat");
+      renderChat();
+    </script>
+  </body>
+</html>

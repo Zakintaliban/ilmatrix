@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <link rel="icon" type="image/svg+xml" href="./logo.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>ILMATRIX — Home</title>
+
+    <!-- Tailwind CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            colors: {
+              primary: "#0f0e85",
+              secondary: "#e44c99",
+              tertiary: "#1b612f",
+            },
+          },
+        },
+      };
+    </script>
+    <style>
+      html {
+        scroll-behavior: smooth;
+      }
+    </style>
+  </head>
+  <body class="bg-gray-50 text-gray-900">
+    <header class="bg-primary text-white">
+      <div
+        class="container mx-auto max-w-6xl px-4 py-4 flex items-center justify-between"
+      >
+        <a href="/" class="text-xl sm:text-2xl font-bold tracking-tight"
+          >ILMATRIX</a
+        >
+        <nav class="flex items-center gap-2">
+          <a
+            href="/app.html"
+            class="text-xs sm:text-sm px-3 py-2 rounded-md hover:bg-indigo-900"
+            >App</a
+          >
+          <a
+            href="/about.html"
+            class="text-xs sm:text-sm px-3 py-2 rounded-md hover:bg-indigo-900"
+            >About</a
+          >
+        </nav>
+      </div>
+    </header>
+
+    <main>
+      <section class="bg-white">
+        <div class="container mx-auto max-w-6xl px-4 py-14 sm:py-20">
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-8 items-center">
+            <div>
+              <h2
+                class="text-3xl sm:text-4xl font-extrabold text-primary leading-tight"
+              >
+                Learn smarter with ILMATRIX
+              </h2>
+              <p class="mt-4 text-gray-700 text-base sm:text-lg">
+                An AI study companion for university students: upload your
+                materials and get help explaining concepts, practicing quizzes,
+                drafting forum replies, preparing for exams, and more.
+              </p>
+              <div class="mt-6 flex flex-wrap gap-3">
+                <a
+                  href="/app.html"
+                  class="inline-flex items-center justify-center px-5 py-2.5 rounded-md bg-secondary text-white font-medium hover:bg-pink-500"
+                  >Open App</a
+                >
+                <a
+                  href="/about.html"
+                  class="inline-flex items-center justify-center px-5 py-2.5 rounded-md border border-white/70 hover:bg-white hover:text-primary"
+                  >About Us</a
+                >
+              </div>
+              <p class="mt-3 text-xs text-white/80">
+                Powered by Groq (Meta Llama models). Supports PDF, DOCX, PPTX,
+                images (OCR).
+              </p>
+            </div>
+            <div>
+              <div
+                class="rounded-xl border border-gray-200 bg-gray-50 p-4 shadow-sm"
+              >
+                <div class="h-48 sm:h-60 grid grid-cols-3 gap-3">
+                  <div
+                    class="col-span-2 rounded-lg bg-white ring-1 ring-gray-200 p-3"
+                  >
+                    <div
+                      class="h-full w-full rounded-md bg-gradient-to-br from-primary/10 to-secondary/10 flex items-center justify-center text-sm text-gray-600"
+                    >
+                      Explain • Quiz • Forum • Exam
+                    </div>
+                  </div>
+                  <div class="rounded-lg bg-white ring-1 ring-gray-200 p-3">
+                    <div
+                      class="h-full w-full rounded-md bg-gradient-to-br from-tertiary/10 to-primary/10 flex items-center justify-center text-sm text-gray-600"
+                    >
+                      Flashcards • MCQ
+                    </div>
+                  </div>
+                  <div class="rounded-lg bg-white ring-1 ring-gray-200 p-3">
+                    <div
+                      class="h-full w-full rounded-md bg-gradient-to-br from-secondary/10 to-tertiary/10 flex items-center justify-center text-sm text-gray-600"
+                    >
+                      OCR • DOCX • PPTX
+                    </div>
+                  </div>
+                  <div
+                    class="col-span-2 rounded-lg bg-white ring-1 ring-gray-200 p-3"
+                  >
+                    <div
+                      class="h-full w-full rounded-md bg-gradient-to-br from-primary/10 to-tertiary/10 flex items-center justify-center text-sm text-gray-600"
+                    >
+                      Chat with context
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="features" class="bg-gray-50">
+        <div class="container mx-auto max-w-6xl px-4 py-12">
+          <h3 class="text-2xl font-bold text-primary">Key features</h3>
+          <p class="text-gray-600 mt-1 text-sm">
+            Everything you need to study effectively.
+          </p>
+          <div
+            class="mt-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4"
+          >
+            <div class="rounded-lg bg-white ring-1 ring-gray-200 p-4">
+              <h4 class="font-semibold text-gray-900">Explain material</h4>
+              <p class="text-sm text-gray-600 mt-1">
+                Get concise, structured explanations that quote from your
+                materials.
+              </p>
+            </div>
+            <div class="rounded-lg bg-white ring-1 ring-gray-200 p-4">
+              <h4 class="font-semibold text-gray-900">Quiz helper</h4>
+              <p class="text-sm text-gray-600 mt-1">
+                Solve or generate quizzes, with a final "Jawaban" section when
+                needed.
+              </p>
+            </div>
+            <div class="rounded-lg bg-white ring-1 ring-gray-200 p-4">
+              <h4 class="font-semibold text-gray-900">Forum reply</h4>
+              <p class="text-sm text-gray-600 mt-1">
+                Draft respectful, academically sound forum responses.
+              </p>
+            </div>
+            <div class="rounded-lg bg-white ring-1 ring-gray-200 p-4">
+              <h4 class="font-semibold text-gray-900">Exam helper</h4>
+              <p class="text-sm text-gray-600 mt-1">
+                Prepare ethically with study-first guidance and integrity
+                safeguards.
+              </p>
+            </div>
+            <div class="rounded-lg bg-white ring-1 ring-gray-200 p-4">
+              <h4 class="font-semibold text-gray-900">MCQ quiz</h4>
+              <p class="text-sm text-gray-600 mt-1">
+                Generate multiple‑choice questions and get deterministic grading
+                with concise explanations.
+              </p>
+            </div>
+            <div class="rounded-lg bg-white ring-1 ring-gray-200 p-4">
+              <h4 class="font-semibold text-gray-900">Flashcards</h4>
+              <p class="text-sm text-gray-600 mt-1">
+                Auto‑generated flip cards from your materials for quick review.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="how" class="bg-white">
+        <div class="container mx-auto max-w-6xl px-4 py-12">
+          <h3 class="text-2xl font-bold text-primary">How it works</h3>
+          <div class="mt-6 grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div class="rounded-lg ring-1 ring-gray-200 p-4 bg-gray-50">
+              <div class="text-primary font-semibold">1. Upload</div>
+              <div class="text-sm text-gray-600 mt-1">
+                PDF, DOCX, PPTX, TXT, or images. OCR included.
+              </div>
+            </div>
+            <div class="rounded-lg ring-1 ring-gray-200 p-4 bg-gray-50">
+              <div class="text-primary font-semibold">2. Choose</div>
+              <div class="text-sm text-gray-600 mt-1">
+                Explain, quiz (MCQ), forum, exam, flashcards, or chat.
+              </div>
+            </div>
+            <div class="rounded-lg ring-1 ring-gray-200 p-4 bg-gray-50">
+              <div class="text-primary font-semibold">3. Iterate</div>
+              <div class="text-sm text-gray-600 mt-1">
+                Discuss the results and refine with chat.
+              </div>
+            </div>
+          </div>
+          <div class="mt-6">
+            <a
+              href="/app.html"
+              class="px-5 py-2.5 rounded-md bg-secondary text-white hover:bg-pink-500"
+              >Start now</a
+            >
+          </div>
+        </div>
+      </section>
+
+      <section id="tech" class="bg-gray-50">
+        <div class="container mx-auto max-w-6xl px-4 py-12">
+          <h3 class="text-2xl font-bold text-primary">
+            Fast, reliable, privacy-aware
+          </h3>
+          <ul
+            class="mt-3 text-sm text-gray-700 list-disc list-inside space-y-1"
+          >
+            <li>Powered by Groq with Meta Llama models.</li>
+            <li>
+              Works on Netlify serverless with optimized PDF, OCR, DOCX, PPTX
+              extraction.
+            </li>
+            <li>
+              No signup required for local use; bring your own key in backend
+              config.
+            </li>
+          </ul>
+        </div>
+      </section>
+
+      <section class="bg-white">
+        <div class="container mx-auto max-w-6xl px-4 py-12">
+          <div
+            class="rounded-xl bg-primary text-white p-6 sm:p-8 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4"
+          >
+            <div>
+              <h3 class="text-xl sm:text-2xl font-bold">
+                Ready to try ILMATRIX?
+              </h3>
+              <p class="text-white/90 text-sm mt-1">
+                Open the app and upload your first material.
+              </p>
+            </div>
+            <a
+              href="/app.html"
+              class="px-5 py-2.5 rounded-md bg-secondary text-white hover:bg-pink-500"
+              >Open App</a
+            >
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="border-t border-gray-200">
+      <div class="container mx-auto max-w-6xl px-4 py-6 text-xs text-gray-500">
+        Theme colors:
+        <span class="font-medium text-primary">Resistance Blue</span> ·
+        <span class="font-medium text-secondary">Brave Pink</span> ·
+        <span class="font-medium text-tertiary">Hero Green</span>
+      </div>
+      <div class="container mx-auto max-w-6xl px-4 py-6 text-xs text-gray-500">
+        <p>Made with ❤️ by ILMATRIX</p>
+      </div>
+    </footer>
+  </body>
+</html>
