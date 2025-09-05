@@ -40,69 +40,100 @@ api.post("/upload", async (c) => {
   try {
     await ensureUploads();
     const body = await c.req.parseBody();
-    const file: any = (body as any)["file"];
-    if (!file || typeof file.arrayBuffer !== "function") {
+
+    // Collect every file-like value from multipart body (support multiple "file" fields)
+    const files: any[] = [];
+    for (const [, v] of Object.entries(body as any)) {
+      const pushIfFile = (x: any) => {
+        if (x && typeof x.arrayBuffer === "function") files.push(x);
+      };
+      if (Array.isArray(v)) v.forEach(pushIfFile);
+      else pushIfFile(v);
+    }
+
+    if (!files.length) {
       return c.json(
         {
           error:
-            'Provide multipart/form-data with field "file" (PDF/TXT/PNG/JPG/DOCX/PPTX)',
+            'Provide multipart/form-data with one or more "file" fields (PDF/TXT/PNG/JPG/DOCX/PPTX)',
         },
         400
       );
     }
 
-    const name: string = (file as any).name ?? "file";
-    const type: string = (file as any).type ?? "";
-    const id = randomUUID();
+    // Total upload size limit: 10 MB
+    const LIMIT = 10 * 1024 * 1024;
+    let totalBytes = 0;
+    for (const f of files) {
+      if (typeof (f as any).size === "number") totalBytes += (f as any).size;
+      if (totalBytes > LIMIT) {
+        return c.json({ error: "Total upload size exceeded 10 MB" }, 413);
+      }
+    }
 
-    let text = "";
-    if (type.includes("pdf") || name.toLowerCase().endsWith(".pdf")) {
-      const ab = await file.arrayBuffer();
-      text = await extractPdfText(Buffer.from(ab));
-    } else if (type.startsWith("image/") || /\.(png|jpe?g)$/i.test(name)) {
-      const ab = await file.arrayBuffer();
-      text = await extractImageText(Buffer.from(ab));
-      if (!text.trim()) {
+    const id = randomUUID();
+    let combined = "";
+
+    for (const f of files) {
+      const name: string = (f as any).name ?? "file";
+      const type: string = (f as any).type ?? "";
+
+      let text = "";
+      if (type.includes("pdf") || name.toLowerCase().endsWith(".pdf")) {
+        const ab = await f.arrayBuffer();
+        text = await extractPdfText(Buffer.from(ab));
+      } else if (type.startsWith("image/") || /\.(png|jpe?g)$/i.test(name)) {
+        const ab = await f.arrayBuffer();
+        text = await extractImageText(Buffer.from(ab));
+        if (!text.trim()) {
+          return c.json(
+            { error: `Unable to read text from image "${name}" (OCR empty)` },
+            400
+          );
+        }
+      } else if (
+        type.includes(
+          "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        ) ||
+        name.toLowerCase().endsWith(".docx")
+      ) {
+        const ab = await f.arrayBuffer();
+        text = await extractDocxText(Buffer.from(ab));
+      } else if (
+        type.includes(
+          "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+        ) ||
+        name.toLowerCase().endsWith(".pptx")
+      ) {
+        const ab = await f.arrayBuffer();
+        text = await extractPptxText(Buffer.from(ab));
+      } else if (type.includes("text") || name.toLowerCase().endsWith(".txt")) {
+        if (typeof f.text === "function") {
+          text = await f.text();
+        } else {
+          const ab = await f.arrayBuffer();
+          text = Buffer.from(ab).toString("utf8");
+        }
+      } else {
         return c.json(
-          { error: "Unable to read text from image (OCR empty)" },
+          {
+            error: `Unsupported type for "${name}". Use PDF, TXT, PNG/JPG, DOCX, or PPTX.`,
+          },
           400
         );
       }
-    } else if (
-      // DOCX MIME + extension
-      type.includes(
-        "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-      ) ||
-      name.toLowerCase().endsWith(".docx")
-    ) {
-      const ab = await file.arrayBuffer();
-      text = await extractDocxText(Buffer.from(ab));
-    } else if (
-      // PPTX MIME + extension
-      type.includes(
-        "application/vnd.openxmlformats-officedocument.presentationml.presentation"
-      ) ||
-      name.toLowerCase().endsWith(".pptx")
-    ) {
-      const ab = await file.arrayBuffer();
-      text = await extractPptxText(Buffer.from(ab));
-    } else if (type.includes("text") || name.toLowerCase().endsWith(".txt")) {
-      // Some runtimes support file.text()
-      if (typeof file.text === "function") {
-        text = await file.text();
-      } else {
-        const ab = await file.arrayBuffer();
-        text = Buffer.from(ab).toString("utf8");
-      }
-    } else {
-      return c.json(
-        { error: "Unsupported type. Use PDF, TXT, PNG/JPG, DOCX, or PPTX." },
-        400
-      );
+
+      combined += `\n===== FILE: ${name} =====\n${text}\n`;
     }
 
-    await fs.writeFile(join(uploadsDir, `${id}.txt`), text, "utf8");
-    return c.json({ materialId: id, size: text.length });
+    combined = combined.trim();
+    await fs.writeFile(join(uploadsDir, `${id}.txt`), combined, "utf8");
+    return c.json({
+      materialId: id,
+      size: combined.length,
+      files: files.length,
+      limit: "10MB",
+    });
   } catch (err: any) {
     console.error(err);
     return c.json({ error: "Upload failed", detail: err?.message }, 500);

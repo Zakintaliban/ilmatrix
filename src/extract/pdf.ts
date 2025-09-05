@@ -1,7 +1,16 @@
 import { join } from "path";
 
+/**
+ * pdfjs-dist DOMMatrix fix for Node/Railway:
+ * Use the legacy CJS build to avoid browser display-layer paths that reference DOMMatrix.
+ */
 export async function extractPdfText(buffer: Buffer): Promise<string> {
-  const pdfjs: any = await import("pdfjs-dist/legacy/build/pdf.mjs");
+  const { createRequire } = await import("module");
+  const require = createRequire(import.meta.url);
+  // Force Node-friendly build
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const pdfjs: any = require("pdfjs-dist/legacy/build/pdf.cjs");
+
   const data = new Uint8Array(buffer);
 
   // Configure standard fonts & CMaps (Node vs Serverless/Netlify)
