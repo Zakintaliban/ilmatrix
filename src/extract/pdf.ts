@@ -1,15 +1,47 @@
 import { join } from "path";
 
 /**
- * pdfjs-dist DOMMatrix fix for Node/Railway:
- * Use the legacy CJS build to avoid browser display-layer paths that reference DOMMatrix.
+ * Robust pdfjs loader for Node/Railway:
+ * - Try legacy CJS build first (v3 style) to avoid DOMMatrix references.
+ * - Fallback to ESM legacy build with a minimal DOMMatrix polyfill if needed.
  */
 export async function extractPdfText(buffer: Buffer): Promise<string> {
-  const { createRequire } = await import("module");
-  const require = createRequire(import.meta.url);
-  // Force Node-friendly build
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
-  const pdfjs: any = require("pdfjs-dist/legacy/build/pdf.cjs");
+  let pdfjs: any;
+
+  // Minimal DOMMatrix polyfill for Node in case pdfjs touches it
+  if (!(globalThis as any).DOMMatrix) {
+    (globalThis as any).DOMMatrix = class {
+      // noop polyfill sufficient for text extraction paths
+      constructor() {}
+      multiplySelf() {
+        return this;
+      }
+      translateSelf() {
+        return this;
+      }
+      scaleSelf() {
+        return this;
+      }
+      rotateSelf() {
+        return this;
+      }
+      invertSelf() {
+        return this;
+      }
+    };
+  }
+
+  try {
+    const { createRequire } = await import("module");
+    const require = createRequire(import.meta.url);
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    pdfjs = require("pdfjs-dist/legacy/build/pdf.cjs");
+  } catch {
+    // Fallback to ESM legacy build (pdfjs v4+). Import module namespace.
+    // eslint-disable-next-line @typescript-eslint/consistent-type-imports
+    const m = await import("pdfjs-dist/legacy/build/pdf.mjs");
+    pdfjs = m;
+  }
 
   const data = new Uint8Array(buffer);
 
