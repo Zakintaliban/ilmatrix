@@ -34,6 +34,8 @@ Tech core: Hono.js API, Groq (Meta Llama models), PDF/DOCX/PPTX/OCR extraction, 
   - Study-first guidance; encourages integrity and responsible use
 - Chat (General)
   - Free-form chat with optional material context
+- Dialogue
+  - Coached, topic-based conversation grounded in your materials. Start → "Let's get started!" → Send. Use "I'm stuck" for hints; final feedback after 3 topics.
 
 UI color scheme:
 
@@ -83,6 +85,14 @@ UI color scheme:
 
 - Type messages to discuss content, clarify answers, or iterate on results
 - If a material is uploaded, the assistant uses it as context
+
+  3.7 Dialogue
+
+- Open the Dialogue tab.
+- Click Start to receive an "ilmatrix" intro tailored to your material.
+- Click "Let's get started!" to get the first coach question for Topic 1.
+- Answer in the input and press Send. Ask "How am I doing?" anytime to get progress.
+- Click "I'm stuck" for a short hint. After 3 topics, you'll receive final feedback and input will be disabled.
 
 ## 4) High-level Architecture
 
@@ -250,6 +260,21 @@ Base: /api
   - JSON: { materialId: string, numCards: number }
   - Response: { cards: { id:number, front:string, back:string }[] }
 
+- Dialogue
+
+  - POST /api/dialogue/start
+    - JSON: { materialId: string }
+    - Response: { sessionId: string, language: "id"|"en", intro: string, topics: Array<{ id:number, title:string }>, firstCoachPrompt: string }
+  - POST /api/dialogue/step
+    - JSON: { materialId: string, topics: Array<{ id:number, title:string }>, currentTopicIndex: number, userMessage: string, lastCoachQuestion?: string, language?: "id"|"en" }
+    - Response: { coachMessage: string, addressed: boolean, moveToNext: boolean, nextCoachQuestion?: string }
+  - POST /api/dialogue/hint
+    - JSON: { materialId: string, currentTopicTitle: string, language?: "id"|"en" }
+    - Response: { hint: string }
+  - POST /api/dialogue/feedback
+    - JSON: { materialId: string, topics: Array<{ id:number, title:string }>, history?: Array<{ role:"coach"|"user"|"ilmatrix"|"system", content:string }>, language?: "id"|"en" }
+    - Response: { feedback: string, strengths: string[], improvements: string[] }
+
 - GET /api/material/:id
 
   - Response: { materialId: string, totalSize: number, files: [{ name: string, size: number, occurrences: number }] }
@@ -267,7 +292,7 @@ Base: /api
 - Tabs in App (app.html)
   - Chat (primary)
   - Upload (secondary)
-  - Explain, Quiz (MCQ), Forum, Exam, Flashcards (tertiary)
+  - Explain, Quiz (MCQ), Forum, Exam, Flashcards, Dialogue (tertiary)
 - UX notes
   - Each feature renders its result within its own section
   - No “Result” tab; reduce context switching
@@ -292,6 +317,7 @@ Performance tips:
 - Environment
   - GROQ_API_KEY must be set for the backend
   - ESM with TypeScript in NodeNext mode; ensure .js extensions on local imports post-emit
+  - MATERIAL_CLAMP sets the max characters of materials included per request (default 100000). Increase for better recall (higher token usage), decrease to save tokens.
 - Local development
   - Install dependencies; run dev/start scripts
   - Open /public/index.html (Home) or /public/app.html (App) in the served site, or deploy to Netlify

@@ -9,6 +9,7 @@ An AI study companion for university students. Core features:
   - Forum reply drafter
   - Exam helper (study‑first, responsible use)
   - Chat with context (optional, based on uploaded materials)
+  - Dialogue (coached conversation; topic-based with 3 topics; Start/Begin/Send/Hint; grounded in uploaded materials)
 
 Tech stack:
 
@@ -55,6 +56,7 @@ Server (default): http://localhost:8787
 - GROQ_API_KEY: Your Groq API key (required)
 - GROQ_MODEL: Groq model id (default set in code)
 - PORT: Server port (default: 8787)
+- MATERIAL_CLAMP: Max characters of materials included per request (default 100000). Increase for better recall (higher cost), decrease to save tokens.
 
 ## API
 
@@ -102,6 +104,21 @@ Base: /api
   - POST /api/flashcards
     - { materialId: string, numCards: number }
     - → { cards: [{ id, front, back }] }
+
+- Dialogue
+
+  - POST /api/dialogue/start
+    - { materialId: string }
+    - → { sessionId, language, intro, topics: [{ id, title }], firstCoachPrompt }
+  - POST /api/dialogue/step
+    - { materialId: string, topics: Array<{ id:number, title:string }>, currentTopicIndex: number, userMessage: string, lastCoachQuestion?: string, language?: "id"|"en" }
+    - → { coachMessage: string, addressed: boolean, moveToNext: boolean, nextCoachQuestion?: string }
+  - POST /api/dialogue/hint
+    - { materialId: string, currentTopicTitle: string, language?: "id"|"en" }
+    - → { hint: string }
+  - POST /api/dialogue/feedback
+    - { materialId: string, topics: Array<{ id:number, title:string }>, history?: Array<{ role:"coach"|"user"|"ilmatrix"|"system", content:string }>, language?: "id"|"en" }
+    - → { feedback: string, strengths: string[], improvements: string[] }
 
 - Materials
   - GET /api/material/:id
@@ -168,6 +185,7 @@ curl -H "Content-Type: application/json" \
   - Forum: draft reply
   - Exam: helper plan
   - Chat: general with optional context
+  - Dialogue: coached session (Start → “Let’s get started!” → Send). Use “I’m stuck” for a short hint; after 3 topics you’ll get final feedback.
 - Results appear within each section (no result-only tab)
 
 ## Prompts and guardrails
