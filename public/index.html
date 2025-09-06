@@ -21,11 +21,115 @@
         },
       };
     </script>
+    <!-- SEO meta -->
+    <link rel="canonical" href="/" />
+    <meta
+      name="description"
+      content="ILMATRIX is an AI study companion for university students: explain materials, generate MCQ quizzes with deterministic grading, create flashcards, draft forum replies, prepare for exams, and chat with context."
+    />
+    <meta
+      name="keywords"
+      content="ILMATRIX, AI study assistant, quiz generator, MCQ, flashcards, explain material, forum reply, exam helper, OCR, PDF to text, DOCX, PPTX, university, belajar, kuliah"
+    />
+    <meta
+      name="robots"
+      content="index,follow,max-snippet:-1,max-image-preview:large,max-video-preview:-1"
+    />
+    <meta name="author" content="ILMATRIX" />
+    <meta name="theme-color" content="#0f0e85" />
+    <!-- Open Graph -->
+    <meta property="og:type" content="website" />
+    <meta
+      property="og:title"
+      content="ILMATRIX — AI Study Companion (Explain, MCQ, Flashcards, Forum, Exam)"
+    />
+    <meta
+      property="og:description"
+      content="Upload PDF, DOCX, PPTX, or images. Explain with citations, MCQ with deterministic grading, flashcards, forum replies, exam helper, and chat with context."
+    />
+    <meta property="og:url" content="/" />
+    <meta property="og:image" content="/logo.svg" />
+    <!-- Twitter -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="ILMATRIX — AI Study Companion" />
+    <meta
+      name="twitter:description"
+      content="Explain, MCQ, Flashcards, Forum, Exam — grounded in your materials."
+    />
+    <meta name="twitter:image" content="/logo.svg" />
+    <!-- hreflang -->
+    <link rel="alternate" href="/" hreflang="en" />
+    <link rel="alternate" href="/" hreflang="x-default" />
     <style>
       html {
         scroll-behavior: smooth;
       }
     </style>
+    <!-- Structured data -->
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "WebSite",
+        "name": "ILMATRIX",
+        "url": "/",
+        "potentialAction": {
+          "@type": "SearchAction",
+          "target": "/app.html?q={search_term_string}",
+          "query-input": "required name=search_term_string"
+        }
+      }
+    </script>
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "Organization",
+        "name": "ILMATRIX",
+        "url": "/",
+        "logo": "/logo.svg"
+      }
+    </script>
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "SoftwareApplication",
+        "name": "ILMATRIX",
+        "applicationCategory": "EducationalApplication",
+        "operatingSystem": "Web",
+        "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" }
+      }
+    </script>
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "FAQPage",
+        "mainEntity": [
+          {
+            "@type": "Question",
+            "name": "What can ILMATRIX do?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Explain materials with citations, generate MCQ with deterministic grading, create flashcards, draft forum replies, prepare for exams responsibly, and chat with context."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Which files are supported?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "PDF, DOCX, PPTX, TXT, and images (PNG/JPG) with OCR."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Do I need an account?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "For local use, no. Production deployments may add auth."
+            }
+          }
+        ]
+      }
+    </script>
   </head>
   <body class="bg-gray-50 text-gray-900">
     <header class="bg-primary text-white">

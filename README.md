@@ -98,9 +98,17 @@ Base: /api
     - → { analysis: string } // Score X/Y, per-question lines; for wrong answers prints explanation + weaknesses + study plan; ends with “Jawaban”
 
 - Flashcards
+
   - POST /api/flashcards
     - { materialId: string, numCards: number }
     - → { cards: [{ id, front, back }] }
+
+- Materials
+  - GET /api/material/:id
+    - → { materialId: string, totalSize: number, files: [{ name: string, size: number, occurrences: number }] }
+  - POST /api/material/:id/remove
+    - Body: { name: string }
+    - → { materialId: string, removed: string, totalSize: number, files: [{ name, size, occurrences }] }
 
 ## cURL examples
 
@@ -110,6 +118,14 @@ curl -F "file=@notes.pdf" -F "file=@slides.pptx" http://localhost:8787/api/uploa
 
 # Append to existing material
 curl -F "append=true" -F "mergeTo=UUID" -F "file=@more.docx" http://localhost:8787/api/upload
+
+# List files inside a material
+curl http://localhost:8787/api/material/UUID
+
+# Remove a file's content from a material (destructive)
+curl -H "Content-Type: application/json" \
+  -d "{\"name\":\"slides.pptx\"}" \
+  http://localhost:8787/api/material/UUID/remove
 
 # Explain with uploaded material
 curl -H "Content-Type: application/json" \
@@ -140,8 +156,12 @@ curl -H "Content-Type: application/json" \
 ## Frontend usage
 
 - Open http://localhost:8787/app.html
-- Step 1: Upload one or more files. After first upload, the "Append to current material" toggle becomes available to merge more files into the same materialId (total cap 10 MB).
-- Step 2: Use tabs:
+- Drag & drop or click the upload drop zone to select multiple files. Upload starts automatically:
+  - The first batch creates a new materialId.
+  - Subsequent drops/selections append to the same material automatically (10 MB total cap).
+  - Remove any file’s content from the current material by clicking “Remove” next to it.
+  - Use “Start new material” to reset the client-side materialId and begin a new one (existing materials remain on disk).
+- Use tabs:
   - Explain: prompt and run
   - Quiz (MCQ): generate; answer with “1 a”, “2 b”, …; submit & grade
   - Flashcards: generate N; click cards to flip (front/back)

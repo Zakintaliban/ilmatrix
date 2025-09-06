@@ -15,7 +15,11 @@ Core rules:
 - When uncertain, say so and suggest what information is missing.
 - Output must be safe and respectful.`;
 
-function clamp(text: string, max = 12000) {
+const MATERIAL_CLAMP = Math.max(
+  4000,
+  Number(process.env.MATERIAL_CLAMP || 100000)
+);
+function clamp(text: string, max = MATERIAL_CLAMP) {
   return text.length <= max ? text : text.slice(0, max);
 }
 
@@ -425,4 +429,356 @@ Rules:
   // If the model failed to produce enough, trim or pad (no hallucination padding)
   // We just return whatever valid cards we parsed.
   return { cards: clean.slice(0, n) };
+}
+
+// === Dialogue (coached conversation) ===
+
+export type DialogueTopic = { id: number; title: string };
+export type DialogueStartResult = {
+  language: string; // e.g., "id" or "en"
+  intro: string; // opener text to show after Start
+  topics: DialogueTopic[]; // exactly 3 topics
+  firstCoachPrompt: string; // first coach question to begin topic 1
+};
+
+export type DialogueStepResult = {
+  addressed: boolean; // did user's answer sufficiently address current topic?
+  moveToNext: boolean; // if true and there is a next topic, UI should advance
+  coachMessage: string; // coach reply to show
+  nextCoachQuestion?: string; // if moving to next topic, the first question for that topic
+};
+
+export type DialogueHintResult = { hint: string };
+
+export type DialogueFeedbackResult = {
+  feedback: string; // final feedback paragraph(s)
+  strengths: string[];
+  improvements: string[];
+};
+
+function detectLangFromText(text: string): "id" | "en" | "auto" {
+  // very light heuristic; final decision is by model
+  const sample = (text || "").slice(0, 400).toLowerCase();
+  const hasIndo =
+    /\b(yang|dan|atau|dengan|adalah|tidak|untuk|dari|pada|dalam|itu|ini)\b/.test(
+      sample
+    );
+  return hasIndo ? "id" : "auto";
+}
+
+/**
+ * Start a Dialogue session by proposing 3 topics and an intro + first coach prompt.
+ * The model returns JSON only to keep parsing robust.
+ */
+export async function dialogueStart(params: {
+  materialText: string;
+}): Promise<DialogueStartResult> {
+  const apiKey = process.env.GROQ_API_KEY;
+  if (!apiKey) {
+    return {
+      language: "en",
+      intro:
+        "Welcome! Dialogue could not start because GROQ_API_KEY is missing on the server.",
+      topics: [
+        { id: 1, title: "Topic 1" },
+        { id: 2, title: "Topic 2" },
+        { id: 3, title: "Topic 3" },
+      ],
+      firstCoachPrompt:
+        "Please configure your GROQ API key and restart the server.",
+    };
+  }
+  const groq = new Groq({ apiKey });
+
+  const langHint = detectLangFromText(params.materialText);
+
+  const prompt = `
+You are a coach facilitating a short, structured Dialogue grounded ONLY in the provided course materials. Detect the language (Indonesian vs English). Output JSON only.
+
+Return this exact JSON structure:
+
+{
+  "language": "id|en",
+  "intro": "ilmatrix opener text (short). Include: a welcome line referencing the material's theme; a bullet list of 3 topics to cover (using the topic titles you define below); a single sentence telling the user to click \\"I'm stuck\\" for a hint; and a closing line instructing to click \\"Let's get started!\\".",
+  "topics": [
+    { "id": 1, "title": "short topic 1 title" },
+    { "id": 2, "title": "short topic 2 title" },
+    { "id": 3, "title": "short topic 3 title" }
+  ],
+  "firstCoachPrompt": "Coach's first question to begin topic 1 (one sentence, specific, grounded in the materials)."
+}
+
+Rules:
+- Language: if materials appear Indonesian, return Indonesian; otherwise English.
+- Topics: concise, unambiguous, and tailored to the materials. Exactly 3.
+- Keep intro tight (<= 120 words). Use a friendly coaching tone. No chain-of-thought.
+- Do NOT wrap JSON in markdown fences. No commentary. JSON only.
+`;
+
+  const completion = await groq.chat.completions.create({
+    model: MODEL,
+    messages: [
+      { role: "system", content: systemPrompt },
+      {
+        role: "user",
+        content:
+          `Materials:\n---\n${clamp(params.materialText)}\n---\n\n` +
+          `Lang hint: ${langHint}\n` +
+          prompt,
+      },
+    ],
+    temperature: 0.3,
+    max_tokens: 800,
+  });
+
+  const raw = completion.choices?.[0]?.message?.content ?? "{}";
+  const parsed = (extractJsonBlock(raw) || {}) as DialogueStartResult;
+
+  // Decide language using model output or heuristic hint
+  const lang: "id" | "en" =
+    parsed.language === "id" || parsed.language === "en"
+      ? parsed.language
+      : langHint === "id"
+      ? "id"
+      : "en";
+
+  // Topics: prefer model output; otherwise use neutral, materials-agnostic defaults
+  const defaultTopics: DialogueTopic[] =
+    lang === "id"
+      ? [
+          { id: 1, title: "Konsep inti" },
+          { id: 2, title: "Contoh/penerapan" },
+          { id: 3, title: "Miskonsepsi umum & klarifikasi" },
+        ]
+      : [
+          { id: 1, title: "Core concepts" },
+          { id: 2, title: "Examples/applications" },
+          { id: 3, title: "Common misconceptions & clarification" },
+        ];
+
+  const topics: DialogueTopic[] =
+    Array.isArray(parsed.topics) && parsed.topics.length === 3
+      ? parsed.topics.map((t, i) => ({
+          id: Number(t?.id ?? i + 1),
+          title: String(t?.title || `Topic ${i + 1}`),
+        }))
+      : defaultTopics;
+
+  const t1 =
+    topics[0]?.title || (lang === "id" ? "Konsep inti" : "Core concepts");
+
+  return {
+    language: lang,
+    intro:
+      parsed.intro ||
+      (lang === "id"
+        ? "Selamat datang! Klik 'Start' untuk memulai Dialogue."
+        : "Welcome! Click 'Start' to begin the Dialogue."),
+    topics,
+    firstCoachPrompt:
+      parsed.firstCoachPrompt ||
+      (lang === "id"
+        ? `Mulai dari topik 1 (${t1}). Apa ide utama dari materi? Kutip potongan pendek (<=120 karakter) yang mendukung.`
+        : `Start with topic 1 (${t1}). What is the main idea from the material? Quote a short snippet (<=120 chars) that supports it.`),
+  };
+}
+
+/**
+ * Judge user's answer for the current topic and produce a coach reply.
+ * If addressed, also provide a starter question for the next topic (if provided).
+ * Returns JSON only for robust parsing.
+ */
+export async function dialogueStep(params: {
+  materialText: string;
+  language?: string; // "id"|"en"
+  currentTopicTitle: string;
+  userMessage: string;
+  nextTopicTitle?: string; // optional; if present and addressed=true, produce nextCoachQuestion
+}): Promise<DialogueStepResult> {
+  const apiKey = process.env.GROQ_API_KEY;
+  if (!apiKey) {
+    return {
+      addressed: false,
+      moveToNext: false,
+      coachMessage:
+        "Dialogue cannot proceed because GROQ_API_KEY is missing on the server.",
+    };
+  }
+  const groq = new Groq({ apiKey });
+
+  const prompt = `
+You are a concise coach. Evaluate whether the user's message sufficiently addresses the CURRENT TOPIC. Use ONLY the provided materials for grounding. Output JSON only.
+
+JSON format:
+{
+  "addressed": true|false,
+  "moveToNext": true|false,
+  "coachMessage": "one or two short paragraphs in the detected language (no chain-of-thought)",
+  "nextCoachQuestion": "if moveToNext=true and NEXT TOPIC is provided, ask a clear first question for that next topic; else omit"
+}
+
+Constraints:
+- If the user's answer sufficiently addresses CURRENT TOPIC, set addressed=true and moveToNext=true.
+  - Provide a brief positive acknowledgement and transition.
+  - If NEXT TOPIC is provided, include a strong first question for NEXT TOPIC in "nextCoachQuestion".
+- If not sufficient, set addressed=false and moveToNext=false.
+  - Provide a short, targeted follow-up question within CURRENT TOPIC to help the user improve the answer.
+- Keep it tight and helpful, grounded in the materials. No JSON markdown fences, JSON only.
+`;
+
+  const userBlock = `
+LANGUAGE: ${params.language || "auto"}
+CURRENT TOPIC: ${params.currentTopicTitle}
+NEXT TOPIC: ${params.nextTopicTitle || "(none)"}
+
+MATERIALS:
+---
+${clamp(params.materialText)}
+---
+
+USER MESSAGE:
+${params.userMessage}
+`;
+
+  const completion = await groq.chat.completions.create({
+    model: MODEL,
+    messages: [
+      { role: "system", content: systemPrompt },
+      { role: "user", content: prompt + "\n" + userBlock },
+    ],
+    temperature: 0.3,
+    max_tokens: 700,
+  });
+
+  const raw = completion.choices?.[0]?.message?.content ?? "{}";
+  const parsed = (extractJsonBlock(raw) || {}) as Partial<DialogueStepResult>;
+  return {
+    addressed: !!parsed.addressed,
+    moveToNext: !!parsed.moveToNext,
+    coachMessage: String(parsed.coachMessage || "").trim(),
+    nextCoachQuestion: parsed.nextCoachQuestion
+      ? String(parsed.nextCoachQuestion || "").trim()
+      : undefined,
+  };
+}
+
+/**
+ * Provide a short, actionable hint for the current topic.
+ */
+export async function dialogueHint(params: {
+  materialText: string;
+  language?: string;
+  currentTopicTitle: string;
+}): Promise<DialogueHintResult> {
+  const apiKey = process.env.GROQ_API_KEY;
+  if (!apiKey) return { hint: "Server missing GROQ_API_KEY." };
+  const groq = new Groq({ apiKey });
+
+  const prompt = `
+Give ONE short hint (1–2 sentences) to help the learner progress on the CURRENT TOPIC. Use the materials only. Output JSON only: { "hint": "..." } in the detected language. No fences, no commentary.`;
+
+  const content = `
+LANGUAGE: ${params.language || "auto"}
+CURRENT TOPIC: ${params.currentTopicTitle}
+
+MATERIALS:
+---
+${clamp(params.materialText)}
+---
+`;
+
+  const completion = await groq.chat.completions.create({
+    model: MODEL,
+    messages: [
+      { role: "system", content: systemPrompt },
+      { role: "user", content: prompt + "\n" + content },
+    ],
+    temperature: 0.2,
+    max_tokens: 200,
+  });
+
+  const raw = completion.choices?.[0]?.message?.content ?? "{}";
+  const parsed = (extractJsonBlock(raw) || {}) as DialogueHintResult;
+  return { hint: String(parsed.hint || "").trim() };
+}
+
+/**
+ * Produce final feedback: a short summary paragraph + strengths and improvements.
+ */
+export async function dialogueFeedback(params: {
+  materialText: string;
+  language?: string;
+  topics: { title: string }[];
+  history: {
+    role: "coach" | "user" | "ilmatrix" | "system";
+    content: string;
+  }[];
+}): Promise<DialogueFeedbackResult> {
+  const apiKey = process.env.GROQ_API_KEY;
+  if (!apiKey) {
+    return {
+      feedback:
+        "Feedback unavailable because the server is missing GROQ_API_KEY.",
+      strengths: [],
+      improvements: [],
+    };
+  }
+  const groq = new Groq({ apiKey });
+
+  const prompt = `
+Based on the short Dialogue history and the topics, provide final feedback in the detected language. Output JSON only:
+
+{
+  "feedback": "short closing paragraph summarizing the session focus and learner's performance",
+  "strengths": ["...", "..."],
+  "improvements": ["...", "..."]
+}
+
+Rules:
+- Use only the conversation and materials for grounding.
+- Keep strengths and improvements concrete (2–4 items each).
+- No markdown fences, no extra commentary.
+`;
+
+  const convoText = (params.history || [])
+    .map((m) => `${m.role.toUpperCase()}: ${m.content}`)
+    .join("\n");
+
+  const content = `
+LANGUAGE: ${params.language || "auto"}
+TOPICS: ${(params.topics || []).map((t) => t.title).join(" | ")}
+
+MATERIALS:
+---
+${clamp(params.materialText)}
+---
+
+DIALOGUE HISTORY (trimmed):
+---
+${clamp(convoText, 8000)}
+---
+`;
+
+  const completion = await groq.chat.completions.create({
+    model: MODEL,
+    messages: [
+      { role: "system", content: systemPrompt },
+      { role: "user", content: prompt + "\n" + content },
+    ],
+    temperature: 0.2,
+    max_tokens: 800,
+  });
+
+  const raw = completion.choices?.[0]?.message?.content ?? "{}";
+  const parsed = (extractJsonBlock(raw) ||
+    {}) as Partial<DialogueFeedbackResult>;
+  return {
+    feedback: String(parsed.feedback || "").trim(),
+    strengths: Array.isArray(parsed.strengths)
+      ? parsed.strengths.map((s) => String(s || "").trim()).filter(Boolean)
+      : [],
+    improvements: Array.isArray(parsed.improvements)
+      ? parsed.improvements.map((s) => String(s || "").trim()).filter(Boolean)
+      : [],
+  };
 }

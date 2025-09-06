@@ -21,6 +21,77 @@
         },
       };
     </script>
+    <!-- SEO meta -->
+    <link rel="canonical" href="/app.html" />
+    <meta
+      name="description"
+      content="ILMATRIX App — Upload PDF, DOCX, PPTX, or images. Explain with citations, generate MCQ quizzes with deterministic grading, create flashcards, draft forum replies, prepare for exams, and chat with context."
+    />
+    <meta
+      name="keywords"
+      content="ILMATRIX app, study AI, quiz generator, MCQ, flashcards, explain material, forum reply, exam helper, OCR, PDF to text, DOCX, PPTX, university, belajar, kuliah"
+    />
+    <meta
+      name="robots"
+      content="index,follow,max-snippet:-1,max-image-preview:large,max-video-preview:-1"
+    />
+    <meta name="author" content="ILMATRIX" />
+    <meta name="theme-color" content="#0f0e85" />
+    <!-- Open Graph -->
+    <meta property="og:type" content="website" />
+    <meta
+      property="og:title"
+      content="ILMATRIX — App (Explain, MCQ, Flashcards, Forum, Exam, Chat)"
+    />
+    <meta
+      property="og:description"
+      content="Study companion grounded in your materials. Explain, MCQ with deterministic grading, flashcards, forum replies, exam helper, and chat."
+    />
+    <meta property="og:url" content="/app.html" />
+    <meta property="og:image" content="/logo.svg" />
+    <!-- Twitter -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="ILMATRIX — App" />
+    <meta
+      name="twitter:description"
+      content="Explain, MCQ, Flashcards, Forum, Exam — grounded in your materials."
+    />
+    <meta name="twitter:image" content="/logo.svg" />
+    <!-- hreflang -->
+    <link rel="alternate" href="/app.html" hreflang="en" />
+    <link rel="alternate" href="/app.html" hreflang="x-default" />
+
+    <!-- Structured data -->
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "BreadcrumbList",
+        "itemListElement": [
+          { "@type": "ListItem", "position": 1, "name": "Home", "item": "/" },
+          {
+            "@type": "ListItem",
+            "position": 2,
+            "name": "App",
+            "item": "/app.html"
+          }
+        ]
+      }
+    </script>
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "SoftwareApplication",
+        "name": "ILMATRIX",
+        "applicationCategory": "EducationalApplication",
+        "operatingSystem": "Web",
+        "url": "/app.html",
+        "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" }
+      }
+    </script>
+    <!-- Markdown renderer + sanitizer -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js"></script>
+
     <style>
       html {
         scroll-behavior: smooth;
@@ -46,6 +117,52 @@
       }
       .fc-card.is-flipped {
         transform: rotateY(180deg);
+      }
+      /* Mobile-friendly global clamps */
+      html,
+      body {
+        max-width: 100%;
+        overflow-x: hidden;
+      }
+      .markdown {
+        word-break: break-word;
+        overflow-wrap: anywhere;
+        max-width: 100%;
+      }
+      /* Attachments container mobile fixes */
+      #attachments {
+        max-width: 100%;
+      }
+      #attachments .truncate {
+        min-width: 0;
+      }
+      #attachments .font-medium {
+        word-break: break-word;
+        overflow-wrap: anywhere;
+      }
+      #attachments .btnRemove {
+        flex-shrink: 0;
+      }
+      .markdown img {
+        max-width: 100%;
+        height: auto;
+      }
+      .markdown table {
+        width: 100%;
+        display: block;
+        overflow-x: auto;
+      }
+      .markdown pre {
+        max-width: 100%;
+        overflow: auto;
+      }
+
+      /* Attachments list responsive helpers */
+      .attachments-item .left {
+        min-width: 0;
+      }
+      .attachments-item .right {
+        flex-shrink: 0;
       }
       .fc-face {
         position: absolute;
@@ -77,6 +194,41 @@
         font-size: 0.75rem;
         color: rgb(107 114 128); /* gray-500 */
         opacity: 0.85;
+      }
+
+      /* Basic markdown rendering */
+      .markdown h1,
+      .markdown h2,
+      .markdown h3 {
+        font-weight: 700;
+        margin: 0.75rem 0 0.5rem;
+      }
+      .markdown p {
+        margin: 0.5rem 0;
+      }
+      .markdown ul,
+      .markdown ol {
+        margin: 0.5rem 1.25rem;
+        padding-left: 1rem;
+      }
+      .markdown code {
+        background: #f3f4f6;
+        padding: 0.15rem 0.35rem;
+        border-radius: 0.25rem;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+          "Liberation Mono", "Courier New", monospace;
+      }
+      .markdown pre {
+        background: #111827;
+        color: #e5e7eb;
+        padding: 0.75rem;
+        border-radius: 0.5rem;
+        overflow: auto;
+      }
+      .markdown blockquote {
+        border-left: 4px solid #e5e7eb;
+        padding-left: 0.75rem;
+        color: #6b7280;
       }
     </style>
   </head>
@@ -172,6 +324,14 @@
               Flashcards
             </button>
           </li>
+          <li>
+            <button
+              data-tab="dialogue"
+              class="tab-btn px-3 py-2 rounded-md bg-tertiary text-white hover:bg-green-700"
+            >
+              Dialogue
+            </button>
+          </li>
         </ul>
       </div>
     </nav>
@@ -218,44 +378,55 @@
           <h2 class="text-lg sm:text-xl font-semibold text-primary mb-4">
             Upload Material (PDF / TXT / PNG / JPG / DOCX / PPTX)
           </h2>
-          <div class="grid grid-cols-1 md:grid-cols-3 gap-3 items-center">
-            <label for="file" class="text-sm font-medium text-gray-700"
-              >Material file</label
-            >
-            <input
-              class="md:col-span-2 block w-full text-sm text-gray-900 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-secondary file:text-white hover:file:bg-pink-500 bg-white border border-gray-300 rounded-md"
-              type="file"
-              id="file"
-              aria-label="Material file"
-              multiple
-              accept=".pdf,.txt,.png,.jpg,.jpeg,.docx,.pptx,image/*,application/pdf,text/plain,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.presentationml.presentation"
-            />
-          </div>
-          <div class="mt-2 flex items-center gap-2">
-            <input
-              id="appendToggle"
-              type="checkbox"
-              class="h-4 w-4 rounded border-gray-300"
-              disabled
-              aria-describedby="appendHelp"
-            />
-            <label for="appendToggle" class="text-sm text-gray-700">
-              Append to current material
-            </label>
-            <span id="currentMaterial" class="text-xs text-gray-500"></span>
-          </div>
-          <p id="appendHelp" class="mt-1 text-xs text-gray-500">
-            You can select multiple files. After first upload, toggle to append
-            to the same materialId. Total limit 10 MB.
-          </p>
-          <div class="mt-4 flex gap-3 items-center">
+
+          <!-- Header bar: current material + actions -->
+          <div class="flex flex-wrap items-center gap-3 mb-3">
+            <div class="text-sm text-gray-700">
+              Current material:
+              <span id="currentMaterialLabel" class="font-semibold text-primary"
+                >none</span
+              >
+            </div>
             <button
-              id="btnUpload"
-              class="inline-flex items-center justify-center px-4 py-2 rounded-md bg-tertiary text-white font-medium hover:bg-green-700 transition"
+              id="btnNewMaterial"
+              class="px-3 py-1.5 rounded-md border border-gray-300 text-sm bg-white hover:bg-gray-50"
+              title="Start a new material (does not delete existing one)"
             >
-              Upload
+              Start new material
             </button>
             <span id="uploadInfo" class="text-sm text-gray-600"></span>
+          </div>
+
+          <!-- Hidden multi-file picker (triggered by clicking the drop zone) -->
+          <input
+            id="filePicker"
+            class="hidden"
+            type="file"
+            multiple
+            aria-label="Select files"
+            accept=".pdf,.txt,.png,.jpg,.jpeg,.docx,.pptx,image/*,application/pdf,text/plain,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.presentationml.presentation"
+          />
+
+          <!-- Drop zone (click or drag & drop) -->
+          <div
+            id="dropZone"
+            class="rounded-lg border-2 border-dashed border-gray-300 bg-gray-50 hover:bg-gray-100 transition p-4 sm:p-6 text-center cursor-pointer"
+            role="button"
+            tabindex="0"
+            aria-label="Drop files here or click to select"
+          >
+            <p class="font-medium text-gray-800">Drag & drop files here</p>
+            <p class="text-xs text-gray-500">
+              or click to select. Accepted: PDF, TXT, PNG/JPG, DOCX, PPTX. Total
+              limit 10 MB per material.
+            </p>
+          </div>
+
+          <!-- Attachments list -->
+          <div id="attachments" class="mt-4 grid gap-2">
+            <em class="text-gray-500"
+              >No files yet. Drop or click to upload.</em
+            >
           </div>
         </div>
       </section>
@@ -290,7 +461,7 @@
           </div>
           <div
             id="explainResult"
-            class="mt-4 text-sm bg-gray-50 border border-gray-200 rounded-md p-3 whitespace-pre-wrap"
+            class="mt-4 text-sm bg-gray-50 border border-gray-200 rounded-md p-3 whitespace-pre-wrap break-words overflow-x-auto"
           ></div>
         </div>
       </section>
@@ -359,7 +530,7 @@
 
           <div
             id="quizResult"
-            class="text-sm bg-gray-50 border border-gray-200 rounded-md p-3 whitespace-pre-wrap"
+            class="text-sm bg-gray-50 border border-gray-200 rounded-md p-3 whitespace-pre-wrap break-words overflow-x-auto"
           ></div>
         </div>
       </section>
@@ -394,7 +565,7 @@
           </div>
           <div
             id="forumResult"
-            class="mt-4 text-sm bg-gray-50 border border-gray-200 rounded-md p-3 whitespace-pre-wrap"
+            class="mt-4 text-sm bg-gray-50 border border-gray-200 rounded-md p-3 whitespace-pre-wrap break-words overflow-x-auto"
           ></div>
         </div>
       </section>
@@ -429,7 +600,7 @@
           </div>
           <div
             id="examResult"
-            class="mt-4 text-sm bg-gray-50 border border-gray-200 rounded-md p-3 whitespace-pre-wrap"
+            class="mt-4 text-sm bg-gray-50 border border-gray-200 rounded-md p-3 whitespace-pre-wrap break-words overflow-x-auto"
           ></div>
         </div>
       </section>
@@ -474,6 +645,68 @@
           ></div>
         </div>
       </section>
+      <!-- Dialogue -->
+      <section
+        id="sec-dialogue"
+        class="card hidden bg-white rounded-xl shadow-sm ring-1 ring-gray-200"
+      >
+        <div class="p-5 sm:p-6">
+          <div class="flex items-start justify-between gap-2">
+            <h2 class="text-lg sm:text-xl font-semibold text-primary">
+              Dialogue
+            </h2>
+            <button
+              id="btnDialogueHint"
+              class="hidden text-xs sm:text-sm border border-gray-300 px-3 py-1.5 rounded-md hover:bg-gray-50"
+              title="Get a hint for the current topic"
+            >
+              I'm stuck
+            </button>
+          </div>
+
+          <p class="text-sm text-gray-600 mt-1">
+            Guided, topic-based coaching grounded in your uploaded material.
+          </p>
+
+          <div class="mt-4 flex items-center gap-3">
+            <button
+              id="btnDialogueStart"
+              class="px-3 py-2 rounded-md bg-secondary text-white hover:bg-pink-500"
+            >
+              Start
+            </button>
+            <button
+              id="btnDialogueBegin"
+              class="hidden px-3 py-2 rounded-md bg-tertiary text-white hover:bg-green-700"
+            >
+              Let's get started!
+            </button>
+          </div>
+
+          <div
+            id="dialogueStream"
+            class="mt-4 text-sm bg-gray-50 border border-gray-200 rounded-md p-3 markdown"
+          >
+            <em class="text-gray-500">Click Start to begin Dialogue.</em>
+          </div>
+
+          <div class="mt-3 flex gap-2 items-start">
+            <textarea
+              id="dialogueInput"
+              class="flex-1 rounded-md border border-gray-300 bg-white px-3 py-2 text-sm"
+              rows="2"
+              placeholder="Type your answer (tip: ask 'How am I doing?')"
+            ></textarea>
+            <button
+              id="btnDialogueSend"
+              class="px-4 py-2 rounded-md bg-primary text-white font-medium hover:bg-indigo-900 disabled:opacity-50"
+              disabled
+            >
+              Send
+            </button>
+          </div>
+        </div>
+      </section>
     </main>
 
     <footer class="border-t border-gray-200">
@@ -499,8 +732,28 @@
       const escapeHtml = (s) =>
         String(s).replace(
           /[&<>]/g,
-          (c) => ({ "&": "&", "<": "<", ">": ">" }[c])
+          (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c])
         );
+
+      // Render Markdown safely using marked + DOMPurify (fallback to escaping)
+      function renderMarkdown(s) {
+        try {
+          const src = String(s ?? "");
+          const parsed = window.marked
+            ? window.marked.parse(src)
+            : escapeHtml(src);
+          const safe = window.DOMPurify
+            ? window.DOMPurify.sanitize(parsed)
+            : parsed;
+          return "<div class='markdown'>" + safe + "</div>";
+        } catch (e) {
+          return (
+            "<pre class='whitespace-pre-wrap break-words text-sm sm:text-base'><code>" +
+            escapeHtml(String(s ?? "")) +
+            "</code></pre>"
+          );
+        }
+      }
 
       // Tabs
       const tabs = [
@@ -511,6 +764,7 @@
         "forum",
         "exam",
         "flashcards",
+        "dialogue",
       ];
       function setActive(tab) {
         tabs.forEach((t) => {
@@ -545,25 +799,28 @@
 
       // Renderers
       function renderChat() {
-        const out = chat
-          .map((m) => {
-            const who =
-              m.role === "assistant"
-                ? "AI"
-                : m.role === "system"
-                ? "System"
-                : "You";
-            return (
-              '<div class="my-1"><strong>' +
-              who +
-              ":</strong> " +
-              escapeHtml(m.content) +
-              "</div>"
-            );
-          })
-          .join("");
+        const parts = chat.map((m) => {
+          const who =
+            m.role === "assistant"
+              ? "AI"
+              : m.role === "system"
+              ? "System"
+              : "You";
+          const label =
+            '<div class="text-xs text-gray-500 font-semibold mb-1">' +
+            who +
+            ":</div>";
+          const body =
+            m.role === "assistant"
+              ? renderMarkdown(m.content)
+              : "<div class='whitespace-pre-wrap break-words text-sm sm:text-base'>" +
+                escapeHtml(m.content) +
+                "</div>";
+          return '<div class="my-2">' + label + body + "</div>";
+        });
+        const html = parts.join("");
         $("chat").innerHTML =
-          out || "<em>Mulai chat dengan mengetik pesan…</em>";
+          html || "<em>Mulai chat dengan mengetik pesan…</em>";
         $("chat").scrollTop = $("chat").scrollHeight;
       }
 
@@ -578,51 +835,199 @@
         }
       };
 
-      // Upload
-      $("btnUpload").onclick = async () => {
-        const list = $("file").files;
-        if (!list || list.length === 0) {
-          alert("Choose at least one file");
+      // Upload — ChatGPT-like drop zone (auto-upload on select/drag-drop)
+      const dropZone = $("dropZone");
+      const filePicker = $("filePicker");
+      const uploadInfo = $("uploadInfo");
+      const attachments = $("attachments");
+      const currentMaterialLabel = $("currentMaterialLabel");
+
+      function setCurrentMaterialLabel() {
+        currentMaterialLabel.textContent = materialId ? materialId : "none";
+      }
+
+      function bytesToHuman(n) {
+        const units = ["B", "KB", "MB", "GB"];
+        let i = 0;
+        let v = Number(n || 0);
+        while (v >= 1024 && i < units.length - 1) {
+          v /= 1024;
+          i++;
+        }
+        return `${v.toFixed(v < 10 && i > 0 ? 1 : 0)} ${units[i]}`;
+      }
+
+      function renderAttachmentsList(files, totalSize) {
+        if (!files || !files.length) {
+          attachments.innerHTML =
+            "<em class='text-gray-500'>No files yet. Drop or click to upload.</em>";
+        } else {
+          const html = files
+            .map((f) => {
+              const name = String(f.name || "");
+              const size = bytesToHuman(f.size || 0);
+              const occ = Number(f.occurrences || 0);
+              const occText = occ > 1 ? ` ×${occ}` : "";
+              return `
+                <div class="flex items-center justify-between rounded-md border border-gray-200 bg-white px-3 py-2">
+                  <div class="truncate">
+                    <span class="font-medium">${escapeHtml(name)}</span>
+                    <span class="ml-2 text-xs text-gray-500">${size}${occText}</span>
+                  </div>
+                  <button
+                    class="btnRemove text-xs px-2 py-1 rounded-md border border-gray-300 hover:bg-gray-50"
+                    data-name="${encodeURIComponent(name)}"
+                    title="Remove this file from material (destructive)"
+                  >
+                    Remove
+                  </button>
+                </div>
+              `;
+            })
+            .join("");
+          attachments.innerHTML = html;
+        }
+        if (typeof totalSize === "number") {
+          uploadInfo.textContent = `Total size: ${bytesToHuman(
+            totalSize
+          )} (limit 10 MB)`;
+        }
+      }
+
+      async function refreshMaterialList() {
+        setCurrentMaterialLabel();
+        if (!materialId) {
+          attachments.innerHTML =
+            "<em class='text-gray-500'>No files yet. Drop or click to upload.</em>";
+          uploadInfo.textContent = "";
           return;
         }
-        const fd = new FormData();
-        for (const f of list) fd.append("file", f);
+        try {
+          const res = await fetch(`/api/material/${materialId}`);
+          const data = await res.json();
+          const files = Array.isArray(data.files) ? data.files : [];
+          renderAttachmentsList(files, data.totalSize || 0);
+        } catch (e) {
+          uploadInfo.textContent = "List failed: " + e.message;
+        }
+      }
 
-        const appendEl = $("appendToggle");
-        const doAppend = !!materialId && appendEl && appendEl.checked;
+      async function autoUpload(selected) {
+        const files = Array.from(selected || []).filter((f) => !!f);
+        if (!files.length) return;
+        const fd = new FormData();
+        for (const f of files) fd.append("file", f);
+
+        const doAppend = !!materialId;
         if (doAppend) {
           fd.append("append", "true");
           fd.append("mergeTo", materialId);
         }
 
-        const count = list.length;
-        $(
-          "uploadInfo"
-        ).textContent = `Uploading ${count} file(s)... append=${doAppend}`;
+        uploadInfo.textContent = `Uploading ${files.length} file(s)...`;
         try {
           const res = await fetch("/api/upload", { method: "POST", body: fd });
           const data = await res.json();
           if (data.materialId) {
             materialId = data.materialId;
-            // enable append toggle and show current id
-            const el = $("appendToggle");
-            const cur = $("currentMaterial");
-            if (el) el.disabled = false;
-            if (cur) cur.textContent = `(current: ${materialId})`;
-
-            $("uploadInfo").textContent = `Uploaded ${
-              data.files
-            } file(s). materialId=${materialId} size=${data.size} ${
-              data.sizeAdded ? "(+" + data.sizeAdded + ")" : ""
-            } limit=${data.limit} appended=${!!data.appended}`;
+            setCurrentMaterialLabel();
+            uploadInfo.textContent = `Uploaded ${data.files} file(s). size=${
+              data.size
+            } ${data.sizeAdded ? "(+" + data.sizeAdded + ")" : ""} limit=${
+              data.limit
+            }`;
+            await refreshMaterialList();
           } else {
-            $("uploadInfo").textContent =
-              "Upload error: " + JSON.stringify(data);
+            uploadInfo.textContent = "Upload error: " + JSON.stringify(data);
           }
         } catch (e) {
-          $("uploadInfo").textContent = "Upload failed: " + e.message;
+          uploadInfo.textContent = "Upload failed: " + e.message;
         }
+      }
+
+      // Click on drop zone opens file picker
+      if (dropZone) {
+        dropZone.addEventListener(
+          "click",
+          () => filePicker && filePicker.click()
+        );
+        dropZone.addEventListener("keydown", (e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            filePicker && filePicker.click();
+          }
+        });
+        dropZone.addEventListener("dragover", (e) => {
+          e.preventDefault();
+          dropZone.classList.add("ring-2", "ring-gray-300");
+        });
+        dropZone.addEventListener("dragleave", () => {
+          dropZone.classList.remove("ring-2", "ring-gray-300");
+        });
+        dropZone.addEventListener("drop", (e) => {
+          e.preventDefault();
+          dropZone.classList.remove("ring-2", "ring-gray-300");
+          const dt = e.dataTransfer;
+          const files = dt && dt.files ? Array.from(dt.files) : [];
+          if (files.length) autoUpload(files);
+        });
+      }
+
+      // File picker change -> auto upload
+      if (filePicker) {
+        filePicker.addEventListener("change", () => {
+          const files = Array.from(filePicker.files || []);
+          // reset value so same file can be selected again later
+          filePicker.value = "";
+          if (files.length) autoUpload(files);
+        });
+      }
+
+      // Remove attachment (delegated)
+      if (attachments) {
+        attachments.addEventListener("click", async (e) => {
+          const btn =
+            e.target && e.target.closest
+              ? e.target.closest(".btnRemove")
+              : null;
+          if (!btn) return;
+          if (!materialId) return;
+          const name = decodeURIComponent(btn.getAttribute("data-name") || "");
+          if (!name) return;
+          uploadInfo.textContent = `Removing ${name}...`;
+          try {
+            const res = await fetch(`/api/material/${materialId}/remove`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ name }),
+            });
+            const data = await res.json();
+            if (data && data.materialId) {
+              uploadInfo.textContent = `Removed "${name}". Total size: ${bytesToHuman(
+                data.totalSize || 0
+              )}`;
+              await refreshMaterialList();
+            } else {
+              uploadInfo.textContent = "Remove error: " + JSON.stringify(data);
+            }
+          } catch (err) {
+            uploadInfo.textContent = "Remove failed: " + err.message;
+          }
+        });
+      }
+
+      // Start new material (client-side reset; does not delete existing server files)
+      $("btnNewMaterial").onclick = () => {
+        materialId = null;
+        setCurrentMaterialLabel();
+        attachments.innerHTML =
+          "<em class='text-gray-500'>New material. Drop or click to upload.</em>";
+        uploadInfo.textContent = "";
       };
+
+      // Initial render
+      setCurrentMaterialLabel();
+      // No material at first; keep empty list text
 
       // Shared runner to show JSON or answer into a target element
       async function runAndShow(endpoint, payload, targetId) {
@@ -636,13 +1041,14 @@
             body: JSON.stringify(payload),
           });
           const data = await res.json();
-          el.innerHTML = data.answer
-            ? "<pre class='whitespace-pre-wrap break-words text-sm sm:text-base'><code>" +
-              escapeHtml(data.answer) +
-              "</code></pre>"
-            : "<pre class='whitespace-pre-wrap break-words text-sm sm:text-base'><code>" +
+          if (data && typeof data.answer === "string" && data.answer.trim()) {
+            el.innerHTML = renderMarkdown(data.answer);
+          } else {
+            el.innerHTML =
+              "<pre class='whitespace-pre-wrap break-words text-sm sm:text-base'><code>" +
               escapeHtml(JSON.stringify(data, null, 2)) +
               "</code></pre>";
+          }
         } catch (e) {
           el.innerHTML =
             "<pre class='whitespace-pre-wrap break-words text-sm sm:text-base text-red-700'><code>" +
@@ -865,13 +1271,13 @@
               '<div class="text-sm sm:text-base"><span class="font-semibold text-primary">' +
               idx +
               ")</span> " +
-              escapeHtml(q) +
+              renderMarkdown(q) +
               "</div>" +
               '<div class="fc-hint">Click / Press Enter to flip</div>' +
               "</div>" +
               '<div class="fc-face fc-back">' +
               '<div class="text-sm sm:text-base">' +
-              escapeHtml(a) +
+              renderMarkdown(a) +
               "</div>" +
               '<div class="fc-hint">Click again to flip back</div>' +
               "</div>" +
@@ -925,6 +1331,246 @@
       // Init (Chat first)
       setActive("chat");
       renderChat();
+
+      // ===== Dialogue (coached conversation) =====
+      let dialogueSessionId = null;
+      let dialogueTopics = [];
+      let dialogueIndex = 0;
+      let dialogueStarted = false;
+      let dialogueLanguage = null;
+      let lastCoachQuestion = "";
+
+      // Append a message to the Dialogue stream
+      function renderDialogueStreamAppend(role, content) {
+        const el = $("dialogueStream");
+        if (!el) return;
+        const who =
+          role === "coach" ? "Coach" : role === "ilmatrix" ? "ilmatrix" : "You";
+        const body =
+          role === "coach" || role === "ilmatrix"
+            ? renderMarkdown(content)
+            : "<div class='whitespace-pre-wrap break-words text-sm sm:text-base'>" +
+              escapeHtml(content) +
+              "</div>";
+        const html =
+          '<div class="my-2">' +
+          '<div class="text-xs text-gray-500 font-semibold mb-1">' +
+          escapeHtml(who) +
+          ":</div>" +
+          body +
+          "</div>";
+        el.insertAdjacentHTML("beforeend", html);
+        el.scrollTop = el.scrollHeight;
+      }
+
+      // Reset Dialogue UI state
+      function resetDialogueUI() {
+        dialogueSessionId = null;
+        dialogueTopics = [];
+        dialogueIndex = 0;
+        dialogueStarted = false;
+        dialogueLanguage = null;
+        lastCoachQuestion = "";
+        const s = $("dialogueStream");
+        if (s)
+          s.innerHTML =
+            "<em class='text-gray-500'>Click Start to begin Dialogue.</em>";
+        const start = $("btnDialogueStart");
+        const begin = $("btnDialogueBegin");
+        const input = $("dialogueInput");
+        const send = $("btnDialogueSend");
+        const hint = $("btnDialogueHint");
+        if (start) start.classList.remove("hidden");
+        if (begin) begin.classList.add("hidden");
+        if (input) input.value = "";
+        if (send) send.disabled = true;
+        if (hint) hint.classList.add("hidden");
+      }
+
+      // Wire buttons (if the tab exists)
+      const btnDialogueStart = $("btnDialogueStart");
+      const btnDialogueBegin = $("btnDialogueBegin");
+      const btnDialogueSend = $("btnDialogueSend");
+      const btnDialogueHint = $("btnDialogueHint");
+
+      if (btnDialogueStart) {
+        btnDialogueStart.addEventListener("click", async () => {
+          if (!materialId) {
+            alert("Upload material first");
+            setActive("upload");
+            return;
+          }
+          try {
+            const res = await fetch("/api/dialogue/start", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ materialId }),
+            });
+            const data = await res.json();
+            dialogueSessionId = data.sessionId || null;
+            dialogueTopics = Array.isArray(data.topics) ? data.topics : [];
+            dialogueLanguage = data.language || null;
+
+            // Show opener as "ilmatrix"
+            const stream = $("dialogueStream");
+            if (stream) stream.innerHTML = "";
+            renderDialogueStreamAppend("ilmatrix", data.intro || "");
+            lastCoachQuestion = data.firstCoachPrompt || "";
+            dialogueStarted = true;
+
+            btnDialogueStart.classList.add("hidden");
+            btnDialogueBegin?.classList.remove("hidden");
+            if (btnDialogueSend) btnDialogueSend.disabled = true;
+            btnDialogueHint?.classList.add("hidden");
+          } catch (e) {
+            alert("Dialogue start failed: " + e.message);
+          }
+        });
+      }
+
+      if (btnDialogueBegin) {
+        btnDialogueBegin.addEventListener("click", () => {
+          btnDialogueBegin.classList.add("hidden");
+          if (lastCoachQuestion) {
+            renderDialogueStreamAppend("coach", lastCoachQuestion);
+            if (btnDialogueSend) btnDialogueSend.disabled = false;
+            btnDialogueHint?.classList.remove("hidden");
+            $("dialogueInput")?.focus();
+          }
+        });
+      }
+
+      async function sendDialogue() {
+        if (!dialogueStarted) return;
+        const input = $("dialogueInput");
+        const msg = (input?.value || "").trim();
+        if (!msg) return;
+        input.value = "";
+        renderDialogueStreamAppend("you", msg);
+        try {
+          const payload = {
+            sessionId: dialogueSessionId || undefined,
+            materialId,
+            topics: dialogueTopics,
+            currentTopicIndex: dialogueIndex,
+            userMessage: msg,
+            lastCoachQuestion,
+            language: dialogueLanguage || undefined,
+          };
+          const res = await fetch("/api/dialogue/step", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+          });
+          const data = await res.json();
+          const coachMsg = data.coachMessage || JSON.stringify(data);
+          renderDialogueStreamAppend("coach", coachMsg);
+
+          if (data.moveToNext) {
+            dialogueIndex = dialogueIndex + 1;
+
+            // finished all topics
+            if (dialogueIndex >= (dialogueTopics?.length || 3)) {
+              try {
+                const fbRes = await fetch("/api/dialogue/feedback", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    materialId,
+                    topics: dialogueTopics,
+                    history: [], // optional
+                    language: dialogueLanguage || undefined,
+                  }),
+                });
+                const fb = await fbRes.json();
+                let block = "";
+                if (fb && (fb.feedback || fb.strengths || fb.improvements)) {
+                  block += fb.feedback ? fb.feedback + "\n\n" : "";
+                  if (Array.isArray(fb.strengths) && fb.strengths.length) {
+                    block +=
+                      (dialogueLanguage === "id"
+                        ? "Kekuatan:\n"
+                        : "Strengths:\n") +
+                      fb.strengths.map((s) => "- " + s).join("\n") +
+                      "\n\n";
+                  }
+                  if (
+                    Array.isArray(fb.improvements) &&
+                    fb.improvements.length
+                  ) {
+                    block +=
+                      (dialogueLanguage === "id"
+                        ? "Perbaikan:\n"
+                        : "Improvements:\n") +
+                      fb.improvements.map((s) => "- " + s).join("\n");
+                  }
+                } else {
+                  block = coachMsg;
+                }
+                renderDialogueStreamAppend("coach", block);
+              } catch (e) {
+                renderDialogueStreamAppend(
+                  "coach",
+                  "Feedback error: " + e.message
+                );
+              }
+              if (btnDialogueSend) btnDialogueSend.disabled = true;
+              btnDialogueHint?.classList.add("hidden");
+              return;
+            }
+
+            if (data.nextCoachQuestion) {
+              lastCoachQuestion = data.nextCoachQuestion;
+              renderDialogueStreamAppend("coach", data.nextCoachQuestion);
+            }
+          } else {
+            if (data.nextCoachQuestion)
+              lastCoachQuestion = data.nextCoachQuestion;
+          }
+        } catch (e) {
+          renderDialogueStreamAppend(
+            "coach",
+            "Dialogue step error: " + e.message
+          );
+        }
+      }
+
+      if (btnDialogueSend) {
+        btnDialogueSend.addEventListener("click", sendDialogue);
+        $("dialogueInput")?.addEventListener("keydown", (e) => {
+          if (e.key === "Enter" && !e.shiftKey) {
+            e.preventDefault();
+            sendDialogue();
+          }
+        });
+      }
+
+      if (btnDialogueHint) {
+        btnDialogueHint.addEventListener("click", async () => {
+          if (!dialogueStarted) return;
+          const title =
+            (dialogueTopics && dialogueTopics[dialogueIndex]?.title) || "";
+          try {
+            const res = await fetch("/api/dialogue/hint", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                materialId,
+                currentTopicTitle: title,
+                language: dialogueLanguage || undefined,
+              }),
+            });
+            const data = await res.json();
+            const hint = data.hint || JSON.stringify(data);
+            renderDialogueStreamAppend(
+              "coach",
+              (dialogueLanguage === "id" ? "Petunjuk: " : "Hint: ") + hint
+            );
+          } catch (e) {
+            renderDialogueStreamAppend("coach", "Hint error: " + e.message);
+          }
+        });
+      }
     </script>
   </body>
 </html>

@@ -12,6 +12,10 @@ import {
   generateQuizTrainerMCQ,
   scoreQuizTrainerMCQ,
   generateFlashcards,
+  dialogueStart,
+  dialogueStep,
+  dialogueHint,
+  dialogueFeedback,
 } from "./groqClient.js";
 
 type Task = "explain" | "quiz" | "forum" | "exam";
@@ -352,6 +356,315 @@ api.post("/flashcards", async (c) => {
       { error: "Flashcards generation failed", detail: err?.message },
       500
     );
+  }
+});
+// ===== Dialogue endpoints =====
+api.post("/dialogue/start", async (c) => {
+  try {
+    const { materialId, materialText } = await c.req.json();
+    const text =
+      materialId || materialText
+        ? await readMaterial(materialId, materialText)
+        : "";
+    const result = await dialogueStart({ materialText: text });
+    // frontend keeps session; we attach a pseudo id for convenience
+    return c.json({ sessionId: randomUUID(), ...result });
+  } catch (err: any) {
+    console.error(err);
+    return c.json(
+      { error: "Dialogue start failed", detail: err?.message },
+      500
+    );
+  }
+});
+
+api.post("/dialogue/step", async (c) => {
+  try {
+    const {
+      materialId,
+      materialText,
+      topics,
+      currentTopicIndex,
+      userMessage,
+      lastCoachQuestion,
+      language,
+    } = await c.req.json();
+
+    const text =
+      materialId || materialText
+        ? await readMaterial(materialId, materialText)
+        : "";
+
+    // Special checkpoint: "How am I doing?"
+    const isHowAmIDoing =
+      typeof userMessage === "string" &&
+      /^\s*how\s+am\s+i\s+doing\??\s*$/i.test(userMessage);
+
+    if (isHowAmIDoing) {
+      const total = Array.isArray(topics) ? topics.length : 3;
+      const idx = Math.max(
+        0,
+        Math.min(Number(currentTopicIndex || 0), total - 1)
+      );
+      const title =
+        (Array.isArray(topics) && topics[idx] && topics[idx].title) ||
+        (language === "id" ? "topik saat ini" : "the current topic");
+      const completed = Math.max(0, Math.min(idx, total));
+      const msg =
+        language === "id"
+          ? `Kamu telah menyelesaikan ${completed} dari ${total} topik, dan saat ini kita membahas "${title}". Untuk melanjutkan: ${
+              lastCoachQuestion || "silakan jawab pertanyaan terakhir."
+            }`
+          : `You've completed ${completed} of ${total} topics, and we are currently working on "${title}". To pick up where we left off: ${
+              lastCoachQuestion || "please respond to the last question."
+            }`;
+      return c.json({
+        addressed: false,
+        moveToNext: false,
+        coachMessage: msg,
+      });
+    }
+
+    const currTitle =
+      (Array.isArray(topics) &&
+        topics?.[Number(currentTopicIndex || 0)]?.title) ||
+      "";
+    const nextTitle =
+      (Array.isArray(topics) &&
+        topics?.[Number(currentTopicIndex || 0) + 1]?.title) ||
+      undefined;
+
+    const result = await dialogueStep({
+      materialText: text,
+      language,
+      currentTopicTitle: currTitle || (language === "id" ? "Topik" : "Topic"),
+      userMessage: String(userMessage || ""),
+      nextTopicTitle: nextTitle,
+    });
+
+    return c.json(result);
+  } catch (err: any) {
+    console.error(err);
+    return c.json({ error: "Dialogue step failed", detail: err?.message }, 500);
+  }
+});
+
+api.post("/dialogue/hint", async (c) => {
+  try {
+    const { materialId, materialText, currentTopicTitle, language } =
+      await c.req.json();
+    const text =
+      materialId || materialText
+        ? await readMaterial(materialId, materialText)
+        : "";
+    const result = await dialogueHint({
+      materialText: text,
+      language,
+      currentTopicTitle: String(currentTopicTitle || ""),
+    });
+    return c.json(result);
+  } catch (err: any) {
+    console.error(err);
+    return c.json({ error: "Dialogue hint failed", detail: err?.message }, 500);
+  }
+});
+
+api.post("/dialogue/feedback", async (c) => {
+  try {
+    const { materialId, materialText, topics, history, language } =
+      await c.req.json();
+    const text =
+      materialId || materialText
+        ? await readMaterial(materialId, materialText)
+        : "";
+    const result = await dialogueFeedback({
+      materialText: text,
+      language,
+      topics: Array.isArray(topics) ? topics : [],
+      history: Array.isArray(history) ? history : [],
+    });
+    return c.json(result);
+  } catch (err: any) {
+    console.error(err);
+    return c.json(
+      { error: "Dialogue feedback failed", detail: err?.message },
+      500
+    );
+  }
+});
+
+/** ===== Helpers to parse stored material into per-file segments ===== */
+type FileSegment = {
+  name: string;
+  markerStart: number;
+  contentStart: number;
+  end: number;
+};
+
+function escapeRegExp(s: string) {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function parseFileSegments(text: string): FileSegment[] {
+  const fileRe = /(^|\n)===== FILE: ([^\n]+) =====\n/g;
+  const appendRe = /(^|\n)===== APPEND BATCH [^\n]* =====\n/g;
+
+  // Collect boundary markers
+  const fileMarkers: {
+    name: string;
+    markerStart: number;
+    contentStart: number;
+  }[] = [];
+  const boundaries: number[] = [];
+
+  let m: RegExpExecArray | null;
+  while ((m = fileRe.exec(text))) {
+    const prefixNL = m[1] ? 1 : 0;
+    const markerStart = m.index + prefixNL;
+    const name = m[2].trim();
+    const headerLen = ("===== FILE: " + name + " =====\n").length;
+    const contentStart = markerStart + headerLen;
+    fileMarkers.push({ name, markerStart, contentStart });
+    boundaries.push(markerStart);
+  }
+  while ((m = appendRe.exec(text))) {
+    const prefixNL = m[1] ? 1 : 0;
+    const markerStart = m.index + prefixNL;
+    boundaries.push(markerStart);
+  }
+  boundaries.sort((a, b) => a - b);
+
+  // Build segments by finding the next boundary after this marker
+  const segments: FileSegment[] = [];
+  for (let i = 0; i < fileMarkers.length; i++) {
+    const fm = fileMarkers[i];
+    // Find first boundary strictly greater than fm.markerStart
+    let end = text.length;
+    for (let j = 0; j < boundaries.length; j++) {
+      const b = boundaries[j];
+      if (b > fm.markerStart) {
+        end = b;
+        break;
+      }
+    }
+    segments.push({
+      name: fm.name,
+      markerStart: fm.markerStart,
+      contentStart: fm.contentStart,
+      end,
+    });
+  }
+  return segments;
+}
+
+/** ===== Material listing endpoint =====
+ * Returns aggregated file names, their approximate character size, occurrences, and total size.
+ */
+api.get("/material/:id", async (c) => {
+  try {
+    await ensureUploads();
+    const id = c.req.param("id");
+    if (!id) return c.json({ error: "material id required" }, 400);
+    const path = join(uploadsDir, `${id}.txt`);
+    const text = await fs.readFile(path, "utf8").catch(() => "");
+    if (!text) {
+      return c.json({
+        materialId: id,
+        totalSize: 0,
+        files: [],
+      });
+    }
+    const segs = parseFileSegments(text);
+    const byName: Record<
+      string,
+      { name: string; size: number; occurrences: number }
+    > = {};
+    for (const s of segs) {
+      const size = Math.max(0, s.end - s.contentStart);
+      if (!byName[s.name])
+        byName[s.name] = { name: s.name, size: 0, occurrences: 0 };
+      byName[s.name].size += size;
+      byName[s.name].occurrences += 1;
+    }
+    const files = Object.values(byName).sort((a, b) => b.size - a.size);
+    return c.json({
+      materialId: id,
+      totalSize: Buffer.byteLength(text, "utf8"),
+      files,
+    });
+  } catch (err: any) {
+    console.error(err);
+    return c.json({ error: "List material failed", detail: err?.message }, 500);
+  }
+});
+
+/** ===== Remove file(s) from a material by name (destructive) =====
+ * Body: { name: string }
+ * Removes all occurrences of that file name and rewrites the stored text.
+ */
+api.post("/material/:id/remove", async (c) => {
+  try {
+    await ensureUploads();
+    const id = c.req.param("id");
+    if (!id) return c.json({ error: "material id required" }, 400);
+    const { name } = await c.req.json();
+    if (!name || typeof name !== "string") {
+      return c.json({ error: "name is required" }, 400);
+    }
+
+    const path = join(uploadsDir, `${id}.txt`);
+    let text = await fs.readFile(path, "utf8").catch((e) => {
+      if (e?.code === "ENOENT") return "";
+      throw e;
+    });
+    if (!text) return c.json({ error: "material not found or empty" }, 404);
+
+    const segs = parseFileSegments(text).filter((s) => s.name === name);
+    if (!segs.length) {
+      return c.json({ error: `file "${name}" not found in material` }, 404);
+    }
+
+    // Build new text by skipping segments to remove (including their headers)
+    const removeRanges = parseFileSegments(text)
+      .filter((s) => s.name === name)
+      .sort((a, b) => a.markerStart - b.markerStart)
+      .map((s) => ({ start: s.markerStart, end: s.end }));
+
+    const parts: string[] = [];
+    let cursor = 0;
+    for (const r of removeRanges) {
+      if (cursor < r.start) parts.push(text.slice(cursor, r.start));
+      cursor = r.end;
+    }
+    if (cursor < text.length) parts.push(text.slice(cursor));
+    let updated = parts.join("").trim();
+
+    await fs.writeFile(path, updated, "utf8");
+
+    // Return updated listing
+    const segsAfter = parseFileSegments(updated);
+    const byName: Record<
+      string,
+      { name: string; size: number; occurrences: number }
+    > = {};
+    for (const s of segsAfter) {
+      const size = Math.max(0, s.end - s.contentStart);
+      if (!byName[s.name])
+        byName[s.name] = { name: s.name, size: 0, occurrences: 0 };
+      byName[s.name].size += size;
+      byName[s.name].occurrences += 1;
+    }
+    const files = Object.values(byName).sort((a, b) => b.size - a.size);
+
+    return c.json({
+      materialId: id,
+      removed: name,
+      totalSize: Buffer.byteLength(updated, "utf8"),
+      files,
+    });
+  } catch (err: any) {
+    console.error(err);
+    return c.json({ error: "Remove failed", detail: err?.message }, 500);
   }
 });
 

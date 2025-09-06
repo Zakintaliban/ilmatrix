@@ -246,8 +246,17 @@ Base: /api
   - Response: { analysis: string } // deterministic score + rationale/weakness/study plan for wrong answers only + final Jawaban
 
 - POST /api/flashcards
+
   - JSON: { materialId: string, numCards: number }
   - Response: { cards: { id:number, front:string, back:string }[] }
+
+- GET /api/material/:id
+
+  - Response: { materialId: string, totalSize: number, files: [{ name: string, size: number, occurrences: number }] }
+
+- POST /api/material/:id/remove
+  - JSON: { name: string }
+  - Response: { materialId: string, removed: string, totalSize: number, files: [{ name: string, size: number, occurrences: number }] }
 
 ## 7) Frontend Structure
 
@@ -362,6 +371,20 @@ Response:
 
 ```
 { "materialId": "a1b2c3d4", "appended": true, "files": 1, "size": 123456, "sizeAdded": 7890, "limit": "10MB" }
+```
+
+14.1b List files inside a material
+
+```
+curl http://localhost:8787/api/material/a1b2c3d4
+```
+
+14.1c Remove a file's content from a material (destructive)
+
+```
+curl -X POST http://localhost:8787/api/material/a1b2c3d4/remove \
+  -H "Content-Type: application/json" \
+  -d '{ "name": "slides.pptx" }'
 ```
 
 14.2 Explain
