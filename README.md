@@ -231,4 +231,4 @@ curl -H "Content-Type: application/json" \
 
 ## License
 
-MIT (or your preferred license)
+Apache-2.0 License
