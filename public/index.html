@@ -10,6 +10,7 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
       tailwind.config = {
+        darkMode: "class",
         theme: {
           extend: {
             colors: {
@@ -63,6 +64,61 @@
     <style>
       html {
         scroll-behavior: smooth;
+        scrollbar-gutter: stable both-edges;
+      }
+      /* Dark-safe brand text colors to avoid clash on black */
+      .dark .text-primary {
+        color: #93c5fd !important;
+      } /* sky-300 */
+      .dark .text-secondary {
+        color: #f9a8d4 !important;
+      } /* pink-300 */
+      .dark .text-tertiary {
+        color: #86efac !important;
+      } /* emerald-300 */
+
+      /* Momentum scroll for iOS */
+      .momentum {
+        -webkit-overflow-scrolling: touch;
+      }
+
+      /* Safe-area insets for iOS notch/home bar */
+      :root {
+        --safe-top: env(safe-area-inset-top, 0px);
+        --safe-bottom: env(safe-area-inset-bottom, 0px);
+        --safe-left: env(safe-area-inset-left, 0px);
+        --safe-right: env(safe-area-inset-right, 0px);
+      }
+      body {
+        padding-left: var(--safe-left);
+        padding-right: var(--safe-right);
+        padding-bottom: var(--safe-bottom);
+      }
+      header {
+        padding-top: var(--safe-top);
+      }
+
+      /* Global focus-visible ring for interactive controls */
+      :where(
+          a,
+          button,
+          input,
+          textarea,
+          select,
+          [role="button"]
+        ):focus-visible {
+        outline: 2px solid #6366f1; /* indigo-500 */
+        outline-offset: 2px;
+      }
+
+      /* Reduce mobile tap highlight */
+      * {
+        -webkit-tap-highlight-color: transparent;
+      }
+
+      /* Helper for safe bottom padding on scrollable containers (optional) */
+      .pb-safe {
+        padding-bottom: calc(1rem + var(--safe-bottom));
       }
     </style>
     <!-- Structured data -->
@@ -131,31 +187,53 @@
       }
     </script>
   </head>
-  <body class="bg-gray-50 text-gray-900">
-    <header class="bg-primary text-white">
+  <body
+    class="bg-gray-50 dark:bg-black text-gray-900 dark:text-slate-100 min-h-screen flex flex-col"
+  >
+    <header class="bg-primary text-white dark:bg-black">
       <div
         class="container mx-auto max-w-6xl px-4 py-4 flex items-center justify-between"
       >
         <a href="/" class="text-xl sm:text-2xl font-bold tracking-tight"
           >ILMATRIX</a
         >
-        <nav class="flex items-center gap-2">
-          <a
-            href="/app.html"
-            class="text-xs sm:text-sm px-3 py-2 rounded-md hover:bg-indigo-900"
-            >App</a
+        <div class="flex items-center gap-2">
+          <nav class="flex items-center gap-2">
+            <a
+              href="/app.html"
+              class="text-xs sm:text-sm px-3 py-2 rounded-md hover:bg-indigo-900"
+              >App</a
+            >
+            <a
+              href="/about.html"
+              class="text-xs sm:text-sm px-3 py-2 rounded-md hover:bg-indigo-900"
+              >About</a
+            >
+          </nav>
+          <button
+            id="btnTheme"
+            class="inline-flex items-center gap-1.5 text-xs sm:text-sm px-3 py-2 rounded-xl border border-white/30 ring-1 ring-black/5 bg-white/80 hover:bg-white/90 text-slate-900 shadow-sm transition-all duration-200 ease-out dark:bg-slate-800/80 dark:hover:bg-slate-800 dark:text-slate-100"
+            title="Toggle theme"
+            aria-label="Toggle theme"
           >
-          <a
-            href="/about.html"
-            class="text-xs sm:text-sm px-3 py-2 rounded-md hover:bg-indigo-900"
-            >About</a
-          >
-        </nav>
+            <span
+              class="icon-sun text-yellow-500 dark:hidden"
+              aria-hidden="true"
+              >☀️</span
+            >
+            <span
+              class="icon-moon hidden dark:inline text-slate-100"
+              aria-hidden="true"
+              >🌙</span
+            >
+            Theme
+          </button>
+        </div>
       </div>
     </header>
 
-    <main>
-      <section class="bg-white">
+    <main class="flex-1">
+      <section class="bg-white dark:bg-neutral-900">
         <div class="container mx-auto max-w-6xl px-4 py-14 sm:py-20">
           <div class="grid grid-cols-1 md:grid-cols-2 gap-8 items-center">
             <div>
@@ -164,7 +242,9 @@
               >
                 Learn smarter with ILMATRIX
               </h2>
-              <p class="mt-4 text-gray-700 text-base sm:text-lg">
+              <p
+                class="mt-4 text-gray-700 dark:text-slate-300 text-base sm:text-lg"
+              >
                 An AI study companion for university students: upload your
                 materials and get help explaining concepts, practicing quizzes,
                 drafting forum replies, preparing for exams, and more.
@@ -188,37 +268,41 @@
             </div>
             <div>
               <div
-                class="rounded-xl border border-gray-200 bg-gray-50 p-4 shadow-sm"
+                class="rounded-xl border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-neutral-900 p-4 shadow-sm"
               >
                 <div class="h-48 sm:h-60 grid grid-cols-3 gap-3">
                   <div
-                    class="col-span-2 rounded-lg bg-white ring-1 ring-gray-200 p-3"
+                    class="col-span-2 rounded-lg bg-white dark:bg-neutral-900 ring-1 ring-gray-200 dark:ring-white/10 p-3"
                   >
                     <div
-                      class="h-full w-full rounded-md bg-gradient-to-br from-primary/10 to-secondary/10 flex items-center justify-center text-sm text-gray-600"
+                      class="h-full w-full rounded-md bg-gradient-to-br from-primary/10 to-secondary/10 flex items-center justify-center text-sm text-gray-600 dark:text-slate-300"
                     >
                       Explain • Quiz • Forum • Exam
                     </div>
                   </div>
-                  <div class="rounded-lg bg-white ring-1 ring-gray-200 p-3">
+                  <div
+                    class="rounded-lg bg-white dark:bg-neutral-900 ring-1 ring-gray-200 dark:ring-white/10 p-3"
+                  >
                     <div
-                      class="h-full w-full rounded-md bg-gradient-to-br from-tertiary/10 to-primary/10 flex items-center justify-center text-sm text-gray-600"
+                      class="h-full w-full rounded-md bg-gradient-to-br from-tertiary/10 to-primary/10 flex items-center justify-center text-sm text-gray-600 dark:text-slate-300"
                     >
                       Flashcards • MCQ
                     </div>
                   </div>
-                  <div class="rounded-lg bg-white ring-1 ring-gray-200 p-3">
+                  <div
+                    class="rounded-lg bg-white dark:bg-neutral-900 ring-1 ring-gray-200 dark:ring-white/10 p-3"
+                  >
                     <div
-                      class="h-full w-full rounded-md bg-gradient-to-br from-secondary/10 to-tertiary/10 flex items-center justify-center text-sm text-gray-600"
+                      class="h-full w-full rounded-md bg-gradient-to-br from-secondary/10 to-tertiary/10 flex items-center justify-center text-sm text-gray-600 dark:text-slate-300"
                     >
                       OCR • DOCX • PPTX
                     </div>
                   </div>
                   <div
-                    class="col-span-2 rounded-lg bg-white ring-1 ring-gray-200 p-3"
+                    class="col-span-2 rounded-lg bg-white dark:bg-neutral-900 ring-1 ring-gray-200 dark:ring-white/10 p-3"
                   >
                     <div
-                      class="h-full w-full rounded-md bg-gradient-to-br from-primary/10 to-tertiary/10 flex items-center justify-center text-sm text-gray-600"
+                      class="h-full w-full rounded-md bg-gradient-to-br from-primary/10 to-tertiary/10 flex items-center justify-center text-sm text-gray-600 dark:text-slate-300"
                     >
                       Chat with context
                     </div>
@@ -230,52 +314,76 @@
         </div>
       </section>
 
-      <section id="features" class="bg-gray-50">
+      <section id="features" class="bg-gray-50 dark:bg-neutral-950">
         <div class="container mx-auto max-w-6xl px-4 py-12">
           <h3 class="text-2xl font-bold text-primary">Key features</h3>
-          <p class="text-gray-600 mt-1 text-sm">
+          <p class="text-gray-600 dark:text-slate-300 mt-1 text-sm">
             Everything you need to study effectively.
           </p>
           <div
             class="mt-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4"
           >
-            <div class="rounded-lg bg-white ring-1 ring-gray-200 p-4">
-              <h4 class="font-semibold text-gray-900">Explain material</h4>
-              <p class="text-sm text-gray-600 mt-1">
+            <div
+              class="rounded-lg bg-white dark:bg-neutral-900 ring-1 ring-gray-200 dark:ring-white/10 p-4"
+            >
+              <h4 class="font-semibold text-gray-900 dark:text-white">
+                Explain material
+              </h4>
+              <p class="text-sm text-gray-600 dark:text-slate-300 mt-1">
                 Get concise, structured explanations that quote from your
                 materials.
               </p>
             </div>
-            <div class="rounded-lg bg-white ring-1 ring-gray-200 p-4">
-              <h4 class="font-semibold text-gray-900">Quiz helper</h4>
-              <p class="text-sm text-gray-600 mt-1">
+            <div
+              class="rounded-lg bg-white dark:bg-neutral-900 ring-1 ring-gray-200 dark:ring-white/10 p-4"
+            >
+              <h4 class="font-semibold text-gray-900 dark:text-white">
+                Quiz helper
+              </h4>
+              <p class="text-sm text-gray-600 dark:text-slate-300 mt-1">
                 Solve or generate quizzes, with a final "Jawaban" section when
                 needed.
               </p>
             </div>
-            <div class="rounded-lg bg-white ring-1 ring-gray-200 p-4">
-              <h4 class="font-semibold text-gray-900">Forum reply</h4>
-              <p class="text-sm text-gray-600 mt-1">
+            <div
+              class="rounded-lg bg-white dark:bg-neutral-900 ring-1 ring-gray-200 dark:ring-white/10 p-4"
+            >
+              <h4 class="font-semibold text-gray-900 dark:text-white">
+                Forum reply
+              </h4>
+              <p class="text-sm text-gray-600 dark:text-slate-300 mt-1">
                 Draft respectful, academically sound forum responses.
               </p>
             </div>
-            <div class="rounded-lg bg-white ring-1 ring-gray-200 p-4">
-              <h4 class="font-semibold text-gray-900">Exam helper</h4>
-              <p class="text-sm text-gray-600 mt-1">
+            <div
+              class="rounded-lg bg-white dark:bg-neutral-900 ring-1 ring-gray-200 dark:ring-white/10 p-4"
+            >
+              <h4 class="font-semibold text-gray-900 dark:text-white">
+                Exam helper
+              </h4>
+              <p class="text-sm text-gray-600 dark:text-slate-300 mt-1">
                 Prepare ethically with study-first guidance and integrity
                 safeguards.
               </p>
             </div>
-            <div class="rounded-lg bg-white ring-1 ring-gray-200 p-4">
-              <h4 class="font-semibold text-gray-900">MCQ quiz</h4>
-              <p class="text-sm text-gray-600 mt-1">
+            <div
+              class="rounded-lg bg-white dark:bg-neutral-900 ring-1 ring-gray-200 dark:ring-white/10 p-4"
+            >
+              <h4 class="font-semibold text-gray-900 dark:text-white">
+                MCQ quiz
+              </h4>
+              <p class="text-sm text-gray-600 dark:text-slate-300 mt-1">
                 Generate multiple‑choice questions and get deterministic grading
                 with concise explanations.
               </p>
             </div>
-            <div class="rounded-lg bg-white ring-1 ring-gray-200 p-4">
-              <h4 class="font-semibold text-gray-900">Flashcards</h4>
-              <p class="text-sm text-gray-600 mt-1">
+            <div
+              class="rounded-lg bg-white dark:bg-neutral-900 ring-1 ring-gray-200 dark:ring-white/10 p-4"
+            >
+              <h4 class="font-semibold text-gray-900 dark:text-white">
+                Flashcards
+              </h4>
+              <p class="text-sm text-gray-600 dark:text-slate-300 mt-1">
                 Auto‑generated flip cards from your materials for quick review.
               </p>
             </div>
@@ -283,25 +391,31 @@
         </div>
       </section>
 
-      <section id="how" class="bg-white">
+      <section id="how" class="bg-white dark:bg-neutral-900">
         <div class="container mx-auto max-w-6xl px-4 py-12">
           <h3 class="text-2xl font-bold text-primary">How it works</h3>
           <div class="mt-6 grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <div class="rounded-lg ring-1 ring-gray-200 p-4 bg-gray-50">
+            <div
+              class="rounded-lg ring-1 ring-gray-200 dark:ring-white/10 p-4 bg-gray-50 dark:bg-neutral-900"
+            >
               <div class="text-primary font-semibold">1. Upload</div>
-              <div class="text-sm text-gray-600 mt-1">
+              <div class="text-sm text-gray-600 dark:text-slate-300 mt-1">
                 PDF, DOCX, PPTX, TXT, or images. OCR included.
               </div>
             </div>
-            <div class="rounded-lg ring-1 ring-gray-200 p-4 bg-gray-50">
+            <div
+              class="rounded-lg ring-1 ring-gray-200 dark:ring-white/10 p-4 bg-gray-50 dark:bg-neutral-900"
+            >
               <div class="text-primary font-semibold">2. Choose</div>
-              <div class="text-sm text-gray-600 mt-1">
+              <div class="text-sm text-gray-600 dark:text-slate-300 mt-1">
                 Explain, quiz (MCQ), forum, exam, flashcards, or chat.
               </div>
             </div>
-            <div class="rounded-lg ring-1 ring-gray-200 p-4 bg-gray-50">
+            <div
+              class="rounded-lg ring-1 ring-gray-200 dark:ring-white/10 p-4 bg-gray-50 dark:bg-neutral-900"
+            >
               <div class="text-primary font-semibold">3. Iterate</div>
-              <div class="text-sm text-gray-600 mt-1">
+              <div class="text-sm text-gray-600 dark:text-slate-300 mt-1">
                 Discuss the results and refine with chat.
               </div>
             </div>
@@ -316,13 +430,13 @@
         </div>
       </section>
 
-      <section id="tech" class="bg-gray-50">
+      <section id="tech" class="bg-gray-50 dark:bg-neutral-950">
         <div class="container mx-auto max-w-6xl px-4 py-12">
           <h3 class="text-2xl font-bold text-primary">
             Fast, reliable, privacy-aware
           </h3>
           <ul
-            class="mt-3 text-sm text-gray-700 list-disc list-inside space-y-1"
+            class="mt-3 text-sm text-gray-700 dark:text-slate-300 list-disc list-inside space-y-1"
           >
             <li>Powered by Groq with Meta Llama models.</li>
             <li>
@@ -337,7 +451,7 @@
         </div>
       </section>
 
-      <section class="bg-white">
+      <section class="bg-white dark:bg-neutral-900">
         <div class="container mx-auto max-w-6xl px-4 py-12">
           <div
             class="rounded-xl bg-primary text-white p-6 sm:p-8 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4"
@@ -360,16 +474,69 @@
       </section>
     </main>
 
-    <footer class="border-t border-gray-200">
-      <div class="container mx-auto max-w-6xl px-4 py-6 text-xs text-gray-500">
+    <footer class="border-t border-gray-200 dark:border-white/10">
+      <div
+        class="container mx-auto max-w-6xl px-4 py-6 text-xs text-gray-500 dark:text-slate-400"
+      >
         Theme colors:
         <span class="font-medium text-primary">Resistance Blue</span> ·
         <span class="font-medium text-secondary">Brave Pink</span> ·
         <span class="font-medium text-tertiary">Hero Green</span>
       </div>
-      <div class="container mx-auto max-w-6xl px-4 py-6 text-xs text-gray-500">
+      <div
+        class="container mx-auto max-w-6xl px-4 py-6 text-xs text-gray-500 dark:text-slate-400"
+      >
         <p>Made with ❤️ by ILMATRIX</p>
       </div>
     </footer>
+
+    <script>
+      // Theme init + toggle (persistent via localStorage + cookie; icon swaps via Tailwind dark:)
+      (function () {
+        const root = document.documentElement;
+        const getCookie = (name) => {
+          const parts = document.cookie.split("; ").filter(Boolean);
+          const hit = parts.find((p) => p.startsWith(name + "="));
+          return hit
+            ? decodeURIComponent(hit.split("=").slice(1).join("="))
+            : null;
+        };
+        const persist = (mode) => {
+          try {
+            localStorage.setItem("theme", mode);
+          } catch {}
+          try {
+            document.cookie =
+              "theme=" +
+              encodeURIComponent(mode) +
+              "; max-age=31536000; path=/; SameSite=Lax";
+          } catch {}
+        };
+        const getSaved = () => {
+          let v = null;
+          try {
+            v = localStorage.getItem("theme");
+          } catch {}
+          if (!v) v = getCookie("theme");
+          return v;
+        };
+        const saved = getSaved();
+        const prefersDark =
+          window.matchMedia &&
+          window.matchMedia("(prefers-color-scheme: dark)").matches;
+        const initial = saved ? saved : prefersDark ? "dark" : "light";
+        root.classList.toggle("dark", initial === "dark");
+        if (!saved) persist(initial);
+
+        const btn = document.getElementById("btnTheme");
+        if (btn) {
+          btn.addEventListener("click", () => {
+            const newMode = root.classList.contains("dark") ? "light" : "dark";
+            root.classList.toggle("dark", newMode === "dark");
+            persist(newMode);
+          });
+        }
+      })();
+    </script>
   </body>
 </html>

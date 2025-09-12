@@ -10,6 +10,7 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
       tailwind.config = {
+        darkMode: "class",
         theme: {
           extend: {
             colors: {
@@ -95,6 +96,7 @@
     <style>
       html {
         scroll-behavior: smooth;
+        scrollbar-gutter: stable both-edges;
       }
       /* Flashcard flip styles */
       .fc-scene {
@@ -178,6 +180,16 @@
         justify-content: center;
         text-align: center;
       }
+      .dark .fc-face {
+        background: #0a0a0a;
+        border-color: rgba(255, 255, 255, 0.1);
+      }
+      .dark .fc-front {
+        color: #ffffff;
+      }
+      .dark .fc-back {
+        color: #e5e7eb;
+      }
       .fc-front {
         color: rgb(17 24 39); /* gray-900 */
         font-weight: 600;
@@ -230,11 +242,216 @@
         padding-left: 0.75rem;
         color: #6b7280;
       }
+      /* Glass + Chat bubbles + Avatar */
+      .avatar {
+        width: 28px;
+        height: 28px;
+        border-radius: 9999px;
+        background: rgba(148, 163, 184, 0.25);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 12px;
+        color: rgb(71 85 105);
+      }
+      .dark .avatar {
+        background: rgba(255, 255, 255, 0.08);
+        color: rgb(203 213 225);
+      }
+      .bubble-in {
+        background: rgba(255, 255, 255, 0.7);
+        color: rgb(15 23 42);
+        border: 1px solid rgba(255, 255, 255, 0.25);
+      }
+      .dark .bubble-in {
+        background: rgba(255, 255, 255, 0.06);
+        color: rgb(226 232 240);
+        border-color: rgba(255, 255, 255, 0.12);
+      }
+      .bubble-out {
+        background: rgba(99, 102, 241, 0.12);
+        color: rgb(15 23 42);
+        border: 1px solid rgba(99, 102, 241, 0.25);
+      }
+      .dark .bubble-out {
+        background: rgba(99, 102, 241, 0.22);
+        color: #fff;
+        border-color: rgba(99, 102, 241, 0.35);
+      }
+
+      /* Loading skeleton */
+      .skeleton {
+        position: relative;
+        overflow: hidden;
+        background: rgba(0, 0, 0, 0.06);
+        border-radius: 0.5rem;
+        min-height: 2.25rem;
+      }
+      .dark .skeleton {
+        background: rgba(255, 255, 255, 0.06);
+      }
+      .skeleton::after {
+        content: "";
+        position: absolute;
+        inset: 0;
+        transform: translateX(-100%);
+        background: linear-gradient(
+          90deg,
+          transparent,
+          rgba(255, 255, 255, 0.35),
+          transparent
+        );
+        animation: shimmer 1.2s infinite;
+      }
+      @keyframes shimmer {
+        100% {
+          transform: translateX(100%);
+        }
+      }
+      /* Dark brand/text palette to avoid clashes on black */
+      .dark .text-primary {
+        color: #93c5fd !important;
+      } /* sky-300 */
+      .dark .text-secondary {
+        color: #f9a8d4 !important;
+      } /* pink-300 */
+      .dark .text-tertiary {
+        color: #86efac !important;
+      } /* emerald-300 */
+      .dark .text-gray-700 {
+        color: #cbd5e1 !important;
+      } /* slate-300 */
+      .dark .text-gray-600 {
+        color: #cbd5e1 !important;
+      }
+
+      /* Momentum scroll for iOS */
+      .momentum {
+        -webkit-overflow-scrolling: touch;
+      }
+
+      /* Safe-area insets for iOS notch/home bar */
+      :root {
+        --safe-top: env(safe-area-inset-top, 0px);
+        --safe-bottom: env(safe-area-inset-bottom, 0px);
+        --safe-left: env(safe-area-inset-left, 0px);
+        --safe-right: env(safe-area-inset-right, 0px);
+      }
+      body {
+        padding-left: var(--safe-left);
+        padding-right: var(--safe-right);
+        padding-bottom: var(--safe-bottom);
+      }
+      header {
+        padding-top: var(--safe-top);
+      }
+      /* Adjust tools panel top to account for safe-area (mobile and sm+) */
+      #toolsPanel {
+        top: calc(5rem + var(--safe-top));
+      }
+      @media (min-width: 640px) {
+        #toolsPanel {
+          top: calc(6rem + var(--safe-top));
+        }
+      }
+
+      /* Global focus-visible ring for interactive controls */
+      :where(
+          a,
+          button,
+          input,
+          textarea,
+          select,
+          [role="tab"],
+          [role="button"]
+        ):focus-visible {
+        outline: 2px solid #6366f1; /* indigo-500 */
+        outline-offset: 2px;
+      }
+
+      /* Reduce mobile tap highlight */
+      * {
+        -webkit-tap-highlight-color: transparent;
+      }
+
+      /* Safer modal scrolling for in-place tools panel */
+      #toolsPanel {
+        overscroll-behavior: contain;
+        touch-action: pan-y;
+      }
+
+      /* Helper for safe bottom padding on scrollable containers */
+      .pb-safe {
+        padding-bottom: calc(1rem + var(--safe-bottom));
+      }
+
+      /* Larger touch targets for tools list items */
+      #toolsList .tool-btn {
+        min-height: 2.5rem; /* ~40px tap target */
+        padding-top: 0.5rem;
+        padding-bottom: 0.5rem;
+        border-radius: 0.5rem; /* md */
+      }
+
+      /* Compact quick menu for mobile (ChatGPT-like) */
+      .quick-menu {
+        position: absolute;
+        top: 44px; /* just below the + button */
+        left: 0;
+        z-index: 60;
+        width: 220px;
+        border-radius: 0.75rem;
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        background: rgba(255, 255, 255, 0.9);
+        -webkit-backdrop-filter: blur(12px);
+        backdrop-filter: blur(12px);
+        box-shadow: 0 10px 25px rgba(0, 0, 0, 0.25);
+      }
+      .quick-menu::before {
+        content: "";
+        position: absolute;
+        top: -6px;
+        left: 14px; /* arrow aligns under + button */
+        width: 10px;
+        height: 10px;
+        transform: rotate(45deg);
+        border-left: 1px solid rgba(255, 255, 255, 0.2);
+        border-top: 1px solid rgba(255, 255, 255, 0.2);
+        background: inherit;
+        -webkit-backdrop-filter: inherit;
+        backdrop-filter: inherit;
+      }
+      .dark .quick-menu {
+        background: rgba(0, 0, 0, 0.6);
+        border-color: rgba(255, 255, 255, 0.12);
+      }
+      .quick-item {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        width: 100%;
+        padding: 8px 12px;
+        font-size: 0.9rem;
+        color: #0f172a; /* slate-900 */
+      }
+      .quick-item:hover {
+        background: rgba(0, 0, 0, 0.04);
+      }
+      .dark .quick-item {
+        color: #e5e7eb; /* gray-200 */
+      }
+      .dark .quick-item:hover {
+        background: rgba(255, 255, 255, 0.08);
+      }
     </style>
   </head>
-  <body class="bg-gray-50 text-gray-900">
+  <body
+    class="bg-gradient-to-b from-slate-50 to-slate-100 dark:from-black dark:to-black text-slate-900 dark:text-slate-100 min-h-screen flex flex-col antialiased selection:bg-indigo-500/20 selection:text-indigo-900 dark:selection:text-white"
+  >
     <!-- Header -->
-    <header class="bg-primary text-white">
+    <header
+      class="sticky top-0 z-40 bg-primary text-white dark:bg-black border-b border-white/20 dark:border-white/10 ring-1 ring-black/5 shadow-lg"
+    >
       <div
         class="container mx-auto max-w-6xl px-4 py-4 flex items-center justify-between"
       >
@@ -254,18 +471,40 @@
               >About</a
             >
           </nav>
-          <button
-            id="btnHealth"
-            class="text-xs sm:text-sm bg-secondary hover:bg-pink-500 transition text-white px-3 py-2 rounded-md"
-          >
-            Check API
-          </button>
+          <div class="flex items-center gap-2">
+            <button
+              id="btnHealth"
+              class="text-xs sm:text-sm bg-secondary hover:bg-pink-500 transition text-white px-3 py-2 rounded-md"
+            >
+              Check API
+            </button>
+            <button
+              id="btnTheme"
+              class="inline-flex items-center gap-1.5 text-xs sm:text-sm px-3 py-2 rounded-xl border border-white/30 ring-1 ring-black/5 bg-white/80 hover:bg-white/90 text-slate-900 shadow-sm transition-all duration-200 ease-out dark:bg-slate-800/80 dark:hover:bg-slate-800 dark:text-slate-100"
+              title="Toggle theme"
+              aria-label="Toggle theme"
+            >
+              <span
+                class="icon-sun text-yellow-500 dark:hidden"
+                aria-hidden="true"
+                >☀️</span
+              >
+              <span
+                class="icon-moon hidden dark:inline text-slate-100"
+                aria-hidden="true"
+                >🌙</span
+              >
+              Theme
+            </button>
+          </div>
         </div>
       </div>
     </header>
 
     <!-- Nav -->
-    <nav class="bg-white border-b border-gray-200 sticky top-0 z-10">
+    <nav
+      class="hidden sticky top-14 sm:top-16 z-30 bg-white/10 dark:bg-white/5 backdrop-blur-md border-b border-white/20 ring-1 ring-black/5"
+    >
       <div class="container mx-auto max-w-6xl px-4 overflow-x-auto">
         <ul class="flex gap-2 sm:gap-3 py-2 text-sm">
           <li>
@@ -337,28 +576,262 @@
     </nav>
 
     <!-- Main -->
-    <main class="container mx-auto max-w-6xl px-4 py-6 space-y-6">
+    <main
+      class="container mx-auto max-w-6xl px-4 py-6 space-y-6 flex-1 pb-safe"
+    >
       <!-- Chat (General) -->
       <section
         id="sec-chat"
-        class="card bg-white rounded-xl shadow-sm ring-1 ring-gray-200"
+        class="card bg-white dark:bg-neutral-900 rounded-xl shadow-sm ring-1 ring-gray-200 dark:ring-white/10"
       >
         <div class="p-5 sm:p-6">
           <h2 class="text-lg sm:text-xl font-semibold text-primary mb-4">
             Chat (General)
           </h2>
+          <div class="relative">
+            <div
+              id="chat"
+              class="w-full rounded-2xl border border-white/20 dark:border-white/10 ring-1 ring-black/5 bg-white/40 dark:bg-neutral-900 backdrop-blur-md p-4 sm:p-5 min-h-[140px] max-h-[360px] overflow-auto momentum text-sm transition-all duration-200 ease-out"
+            ></div>
+            <div
+              id="activeToolBadge"
+              class="hidden absolute bottom-2 left-2 z-10 shrink-0 items-center gap-1 px-2 py-1 rounded-md border border-white/20 ring-1 ring-black/5 bg-white/70 dark:bg-white/10 text-slate-900 dark:text-slate-100 text-xs"
+            >
+              <span id="activeToolLabel">Explain</span>
+              <button
+                id="activeToolClear"
+                class="ml-1 inline-flex items-center justify-center w-4 h-4 rounded hover:bg-black/5 dark:hover:bg-white/10"
+                title="Clear tool"
+                aria-label="Clear tool"
+              >
+                &times;
+              </button>
+            </div>
+          </div>
           <div
-            id="chat"
-            class="w-full rounded-md border border-gray-200 bg-gray-50 p-3 sm:p-4 min-h-[120px] max-h-[300px] overflow-auto text-sm"
-          ></div>
-          <div class="mt-3 flex gap-2">
-            <input
+            id="attachmentsBar"
+            class="hidden mt-2 flex items-center justify-between gap-3 rounded-lg border border-white/20 ring-1 ring-black/5 bg-white/60 dark:bg-white/10 px-3 py-2 text-xs"
+          >
+            <div class="truncate">
+              <span
+                class="text-gray-700 dark:text-slate-300"
+                id="attachmentsSummary"
+              ></span>
+            </div>
+            <button
+              id="btnManageAttachments"
+              class="shrink-0 inline-flex items-center gap-1 px-2 py-1 rounded-md border border-gray-300 dark:border-white/20 bg-white dark:bg-neutral-900 text-gray-800 dark:text-slate-100 hover:bg-gray-50 dark:hover:bg-white/10"
+            >
+              Manage
+            </button>
+          </div>
+          <div class="mt-3 flex gap-2 items-start relative">
+            <!-- Quick actions (+) with in-place tools panel -->
+            <div class="relative">
+              <button
+                id="btnActionMenu"
+                class="inline-flex items-center justify-center w-9 h-9 rounded-md border border-gray-300 dark:border-white/20 bg-white dark:bg-neutral-900 text-gray-700 dark:text-slate-100 hover:bg-gray-50 dark:hover:bg-white/10 select-none"
+                title="Open tools"
+                aria-haspopup="menu"
+                aria-controls="quickMenu"
+                aria-expanded="false"
+              >
+                +
+              </button>
+
+              <!-- Mobile quick menu (ChatGPT-like), shown only on small screens -->
+              <div
+                id="quickMenu"
+                class="hidden quick-menu"
+                role="menu"
+                aria-label="Quick actions"
+              >
+                <div class="p-1">
+                  <button
+                    class="quick-item rounded-md"
+                    role="menuitem"
+                    tabindex="-1"
+                    data-menu="upload"
+                  >
+                    ➕ Add files
+                  </button>
+                  <div class="h-px my-1 bg-black/10 dark:bg-white/10"></div>
+                  <button
+                    class="quick-item rounded-md"
+                    role="menuitem"
+                    tabindex="-1"
+                    data-menu="explain"
+                  >
+                    🧠 Explain
+                  </button>
+                  <button
+                    class="quick-item rounded-md"
+                    role="menuitem"
+                    tabindex="-1"
+                    data-menu="quiz"
+                  >
+                    ❓ Quiz
+                  </button>
+                  <button
+                    class="quick-item rounded-md"
+                    role="menuitem"
+                    tabindex="-1"
+                    data-menu="forum"
+                  >
+                    💬 Forum
+                  </button>
+                  <button
+                    class="quick-item rounded-md"
+                    role="menuitem"
+                    tabindex="-1"
+                    data-menu="exam"
+                  >
+                    📝 Exam
+                  </button>
+                  <button
+                    class="quick-item rounded-md"
+                    role="menuitem"
+                    tabindex="-1"
+                    data-menu="flashcards"
+                  >
+                    🃏 Cards
+                  </button>
+                  <button
+                    class="quick-item rounded-md"
+                    role="menuitem"
+                    tabindex="-1"
+                    data-menu="dialogue"
+                  >
+                    🎯 Dialogue
+                  </button>
+                </div>
+              </div>
+
+              <!-- In-place tools panel (no navigation) -->
+              <div
+                id="toolsPanel"
+                class="hidden fixed top-20 sm:top-24 inset-x-4 sm:inset-x-8 z-50 w-auto max-w-screen-xl mx-auto max-h-[80vh] overflow-auto momentum rounded-2xl border border-white/20 dark:border-white/10 ring-1 ring-black/5 bg-white/60 dark:bg-black backdrop-blur-xl shadow-2xl"
+                role="dialog"
+                aria-modal="true"
+                aria-label="Study tools"
+              >
+                <div class="p-3 panel-inner pb-safe">
+                  <div class="flex gap-3">
+                    <!-- Tools list -->
+                    <div class="w-28 shrink-0">
+                      <ul
+                        id="toolsList"
+                        class="space-y-1 text-sm"
+                        role="tablist"
+                        aria-label="Study tools"
+                        aria-orientation="vertical"
+                      >
+                        <li role="presentation">
+                          <button
+                            id="tab-upload"
+                            role="tab"
+                            aria-selected="true"
+                            tabindex="0"
+                            class="tool-btn w-full text-left px-3 py-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-white/10 hover:text-slate-900 dark:hover:text-slate-100 focus-visible:ring-2 focus-visible:ring-indigo-400 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-offset-black outline-none"
+                            data-tool="upload"
+                          >
+                            Upload
+                          </button>
+                        </li>
+                        <li role="presentation">
+                          <button
+                            id="tab-explain"
+                            role="tab"
+                            aria-selected="false"
+                            tabindex="-1"
+                            class="tool-btn w-full text-left px-3 py-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-white/10 hover:text-slate-900 dark:hover:text-slate-100 focus-visible:ring-2 focus-visible:ring-indigo-400 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-offset-black outline-none"
+                            data-tool="explain"
+                          >
+                            Explain
+                          </button>
+                        </li>
+                        <li role="presentation">
+                          <button
+                            id="tab-quiz"
+                            role="tab"
+                            aria-selected="false"
+                            tabindex="-1"
+                            class="tool-btn w-full text-left px-3 py-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-white/10 hover:text-slate-900 dark:hover:text-slate-100 focus-visible:ring-2 focus-visible:ring-indigo-400 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-offset-black outline-none"
+                            data-tool="quiz"
+                          >
+                            Quiz
+                          </button>
+                        </li>
+                        <li role="presentation">
+                          <button
+                            id="tab-forum"
+                            role="tab"
+                            aria-selected="false"
+                            tabindex="-1"
+                            class="tool-btn w-full text-left px-3 py-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-white/10 hover:text-slate-900 dark:hover:text-slate-100 focus-visible:ring-2 focus-visible:ring-indigo-400 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-offset-black outline-none"
+                            data-tool="forum"
+                          >
+                            Forum
+                          </button>
+                        </li>
+                        <li role="presentation">
+                          <button
+                            id="tab-exam"
+                            role="tab"
+                            aria-selected="false"
+                            tabindex="-1"
+                            class="tool-btn w-full text-left px-3 py-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-white/10 hover:text-slate-900 dark:hover:text-slate-100 focus-visible:ring-2 focus-visible:ring-indigo-400 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-offset-black outline-none"
+                            data-tool="exam"
+                          >
+                            Exam
+                          </button>
+                        </li>
+                        <li role="presentation">
+                          <button
+                            id="tab-flashcards"
+                            role="tab"
+                            aria-selected="false"
+                            tabindex="-1"
+                            class="tool-btn w-full text-left px-3 py-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-white/10 hover:text-slate-900 dark:hover:text-slate-100 focus-visible:ring-2 focus-visible:ring-indigo-400 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-offset-black outline-none"
+                            data-tool="flashcards"
+                          >
+                            Flashcards
+                          </button>
+                        </li>
+                        <li role="presentation">
+                          <button
+                            id="tab-dialogue"
+                            role="tab"
+                            aria-selected="false"
+                            tabindex="-1"
+                            class="tool-btn w-full text-left px-3 py-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-white/10 hover:text-slate-900 dark:hover:text-slate-100 focus-visible:ring-2 focus-visible:ring-indigo-400 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-offset-black outline-none"
+                            data-tool="dialogue"
+                          >
+                            Dialogue
+                          </button>
+                        </li>
+                      </ul>
+                    </div>
+                    <!-- Dynamic content host (feature sections will be moved here at first open) -->
+                    <div
+                      id="toolsContent"
+                      class="flex-1 min-w-0 space-y-2"
+                    ></div>
+                  </div>
+                </div>
+              </div>
+              <div
+                id="toolsBackdrop"
+                class="hidden fixed inset-0 z-40 bg-slate-900/30 dark:bg-black/60"
+              ></div>
+            </div>
+            <textarea
               id="chatInput"
-              type="text"
+              rows="2"
               placeholder="Tulis pesan..."
               aria-label="Chat input"
-              class="flex-1 rounded-md border border-gray-300 bg-white px-3 py-2 text-sm"
-            />
+              class="flex-1 rounded-xl border border-white/20 ring-1 ring-black/5 bg-white px-4 py-3 text-[16px] leading-relaxed font-medium text-black placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-400 dark:bg-neutral-900 dark:text-white dark:placeholder-slate-400 transition-all duration-200 ease-out min-h-[52px]"
+            ></textarea>
             <button
               id="btnSend"
               class="inline-flex items-center justify-center px-4 py-2 rounded-md bg-primary text-white font-medium hover:bg-indigo-900 transition"
@@ -372,7 +845,7 @@
       <!-- Upload -->
       <section
         id="sec-upload"
-        class="card bg-white rounded-xl shadow-sm ring-1 ring-gray-200"
+        class="card rounded-2xl border border-white/20 ring-1 ring-black/5 bg-white/40 dark:bg-white/5 backdrop-blur-md shadow-sm"
       >
         <div class="p-5 sm:p-6">
           <h2 class="text-lg sm:text-xl font-semibold text-primary mb-4">
@@ -381,7 +854,7 @@
 
           <!-- Header bar: current material + actions -->
           <div class="flex flex-wrap items-center gap-3 mb-3">
-            <div class="text-sm text-gray-700">
+            <div class="text-sm text-gray-700 dark:text-slate-300">
               Current material:
               <span id="currentMaterialLabel" class="font-semibold text-primary"
                 >none</span
@@ -389,12 +862,15 @@
             </div>
             <button
               id="btnNewMaterial"
-              class="px-3 py-1.5 rounded-md border border-gray-300 text-sm bg-white hover:bg-gray-50"
+              class="px-3 py-1.5 rounded-md border border-gray-300 dark:border-white/20 text-sm bg-white dark:bg-neutral-900 dark:text-white hover:bg-gray-50 dark:hover:bg-white/10"
               title="Start a new material (does not delete existing one)"
             >
               Start new material
             </button>
-            <span id="uploadInfo" class="text-sm text-gray-600"></span>
+            <span
+              id="uploadInfo"
+              class="text-sm text-gray-600 dark:text-slate-400"
+            ></span>
           </div>
 
           <!-- Hidden multi-file picker (triggered by clicking the drop zone) -->
@@ -410,13 +886,15 @@
           <!-- Drop zone (click or drag & drop) -->
           <div
             id="dropZone"
-            class="rounded-lg border-2 border-dashed border-gray-300 bg-gray-50 hover:bg-gray-100 transition p-4 sm:p-6 text-center cursor-pointer"
+            class="rounded-lg border-2 border-dashed border-gray-300 dark:border-white/10 bg-white/60 dark:bg-white/10 hover:bg-white/80 dark:hover:bg-white/15 backdrop-blur transition p-4 sm:p-6 text-center cursor-pointer"
             role="button"
             tabindex="0"
             aria-label="Drop files here or click to select"
           >
-            <p class="font-medium text-gray-800">Drag & drop files here</p>
-            <p class="text-xs text-gray-500">
+            <p class="font-medium text-gray-800 dark:text-slate-200">
+              Drag & drop files here
+            </p>
+            <p class="text-xs text-gray-500 dark:text-slate-400">
               or click to select. Accepted: PDF, TXT, PNG/JPG, DOCX, PPTX. Total
               limit 10 MB per material.
             </p>
@@ -424,7 +902,7 @@
 
           <!-- Attachments list -->
           <div id="attachments" class="mt-4 grid gap-2">
-            <em class="text-gray-500"
+            <em class="text-gray-500 dark:text-slate-400"
               >No files yet. Drop or click to upload.</em
             >
           </div>
@@ -434,7 +912,7 @@
       <!-- Explain -->
       <section
         id="sec-explain"
-        class="card hidden bg-white rounded-xl shadow-sm ring-1 ring-gray-200"
+        class="card hidden bg-white dark:bg-neutral-900 rounded-xl shadow-sm ring-1 ring-gray-200 dark:ring-white/10"
       >
         <div class="p-5 sm:p-6">
           <h2 class="text-lg sm:text-xl font-semibold text-primary mb-4">
@@ -448,7 +926,7 @@
           <textarea
             id="promptExplain"
             rows="4"
-            class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+            class="w-full rounded-xl border border-white/20 ring-1 ring-black/5 px-4 py-3 text-base font-medium text-black placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-400 bg-white dark:bg-neutral-900 dark:text-white dark:placeholder-slate-400 transition-all duration-200 ease-out"
             placeholder="Jelaskan bab 2..."
           ></textarea>
           <div class="mt-3">
@@ -461,7 +939,7 @@
           </div>
           <div
             id="explainResult"
-            class="mt-4 text-sm bg-gray-50 border border-gray-200 rounded-md p-3 whitespace-pre-wrap break-words overflow-x-auto"
+            class="mt-4 text-sm bg-gray-50 dark:bg-neutral-900 border border-gray-200 dark:border-white/10 rounded-md p-3 whitespace-pre-wrap break-words overflow-x-auto"
           ></div>
         </div>
       </section>
@@ -469,7 +947,7 @@
       <!-- Quiz (Merged: generate + answer + grade) -->
       <section
         id="sec-quiz"
-        class="card hidden bg-white rounded-xl shadow-sm ring-1 ring-gray-200"
+        class="card hidden bg-white dark:bg-neutral-900 rounded-xl shadow-sm ring-1 ring-gray-200 dark:ring-white/10"
       >
         <div class="p-5 sm:p-6 space-y-4">
           <h2 class="text-lg sm:text-xl font-semibold text-primary mb-2">
@@ -489,7 +967,7 @@
                 min="1"
                 max="20"
                 value="5"
-                class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+                class="w-full rounded-md border border-gray-300 dark:border-white/10 px-3 py-2 text-sm bg-white dark:bg-neutral-900 text-gray-900 dark:text-white"
                 placeholder="5"
                 aria-label="Number of generated quiz questions"
               />
@@ -515,7 +993,7 @@
             <textarea
               id="quizAnswers"
               rows="4"
-              class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+              class="w-full rounded-xl border border-white/20 ring-1 ring-black/5 px-4 py-3 text-base font-medium text-black placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-400 bg-white dark:bg-neutral-900 dark:text-white dark:placeholder-slate-400 transition-all duration-200 ease-out"
               placeholder="1 a&#10;2 b&#10;3 c&#10;4 d&#10;5 e"
             ></textarea>
             <div>
@@ -530,7 +1008,7 @@
 
           <div
             id="quizResult"
-            class="text-sm bg-gray-50 border border-gray-200 rounded-md p-3 whitespace-pre-wrap break-words overflow-x-auto"
+            class="text-sm bg-gray-50 dark:bg-neutral-900 border border-gray-200 dark:border-white/10 rounded-md p-3 whitespace-pre-wrap break-words overflow-x-auto"
           ></div>
         </div>
       </section>
@@ -538,7 +1016,7 @@
       <!-- Forum -->
       <section
         id="sec-forum"
-        class="card hidden bg-white rounded-xl shadow-sm ring-1 ring-gray-200"
+        class="card hidden bg-white dark:bg-neutral-900 rounded-xl shadow-sm ring-1 ring-gray-200 dark:ring-white/10"
       >
         <div class="p-5 sm:p-6">
           <h2 class="text-lg sm:text-xl font-semibold text-primary mb-4">
@@ -552,7 +1030,7 @@
           <textarea
             id="promptForum"
             rows="4"
-            class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+            class="w-full rounded-xl border border-white/20 ring-1 ring-black/5 px-4 py-3 text-base font-medium text-black placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-400 bg-white dark:bg-neutral-900 dark:text-white dark:placeholder-slate-400 transition-all duration-200 ease-out"
             placeholder="Pertanyaan/Topik forum..."
           ></textarea>
           <div class="mt-3">
@@ -565,7 +1043,7 @@
           </div>
           <div
             id="forumResult"
-            class="mt-4 text-sm bg-gray-50 border border-gray-200 rounded-md p-3 whitespace-pre-wrap break-words overflow-x-auto"
+            class="mt-4 text-sm bg-gray-50 dark:bg-neutral-900 border border-gray-200 dark:border-white/10 rounded-md p-3 whitespace-pre-wrap break-words overflow-x-auto"
           ></div>
         </div>
       </section>
@@ -573,7 +1051,7 @@
       <!-- Exam -->
       <section
         id="sec-exam"
-        class="card hidden bg-white rounded-xl shadow-sm ring-1 ring-gray-200"
+        class="card hidden bg-white dark:bg-neutral-900 rounded-xl shadow-sm ring-1 ring-gray-200 dark:ring-white/10"
       >
         <div class="p-5 sm:p-6">
           <h2 class="text-lg sm:text-xl font-semibold text-primary mb-4">
@@ -587,7 +1065,7 @@
           <textarea
             id="promptExam"
             rows="4"
-            class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+            class="w-full rounded-xl border border-white/20 ring-1 ring-black/5 px-4 py-3 text-base font-medium text-black placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-400 bg-white dark:bg-neutral-900 dark:text-white dark:placeholder-slate-400 transition-all duration-200 ease-out"
             placeholder="Petunjuk / pertanyaan terkait exam..."
           ></textarea>
           <div class="mt-3">
@@ -600,7 +1078,7 @@
           </div>
           <div
             id="examResult"
-            class="mt-4 text-sm bg-gray-50 border border-gray-200 rounded-md p-3 whitespace-pre-wrap break-words overflow-x-auto"
+            class="mt-4 text-sm bg-gray-50 dark:bg-neutral-900 border border-gray-200 dark:border-white/10 rounded-md p-3 whitespace-pre-wrap break-words overflow-x-auto"
           ></div>
         </div>
       </section>
@@ -608,7 +1086,7 @@
       <!-- Flashcards -->
       <section
         id="sec-flashcards"
-        class="card hidden bg-white rounded-xl shadow-sm ring-1 ring-gray-200"
+        class="card hidden bg-white dark:bg-neutral-900 rounded-xl shadow-sm ring-1 ring-gray-200 dark:ring-white/10"
       >
         <div class="p-5 sm:p-6 space-y-4">
           <h2 class="text-lg sm:text-xl font-semibold text-primary">
@@ -626,7 +1104,7 @@
                 min="1"
                 max="50"
                 value="5"
-                class="w-28 rounded-md border border-gray-300 px-2 py-2 text-sm"
+                class="w-28 rounded-md border border-gray-300 dark:border-white/10 px-2 py-2 text-sm bg-white dark:bg-neutral-900 text-gray-900 dark:text-white"
                 placeholder="5"
                 aria-label="Number of flashcards"
               />
@@ -648,7 +1126,7 @@
       <!-- Dialogue -->
       <section
         id="sec-dialogue"
-        class="card hidden bg-white rounded-xl shadow-sm ring-1 ring-gray-200"
+        class="card hidden bg-white dark:bg-neutral-900 rounded-xl shadow-sm ring-1 ring-gray-200 dark:ring-white/10"
       >
         <div class="p-5 sm:p-6">
           <div class="flex items-start justify-between gap-2">
@@ -685,15 +1163,97 @@
 
           <div
             id="dialogueStream"
-            class="mt-4 text-sm bg-gray-50 border border-gray-200 rounded-md p-3 markdown"
+            class="mt-4 text-sm bg-gray-50 dark:bg-neutral-900 border border-gray-200 dark:border-white/10 rounded-md p-3 markdown"
           >
             <em class="text-gray-500">Click Start to begin Dialogue.</em>
           </div>
 
           <div class="mt-3 flex gap-2 items-start">
+            <!-- Mobile-only inline quick (+) for Dialogue -->
+            <div class="relative sm:hidden">
+              <button
+                id="btnActionMenuDialogue"
+                class="inline-flex items-center justify-center w-9 h-9 rounded-md border border-gray-300 dark:border-white/20 bg-white dark:bg-neutral-900 text-gray-700 dark:text-slate-100 hover:bg-gray-50 dark:hover:bg-white/10 select-none"
+                title="Open tools"
+                aria-haspopup="menu"
+                aria-controls="quickMenuDialogue"
+                aria-expanded="false"
+              >
+                +
+              </button>
+
+              <!-- Local quick menu anchored to the inline + (mobile) -->
+              <div
+                id="quickMenuDialogue"
+                class="hidden quick-menu"
+                role="menu"
+                aria-label="Quick actions"
+              >
+                <div class="p-1">
+                  <button
+                    class="quick-item rounded-md"
+                    role="menuitem"
+                    tabindex="-1"
+                    data-menu="upload"
+                  >
+                    ➕ Add files
+                  </button>
+                  <div class="h-px my-1 bg-black/10 dark:bg-white/10"></div>
+                  <button
+                    class="quick-item rounded-md"
+                    role="menuitem"
+                    tabindex="-1"
+                    data-menu="explain"
+                  >
+                    🧠 Explain
+                  </button>
+                  <button
+                    class="quick-item rounded-md"
+                    role="menuitem"
+                    tabindex="-1"
+                    data-menu="quiz"
+                  >
+                    ❓ Quiz
+                  </button>
+                  <button
+                    class="quick-item rounded-md"
+                    role="menuitem"
+                    tabindex="-1"
+                    data-menu="forum"
+                  >
+                    💬 Forum
+                  </button>
+                  <button
+                    class="quick-item rounded-md"
+                    role="menuitem"
+                    tabindex="-1"
+                    data-menu="exam"
+                  >
+                    📝 Exam
+                  </button>
+                  <button
+                    class="quick-item rounded-md"
+                    role="menuitem"
+                    tabindex="-1"
+                    data-menu="flashcards"
+                  >
+                    🃏 Cards
+                  </button>
+                  <button
+                    class="quick-item rounded-md"
+                    role="menuitem"
+                    tabindex="-1"
+                    data-menu="dialogue"
+                  >
+                    🎯 Dialogue
+                  </button>
+                </div>
+              </div>
+            </div>
+
             <textarea
               id="dialogueInput"
-              class="flex-1 rounded-md border border-gray-300 bg-white px-3 py-2 text-sm"
+              class="flex-1 rounded-xl border border-white/20 ring-1 ring-black/5 bg-white px-4 py-3 text-base font-medium text-black placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-400 dark:bg-neutral-900 dark:text-white dark:placeholder-slate-400 transition-all duration-200 ease-out min-h-[52px]"
               rows="2"
               placeholder="Type your answer (tip: ask 'How am I doing?')"
             ></textarea>
@@ -709,7 +1269,7 @@
       </section>
     </main>
 
-    <footer class="border-t border-gray-200">
+    <footer class="border-t border-gray-200 dark:border-white/10">
       <div class="container mx-auto max-w-6xl px-4 py-6 text-xs text-gray-500">
         Theme colors:
         <span class="font-medium text-primary">Resistance Blue</span> ·
@@ -721,11 +1281,104 @@
       </div>
     </footer>
 
+    <!-- Global mobile floating quick action (+) -->
+    <div
+      id="globalQuickMenuWrap"
+      class="hidden sm:hidden fixed bottom-16 left-4 z-50"
+    >
+      <div class="relative">
+        <button
+          id="btnActionMenuGlobal"
+          class="inline-flex items-center justify-center w-9 h-9 rounded-md border border-gray-300 dark:border-white/20 bg-white dark:bg-neutral-900 text-gray-700 dark:text-slate-100 hover:bg-gray-50 dark:hover:bg-white/10 select-none"
+          title="Open tools"
+          aria-haspopup="menu"
+          aria-controls="quickMenuGlobal"
+          aria-expanded="false"
+        >
+          +
+        </button>
+
+        <div
+          id="quickMenuGlobal"
+          class="hidden quick-menu"
+          role="menu"
+          aria-label="Quick actions"
+        >
+          <div class="p-1">
+            <button
+              class="quick-item rounded-md"
+              role="menuitem"
+              tabindex="-1"
+              data-menu="upload"
+            >
+              ➕ Add files
+            </button>
+            <div class="h-px my-1 bg-black/10 dark:bg-white/10"></div>
+            <button
+              class="quick-item rounded-md"
+              role="menuitem"
+              tabindex="-1"
+              data-menu="explain"
+            >
+              🧠 Explain
+            </button>
+            <button
+              class="quick-item rounded-md"
+              role="menuitem"
+              tabindex="-1"
+              data-menu="quiz"
+            >
+              ❓ Quiz
+            </button>
+            <button
+              class="quick-item rounded-md"
+              role="menuitem"
+              tabindex="-1"
+              data-menu="forum"
+            >
+              💬 Forum
+            </button>
+            <button
+              class="quick-item rounded-md"
+              role="menuitem"
+              tabindex="-1"
+              data-menu="exam"
+            >
+              📝 Exam
+            </button>
+            <button
+              class="quick-item rounded-md"
+              role="menuitem"
+              tabindex="-1"
+              data-menu="flashcards"
+            >
+              🃏 Cards
+            </button>
+            <button
+              class="quick-item rounded-md"
+              role="menuitem"
+              tabindex="-1"
+              data-menu="dialogue"
+            >
+              🎯 Dialogue
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <script>
       // State
       let materialId = null;
       let chat = [];
       let mcqQuestions = [];
+      // Active tool routing for mobile-first UX ("chat" by default)
+      let activeTool = "chat";
+      // Quiz behavior mode: "section_mobile" | "always_section" | "composer"
+      // - section_mobile: quick menu opens Quiz section on mobile (default)
+      // - always_section: always navigate to Quiz section on mobile from any entry
+      // - composer: route Quiz via the single composer like other tools
+      const QUIZ_BEHAVIOR = "composer";
 
       // Helpers
       const $ = (id) => document.getElementById(id);
@@ -755,6 +1408,53 @@
         }
       }
 
+      // Enhance code blocks with a "Copy" button
+      function addCopyButtons(root) {
+        if (!root) return;
+        const blocks = root.querySelectorAll("pre > code");
+        blocks.forEach((code) => {
+          const pre = code.parentElement;
+          if (!pre || pre.dataset.hasCopy === "1") return;
+          pre.dataset.hasCopy = "1";
+          pre.style.position = pre.style.position || "relative";
+          const btn = document.createElement("button");
+          btn.type = "button";
+          btn.className =
+            "code-copy-btn absolute top-1 right-1 text-xs px-2 py-1 rounded-md border border-white/40 ring-1 ring-black/5 bg-white/80 hover:bg-white/90 text-slate-900 shadow-sm transition dark:bg-slate-800/80 dark:text-slate-100";
+          btn.textContent = "Copy";
+          btn.addEventListener("click", async () => {
+            try {
+              await navigator.clipboard.writeText(code.textContent || "");
+              const prev = btn.textContent;
+              btn.textContent = "Copied";
+              setTimeout(() => (btn.textContent = prev), 1200);
+            } catch (err) {
+              const prev = btn.textContent;
+              btn.textContent = "Error";
+              setTimeout(() => (btn.textContent = prev), 1200);
+            }
+          });
+          pre.appendChild(btn);
+        });
+      }
+
+      // Standardized loading and error helpers
+      function setLoading(el, text) {
+        if (!el) return;
+        el.innerHTML =
+          '<div class="skeleton p-3"><span class="sr-only">' +
+          escapeHtml(text || "Loading...") +
+          "</span></div>";
+      }
+      function renderError(el, message) {
+        if (!el) return;
+        el.innerHTML =
+          "<pre class='whitespace-pre-wrap break-words text-sm sm:text-base text-red-700'><code>" +
+          escapeHtml(message || "Unknown error") +
+          "</code></pre>";
+        addCopyButtons(el);
+      }
+
       // Tabs
       const tabs = [
         "chat",
@@ -767,6 +1467,35 @@
         "dialogue",
       ];
       function setActive(tab) {
+        const isSmall =
+          window.matchMedia && window.matchMedia("(max-width: 639px)").matches;
+
+        // Mobile: single-composer flow
+        if (isSmall) {
+          const composerQuiz = QUIZ_BEHAVIOR === "composer";
+          const treatAsSection =
+            tab === "upload" ||
+            tab === "dialogue" ||
+            (tab === "quiz" && !composerQuiz);
+          if (tab !== "chat" && !treatAsSection) {
+            // Route via composer for tools other than Upload/Dialogue/Quiz (unless composer mode)
+            if (typeof setActiveTool === "function") setActiveTool(tab);
+            $("chatInput")?.focus();
+            return;
+          }
+          if (treatAsSection) {
+            // Show full section for Upload/Dialogue/Quiz on mobile; clear routing
+            if (typeof setActiveTool === "function") setActiveTool("chat");
+          }
+        } else {
+          // Desktop: open rich tools panel for non-chat tabs
+          if (tab !== "chat") {
+            if (typeof openTools === "function") openTools(tab);
+            return;
+          }
+        }
+
+        // Show/hide top-level sections
         tabs.forEach((t) => {
           const sec = $("sec-" + t);
           const btns = document.querySelectorAll(
@@ -779,6 +1508,7 @@
           btns.forEach((b) => b.classList.toggle("ring-gray-300", t === tab));
           btns.forEach((b) => b.classList.toggle("font-semibold", t === tab));
         });
+
         // Focus on first focusable inside section
         const firstFocus = document.querySelector(
           "#sec-" +
@@ -792,35 +1522,211 @@
             " button"
         );
         if (firstFocus) firstFocus.focus({ preventScroll: true });
+        // Update global mobile quick + visibility after section toggle
+        if (typeof updateGlobalQuickButtonVisibility === "function") {
+          try {
+            updateGlobalQuickButtonVisibility();
+          } catch {}
+        }
       }
       document.querySelectorAll(".tab-btn").forEach((btn) => {
         btn.addEventListener("click", () => setActive(btn.dataset.tab));
       });
 
+      // Active tool mobile-first selection (ChatGPT-like flow)
+      const TOOL_ROUTES = {
+        explain: {
+          endpoint: "/api/explain",
+          makePayload: (text) => ({ materialId, prompt: text }),
+        },
+        forum: {
+          endpoint: "/api/forum",
+          makePayload: (text) => ({ materialId, prompt: text }),
+        },
+        exam: {
+          endpoint: "/api/exam",
+          makePayload: (text) => ({ materialId, prompt: text }),
+        },
+        // Only used when QUIZ_BEHAVIOR === "composer"
+        quiz: {
+          endpoint: "/api/quiz",
+          makePayload: (text) => ({ materialId, prompt: text }),
+        },
+      };
+
+      function updateActiveToolBadge() {
+        const badge = $("activeToolBadge");
+        const label = $("activeToolLabel");
+        if (!badge || !label) return;
+        if (!activeTool || activeTool === "chat") {
+          badge.classList.add("hidden");
+          return;
+        }
+        label.textContent =
+          activeTool.charAt(0).toUpperCase() + activeTool.slice(1);
+        badge.classList.remove("hidden");
+      }
+
+      function setComposerPlaceholder() {
+        const input = $("chatInput");
+        if (!input) return;
+        const map = {
+          explain: "Explain: tulis catatan/pertanyaan…",
+          forum: "Forum: tulis topik/argumen…",
+          exam: "Exam: tulis pertanyaan/petunjuk…",
+          quiz: "Quiz: kosongkan lalu Send untuk 5 soal; atau ketik jumlah (mis. 10); atau tempel jawaban '1 a, 2 b, ...'",
+        };
+        input.placeholder =
+          activeTool && activeTool !== "chat"
+            ? map[activeTool] || "Tulis pesan..."
+            : "Tulis pesan...";
+      }
+
+      function setActiveTool(tool) {
+        // Small breakpoints
+        const isSmallPhone =
+          window.matchMedia && window.matchMedia("(max-width: 639px)").matches;
+        const isSmallTablet =
+          window.matchMedia && window.matchMedia("(max-width: 765px)").matches;
+
+        // Flashcards unavailable on small screens (< 766px)
+        if (isSmallTablet && tool === "flashcards") {
+          alert("Fitur Cards hanya tersedia pada layar ≥ 766px (tablet).");
+          // Do NOT change activeTool; keep composer focused.
+          $("chatInput")?.focus();
+          return;
+        }
+
+        // Dialogue should open its full section on mobile (not composer)
+        if (isSmallPhone && tool === "dialogue") {
+          // Clear composer routing and navigate to Dialogue section UI
+          activeTool = "chat";
+          updateActiveToolBadge();
+          setComposerPlaceholder();
+          setActive("dialogue");
+          const firstFocus = document.querySelector(
+            "#sec-dialogue input, #sec-dialogue textarea, #sec-dialogue select, #sec-dialogue button"
+          );
+          if (firstFocus) firstFocus.focus({ preventScroll: true });
+          return;
+        }
+
+        // Default behavior
+        activeTool = (tabs || []).includes(tool) ? tool : "chat";
+        updateActiveToolBadge();
+        setComposerPlaceholder();
+
+        // On small screens, stay in Chat composer
+        if (isSmallPhone) {
+          setActive("chat");
+          $("chatInput")?.focus();
+        }
+      }
+
+      // Clear active tool when clicking the × on the badge
+      document.addEventListener("click", (e) => {
+        const btn =
+          e.target && e.target.closest
+            ? e.target.closest("#activeToolClear")
+            : null;
+        if (!btn) return;
+        setActiveTool("chat");
+      });
+
+      // Theme init + toggle (persistent with localStorage + cookie; icons swap via CSS)
+      (function () {
+        const root = document.documentElement;
+
+        const getCookie = (name) => {
+          const parts = document.cookie.split("; ").filter(Boolean);
+          const hit = parts.find((p) => p.startsWith(name + "="));
+          return hit
+            ? decodeURIComponent(hit.split("=").slice(1).join("="))
+            : null;
+        };
+        const persist = (mode) => {
+          try {
+            localStorage.setItem("theme", mode);
+          } catch {}
+          try {
+            document.cookie =
+              "theme=" +
+              encodeURIComponent(mode) +
+              "; max-age=31536000; path=/; SameSite=Lax";
+          } catch {}
+        };
+        const getSaved = () => {
+          let v = null;
+          try {
+            v = localStorage.getItem("theme");
+          } catch {}
+          if (!v) v = getCookie("theme");
+          return v;
+        };
+
+        const saved = getSaved();
+        const prefersDark =
+          window.matchMedia &&
+          window.matchMedia("(prefers-color-scheme: dark)").matches;
+        const initial = saved ? saved : prefersDark ? "dark" : "light";
+        root.classList.toggle("dark", initial === "dark");
+        if (!saved) persist(initial);
+
+        const btn = document.getElementById("btnTheme");
+        if (btn) {
+          btn.addEventListener("click", () => {
+            const newMode = root.classList.contains("dark") ? "light" : "dark";
+            root.classList.toggle("dark", newMode === "dark");
+            persist(newMode);
+          });
+        }
+      })();
+
       // Renderers
       function renderChat() {
         const parts = chat.map((m) => {
-          const who =
+          const role =
             m.role === "assistant"
-              ? "AI"
+              ? "assistant"
               : m.role === "system"
-              ? "System"
-              : "You";
-          const label =
-            '<div class="text-xs text-gray-500 font-semibold mb-1">' +
-            who +
-            ":</div>";
+              ? "system"
+              : "user";
+          const isUser = role === "user";
+          const who =
+            role === "assistant" ? "AI" : role === "system" ? "System" : "You";
+
           const body =
-            m.role === "assistant"
+            role === "assistant"
               ? renderMarkdown(m.content)
               : "<div class='whitespace-pre-wrap break-words text-sm sm:text-base'>" +
                 escapeHtml(m.content) +
                 "</div>";
-          return '<div class="my-2">' + label + body + "</div>";
+
+          const bubbleClass =
+            (isUser ? "bubble-out" : "bubble-in") +
+            " rounded-2xl px-3 py-2 shadow-sm max-w-[80%] sm:max-w-[70%] transition-all duration-200 ease-out";
+          const rowClass = isUser ? "justify-end" : "justify-start";
+          const avatar =
+            '<div class="avatar shrink-0" aria-hidden="true">' +
+            (isUser ? "U" : who[0]) +
+            "</div>";
+          const bubble = '<div class="' + bubbleClass + '">' + body + "</div>";
+
+          return (
+            '<div class="my-2 flex ' +
+            rowClass +
+            ' items-start gap-2">' +
+            (isUser ? "" : avatar) +
+            bubble +
+            (isUser ? avatar : "") +
+            "</div>"
+          );
         });
         const html = parts.join("");
         $("chat").innerHTML =
-          html || "<em>Mulai chat dengan mengetik pesan…</em>";
+          html ||
+          "<em class='text-slate-500'>Mulai chat dengan mengetik pesan…</em>";
+        addCopyButtons($("chat"));
         $("chat").scrollTop = $("chat").scrollHeight;
       }
 
@@ -857,6 +1763,25 @@
         return `${v.toFixed(v < 10 && i > 0 ? 1 : 0)} ${units[i]}`;
       }
 
+      function updateAttachmentsBar(files, totalSize) {
+        const bar = $("attachmentsBar");
+        const summary = document.getElementById("attachmentsSummary");
+        if (!bar || !summary) return;
+
+        const hasFiles = Array.isArray(files) && files.length > 0;
+        if (!materialId || !hasFiles) {
+          bar.classList.add("hidden");
+          summary.textContent = "";
+          return;
+        }
+        const size =
+          typeof totalSize === "number"
+            ? totalSize
+            : files.reduce((acc, f) => acc + Number(f.size || 0), 0);
+        summary.textContent = files.length + " file(s) • " + bytesToHuman(size);
+        bar.classList.remove("hidden");
+      }
+
       function renderAttachmentsList(files, totalSize) {
         if (!files || !files.length) {
           attachments.innerHTML =
@@ -869,13 +1794,13 @@
               const occ = Number(f.occurrences || 0);
               const occText = occ > 1 ? ` ×${occ}` : "";
               return `
-                <div class="flex items-center justify-between rounded-md border border-gray-200 bg-white px-3 py-2">
+                <div class="flex items-center justify-between rounded-md border border-gray-200 dark:border-white/10 bg-white dark:bg-neutral-900 px-3 py-2">
                   <div class="truncate">
                     <span class="font-medium">${escapeHtml(name)}</span>
                     <span class="ml-2 text-xs text-gray-500">${size}${occText}</span>
                   </div>
                   <button
-                    class="btnRemove text-xs px-2 py-1 rounded-md border border-gray-300 hover:bg-gray-50"
+                    class="btnRemove text-xs px-2 py-1 rounded-md border border-gray-300 dark:border-white/20 hover:bg-gray-50 dark:hover:bg-white/10 dark:text-slate-100"
                     data-name="${encodeURIComponent(name)}"
                     title="Remove this file from material (destructive)"
                   >
@@ -900,15 +1825,19 @@
           attachments.innerHTML =
             "<em class='text-gray-500'>No files yet. Drop or click to upload.</em>";
           uploadInfo.textContent = "";
+          updateAttachmentsBar([], 0);
           return;
         }
         try {
           const res = await fetch(`/api/material/${materialId}`);
           const data = await res.json();
           const files = Array.isArray(data.files) ? data.files : [];
-          renderAttachmentsList(files, data.totalSize || 0);
+          const total = Number(data.totalSize || 0);
+          renderAttachmentsList(files, total);
+          updateAttachmentsBar(files, total);
         } catch (e) {
           uploadInfo.textContent = "List failed: " + e.message;
+          updateAttachmentsBar([], 0);
         }
       }
 
@@ -1033,7 +1962,7 @@
       async function runAndShow(endpoint, payload, targetId) {
         const el = $(targetId);
         if (!el) return;
-        el.innerHTML = '<em class="text-gray-500">Processing...</em>';
+        setLoading(el, "Processing...");
         try {
           const res = await fetch(endpoint, {
             method: "POST",
@@ -1049,11 +1978,9 @@
               escapeHtml(JSON.stringify(data, null, 2)) +
               "</code></pre>";
           }
+          addCopyButtons(el);
         } catch (e) {
-          el.innerHTML =
-            "<pre class='whitespace-pre-wrap break-words text-sm sm:text-base text-red-700'><code>" +
-            escapeHtml(e.message) +
-            "</code></pre>";
+          renderError(el, e.message);
         }
       }
 
@@ -1083,7 +2010,7 @@
               })
               .join("");
             return (
-              '<div class="rounded-md border border-gray-200 bg-white p-3">' +
+              '<div class="rounded-md border border-gray-200 dark:border-white/10 bg-white dark:bg-neutral-900 p-3">' +
               '<div class="font-medium">' +
               (qi + 1) +
               ") " +
@@ -1098,11 +2025,198 @@
         container.innerHTML = html;
       }
 
+      // Helpers for Quiz (composer mode)
+      function mcqToMarkdown(questions) {
+        const letters = ["A", "B", "C", "D", "E"];
+        if (!Array.isArray(questions) || !questions.length)
+          return "Tidak ada soal.";
+        let out = "";
+        questions.forEach((q, i) => {
+          const qText = escapeHtml(q?.question || "");
+          out += `${i + 1}) ${qText}\n`;
+          const opts = Array.isArray(q?.options) ? q.options.slice(0, 5) : [];
+          opts.forEach((opt, oi) => {
+            const letter = letters[oi] || String.fromCharCode(65 + oi);
+            out += ` - ${letter}. ${escapeHtml(opt || "")}\n`;
+          });
+          out += "\n";
+        });
+        return out.trim();
+      }
+
+      function parseAnswersForQuestions(text, questions) {
+        // Accept both newline-separated and comma-separated tokens.
+        // Pattern per token: /^\s*(\d+)\s*([a-eA-E])\s*$/
+        const tokens = String(text || "")
+          .split(/[,\n]/)
+          .map((t) => t.trim())
+          .filter(Boolean);
+
+        const userAnswers = {};
+        const missing = [];
+        const byIndex = new Map();
+
+        for (const tk of tokens) {
+          const m = tk.match(/^\s*(\d+)\s*([a-eA-E])\s*$/);
+          if (m) {
+            const idx = Number(m[1]);
+            const letter = m[2].toUpperCase();
+            if (!byIndex.has(idx)) byIndex.set(idx, letter);
+          }
+        }
+        (questions || []).forEach((q, i) => {
+          const idx = i + 1;
+          const letter = byIndex.get(idx);
+          if (!letter) missing.push(idx);
+          else userAnswers[q.id] = letter;
+        });
+        return { userAnswers, missing };
+      }
+
+      async function handleQuizComposer(text) {
+        if (!materialId) {
+          alert("Upload material first");
+          return;
+        }
+        const trimmed = (text || "").trim();
+
+        // When empty: default generate 5 MCQs
+        if (!trimmed) {
+          try {
+            const res = await fetch("/api/quiz/trainer/mcq/start", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ materialId, numQuestions: 5 }),
+            });
+            const data = await res.json();
+            mcqQuestions = Array.isArray(data.questions) ? data.questions : [];
+            const md = "Berikut MCQ:\n\n" + mcqToMarkdown(mcqQuestions);
+            chat.push({ role: "assistant", content: md });
+            renderChat();
+          } catch (e) {
+            chat.push({ role: "system", content: "Quiz error: " + e.message });
+            renderChat();
+          }
+          return;
+        }
+
+        // Answers format: accept per-line or comma-separated tokens like "1 a, 2 b, ..."
+        const tokens = trimmed
+          .split(/[,\n]/)
+          .map((t) => t.trim())
+          .filter(Boolean);
+        const looksLikeAnswers =
+          tokens.length > 0 &&
+          tokens.every((tk) => /^\s*\d+\s*([a-eA-E])\s*$/.test(tk));
+
+        if (
+          looksLikeAnswers &&
+          Array.isArray(mcqQuestions) &&
+          mcqQuestions.length
+        ) {
+          try {
+            const { userAnswers, missing } = parseAnswersForQuestions(
+              trimmed,
+              mcqQuestions
+            );
+            if (missing.length) {
+              chat.push({
+                role: "system",
+                content: "Jawab semua nomor: " + missing.join(", "),
+              });
+              renderChat();
+              return;
+            }
+            const res = await fetch("/api/quiz/trainer/mcq/score", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                materialId,
+                questions: mcqQuestions,
+                userAnswers,
+              }),
+            });
+            const data = await res.json();
+            const analysis = data.analysis || JSON.stringify(data);
+            chat.push({ role: "assistant", content: analysis });
+            renderChat();
+          } catch (e) {
+            chat.push({
+              role: "system",
+              content: "Scoring error: " + e.message,
+            });
+            renderChat();
+          }
+          return;
+        }
+
+        // Generate N if user typed only a number 1..20, or number + clear generation intent
+        const pureNum = trimmed.match(/^\s*(\d{1,2})\s*$/);
+        if (pureNum) {
+          try {
+            const n = Math.max(1, Math.min(20, Number(pureNum[1])));
+            const res = await fetch("/api/quiz/trainer/mcq/start", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ materialId, numQuestions: n }),
+            });
+            const data = await res.json();
+            mcqQuestions = Array.isArray(data.questions) ? data.questions : [];
+            const md = `Berikut ${n} MCQ:\n\n` + mcqToMarkdown(mcqQuestions);
+            chat.push({ role: "assistant", content: md });
+            renderChat();
+          } catch (e) {
+            chat.push({ role: "system", content: "Quiz error: " + e.message });
+            renderChat();
+          }
+          return;
+        }
+        const numMatch = trimmed.match(/\b(\d{1,2})\b/);
+        const hasCountIntent =
+          /\b(soal|soalan|pertanyaan|question|questions|mcq|quiz|buat|generate|buatkan|buatlah)\b/i.test(
+            trimmed
+          );
+        if (numMatch && hasCountIntent) {
+          try {
+            const n = Math.max(1, Math.min(20, Number(numMatch[1])));
+            const res = await fetch("/api/quiz/trainer/mcq/start", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ materialId, numQuestions: n }),
+            });
+            const data = await res.json();
+            mcqQuestions = Array.isArray(data.questions) ? data.questions : [];
+            const md = `Berikut ${n} MCQ:\n\n` + mcqToMarkdown(mcqQuestions);
+            chat.push({ role: "assistant", content: md });
+            renderChat();
+          } catch (e) {
+            chat.push({ role: "system", content: "Quiz error: " + e.message });
+            renderChat();
+          }
+          return;
+        }
+
+        // Fallback to freeform /api/quiz
+        try {
+          const res = await fetch("/api/quiz", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ materialId, prompt: trimmed }),
+          });
+          const data = await res.json();
+          const answer = data.answer || JSON.stringify(data);
+          chat.push({ role: "assistant", content: answer });
+          renderChat();
+        } catch (e) {
+          chat.push({ role: "system", content: "Quiz error: " + e.message });
+          renderChat();
+        }
+      }
+
       // Explain
       $("btnExplain").onclick = async () => {
         if (!materialId) {
           alert("Upload material first");
-          setActive("upload");
           return;
         }
         const prompt = $("promptExplain").value || "";
@@ -1117,13 +2231,11 @@
       $("btnGenerateQuizMCQ").onclick = async () => {
         if (!materialId) {
           alert("Upload material first");
-          setActive("upload");
           return;
         }
         const n = Number($("numQuestions").value || 5);
         const containerId = "quizMCQ";
-        $(containerId).innerHTML =
-          "<em class='text-gray-500'>Generating...</em>";
+        setLoading($(containerId), "Generating...");
         $("quizResult").textContent = "";
         $("quizAnswers").value = "";
         mcqQuestions = [];
@@ -1137,7 +2249,7 @@
           mcqQuestions = Array.isArray(data.questions) ? data.questions : [];
           renderMCQ(mcqQuestions, containerId);
         } catch (e) {
-          $(containerId).innerHTML = "Error: " + e.message;
+          renderError($(containerId), e.message);
         }
       };
 
@@ -1145,7 +2257,6 @@
       $("btnSubmitQuizMCQ").onclick = async () => {
         if (!materialId) {
           alert("Upload material first");
-          setActive("upload");
           return;
         }
         if (!mcqQuestions || mcqQuestions.length === 0) {
@@ -1178,7 +2289,7 @@
           alert("Jawab semua nomor: " + missing.join(", "));
           return;
         }
-        $("quizResult").textContent = "Scoring...";
+        setLoading($("quizResult"), "Scoring...");
         try {
           const res = await fetch("/api/quiz/trainer/mcq/score", {
             method: "POST",
@@ -1192,7 +2303,7 @@
           const data = await res.json();
           $("quizResult").textContent = data.analysis || JSON.stringify(data);
         } catch (e) {
-          $("quizResult").textContent = "Error: " + e.message;
+          renderError($("quizResult"), e.message);
         }
       };
 
@@ -1200,7 +2311,6 @@
       $("btnForum").onclick = async () => {
         if (!materialId) {
           alert("Upload material first");
-          setActive("upload");
           return;
         }
         const prompt = $("promptForum").value || "";
@@ -1211,7 +2321,6 @@
       $("btnExam").onclick = async () => {
         if (!materialId) {
           alert("Upload material first");
-          setActive("upload");
           return;
         }
         const prompt = $("promptExam").value || "";
@@ -1222,12 +2331,11 @@
       $("btnGenerateCards").onclick = async () => {
         if (!materialId) {
           alert("Upload material first");
-          setActive("upload");
           return;
         }
         const n = Number($("numCards").value || 5);
         const list = $("flashcardsList");
-        list.innerHTML = "<em class='text-gray-500'>Generating...</em>";
+        setLoading(list, "Generating...");
         try {
           const res = await fetch("/api/flashcards", {
             method: "POST",
@@ -1238,7 +2346,7 @@
           const cards = Array.isArray(data.cards) ? data.cards : [];
           renderFlashcards(cards);
         } catch (e) {
-          list.innerHTML = "Error: " + e.message;
+          renderError(list, e.message);
         }
       };
 
@@ -1287,6 +2395,7 @@
           })
           .join("");
         list.innerHTML = html;
+        addCopyButtons(list);
       }
       function flipCard(id) {
         const el = document.getElementById(id);
@@ -1296,19 +2405,115 @@
       // Chat (General)
       $("btnSend").onclick = sendChat;
       $("chatInput").addEventListener("keydown", (e) => {
-        if (e.key === "Enter") {
+        // Enter sends; Shift+Enter inserts newline
+        if (e.key === "Enter" && !e.shiftKey) {
           e.preventDefault();
           sendChat();
         }
       });
       async function sendChat() {
         const input = $("chatInput");
-        const text = (input.value || "").trim();
-        if (!text) return;
-        chat.push({ role: "user", content: text });
+        const original = input.value || "";
+        const trimmed = original.trim();
+
+        // Intercept Quiz when routed via composer (supports empty input)
+        if (activeTool === "quiz") {
+          if (!materialId) {
+            alert("Upload material first");
+            return;
+          }
+          if (trimmed.length > 0) {
+            chat.push({ role: "user", content: original });
+          }
+          input.value = "";
+          renderChat();
+          try {
+            await handleQuizComposer(trimmed);
+          } catch (e) {
+            chat.push({ role: "system", content: "Quiz error: " + e.message });
+            renderChat();
+          }
+          return;
+        }
+
+        // Explain and Exam optional behavior (empty input uses defaults)
+        if (
+          (activeTool === "explain" || activeTool === "exam") &&
+          trimmed.length === 0
+        ) {
+          if (!materialId) {
+            alert("Upload material first");
+            return;
+          }
+          const defaultPrompt =
+            activeTool === "explain"
+              ? "Jelaskan materi ini secara ringkas dan jelas (bahasa Indonesia)."
+              : "Buat kisi-kisi ujian ringkas dan contoh soal berdasarkan materi ini (bahasa Indonesia).";
+          // Minimal user marker
+          chat.push({
+            role: "user",
+            content: activeTool === "explain" ? "[Explain]" : "[Exam]",
+          });
+          input.value = "";
+          renderChat();
+          try {
+            const route = TOOL_ROUTES[activeTool];
+            const res = await fetch(route.endpoint, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(route.makePayload(defaultPrompt)),
+            });
+            const data = await res.json();
+            const answer = data.answer || JSON.stringify(data);
+            chat.push({ role: "assistant", content: answer });
+            renderChat();
+          } catch (e) {
+            chat.push({
+              role: "system",
+              content:
+                (activeTool === "explain" ? "Explain" : "Exam") +
+                " error: " +
+                e.message,
+            });
+            renderChat();
+          }
+          return;
+        }
+
+        // Forum remains required: block empty sends
+        if (activeTool === "forum" && trimmed.length === 0) {
+          alert("Masukkan pertanyaan/topik forum");
+          return;
+        }
+
+        // For other tools and general chat, keep behavior:
+        if (!trimmed) return;
+
+        chat.push({ role: "user", content: original });
         input.value = "";
         renderChat();
         try {
+          // Route to selected tool endpoints if any (Explain/Forum/Exam with text)
+          if (activeTool && activeTool !== "chat" && TOOL_ROUTES[activeTool]) {
+            if (!materialId) {
+              alert("Upload material first");
+              return;
+            }
+            const route = TOOL_ROUTES[activeTool];
+            const body = route.makePayload(trimmed);
+            const res = await fetch(route.endpoint, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(body),
+            });
+            const data = await res.json();
+            const answer = data.answer || JSON.stringify(data);
+            chat.push({ role: "assistant", content: answer });
+            renderChat();
+            return;
+          }
+
+          // Default general chat
           const payload = {
             materialId: materialId || undefined,
             messages: chat,
@@ -1328,9 +2533,734 @@
         }
       }
 
+      // Tools panel (in-place all features, no navigation)
+      const btnActionMenu = $("btnActionMenu");
+      const toolsPanel = $("toolsPanel");
+      const toolsList = $("toolsList");
+      const toolsContent = $("toolsContent");
+      let toolsDockInit = false;
+      const toolsBackdrop = $("toolsBackdrop");
+      let toolsKeydownTrap = null;
+      let lastFocusEl = null;
+
+      // Quick menu (mobile)
+      const quickMenu = $("quickMenu");
+      let quickMenuOpen = false;
+      const isSmallScreen = () =>
+        window.matchMedia && window.matchMedia("(max-width: 639px)").matches;
+
+      function ensureToolsDock() {
+        if (toolsDockInit) return;
+        // Move feature sections into the tools content host
+        const list = (tabs || []).filter((t) => t !== "chat");
+        list.forEach((t) => {
+          const sec = $("sec-" + t);
+          if (!sec) return;
+          // Ensure visible internally; wrapper controls visibility
+          sec.classList.remove("hidden");
+          const wrap = document.createElement("div");
+          wrap.className = "toolDockSection";
+          wrap.setAttribute("data-tool", t);
+          wrap.id = "panel-" + t;
+          wrap.setAttribute("role", "tabpanel");
+          wrap.setAttribute("aria-labelledby", "tab-" + t);
+          wrap.setAttribute("aria-hidden", "true");
+          wrap.appendChild(sec);
+          toolsContent.appendChild(wrap);
+        });
+        // Hide all by default; selection will show one
+        toolsContent.querySelectorAll(".toolDockSection").forEach((el) => {
+          el.classList.add("hidden");
+          el.setAttribute("aria-hidden", "true");
+        });
+        toolsDockInit = true;
+      }
+
+      function selectTool(tool) {
+        ensureToolsDock();
+        const wanted = tabs.includes(tool) ? tool : "upload";
+
+        // Toggle panels visibility + aria-hidden
+        toolsContent.querySelectorAll(".toolDockSection").forEach((el) => {
+          const isActive = el.getAttribute("data-tool") === wanted;
+          el.classList.toggle("hidden", !isActive);
+          el.setAttribute("aria-hidden", isActive ? "false" : "true");
+        });
+
+        // Update tabs state: classes + aria-selected + roving tabindex
+        if (toolsList) {
+          toolsList.querySelectorAll("[data-tool]").forEach((btn) => {
+            const active = btn.getAttribute("data-tool") === wanted;
+
+            // Active state: solid dark chip with white text, no hover lightening
+            btn.classList.toggle("bg-gray-900", active);
+            btn.classList.toggle("text-white", active);
+            btn.classList.toggle("cursor-default", active);
+
+            // For non-active, ensure hover background/text are enabled
+            if (active) {
+              btn.classList.remove("hover:bg-gray-100");
+              btn.classList.remove("dark:hover:bg-white/10");
+            } else {
+              if (!btn.classList.contains("hover:bg-gray-100"))
+                btn.classList.add("hover:bg-gray-100");
+              if (!btn.classList.contains("dark:hover:bg-white/10"))
+                btn.classList.add("dark:hover:bg-white/10");
+              btn.classList.remove("cursor-default");
+              btn.classList.remove("bg-gray-900", "text-white");
+            }
+
+            // Accessibility attributes
+            btn.setAttribute("aria-selected", active ? "true" : "false");
+            btn.setAttribute("tabindex", active ? "0" : "-1");
+          });
+        }
+
+        // Focus first focusable inside active tool
+        const firstFocus = toolsContent.querySelector(
+          '[data-tool="' +
+            wanted +
+            '"] input, [data-tool="' +
+            wanted +
+            '"] textarea, [data-tool="' +
+            wanted +
+            '"] select, [data-tool="' +
+            wanted +
+            '"] button'
+        );
+        if (firstFocus) firstFocus.focus({ preventScroll: true });
+      }
+
+      function openTools(initialTool) {
+        ensureToolsDock();
+        if (toolsPanel) {
+          toolsPanel.classList.remove("hidden");
+          btnActionMenu?.setAttribute("aria-expanded", "true");
+        }
+        if (toolsBackdrop) toolsBackdrop.classList.remove("hidden");
+        document.body.classList.add("overflow-hidden");
+        lastFocusEl = document.activeElement;
+
+        // Focus trap within toolsPanel
+        toolsKeydownTrap = function (e) {
+          if (e.key !== "Tab") return;
+          const selectors =
+            'a[href], button:not([disabled]), textarea, input, select, [tabindex]:not([tabindex="-1"])';
+          const els = Array.from(toolsPanel.querySelectorAll(selectors)).filter(
+            (el) => !!(el.offsetParent || el.getClientRects().length)
+          );
+          if (!els.length) return;
+          const first = els[0];
+          const last = els[els.length - 1];
+          if (e.shiftKey) {
+            if (document.activeElement === first) {
+              e.preventDefault();
+              last.focus({ preventScroll: true });
+            }
+          } else {
+            if (document.activeElement === last) {
+              e.preventDefault();
+              first.focus({ preventScroll: true });
+            }
+          }
+        };
+        toolsPanel?.addEventListener("keydown", toolsKeydownTrap);
+
+        selectTool(initialTool || "upload");
+      }
+
+      function closeTools() {
+        if (toolsPanel) {
+          toolsPanel.classList.add("hidden");
+          btnActionMenu?.setAttribute("aria-expanded", "false");
+        }
+        if (toolsBackdrop) toolsBackdrop.classList.add("hidden");
+        document.body.classList.remove("overflow-hidden");
+        if (toolsKeydownTrap) {
+          toolsPanel?.removeEventListener("keydown", toolsKeydownTrap);
+          toolsKeydownTrap = null;
+        }
+        if (lastFocusEl && typeof lastFocusEl.focus === "function") {
+          lastFocusEl.focus({ preventScroll: true });
+        } else {
+          btnActionMenu?.focus({ preventScroll: true });
+        }
+      }
+
+      function openQuickMenu() {
+        if (!quickMenu) return;
+        quickMenu.classList.remove("hidden");
+        quickMenuOpen = true;
+        btnActionMenu?.setAttribute("aria-expanded", "true");
+        // Initialize roving tabindex and focus first item
+        const items = Array.from(
+          quickMenu.querySelectorAll('.quick-item[role="menuitem"]')
+        );
+        items.forEach((el, i) =>
+          el.setAttribute("tabindex", i === 0 ? "0" : "-1")
+        );
+        if (items[0]) items[0].focus({ preventScroll: true });
+      }
+      function closeQuickMenu() {
+        if (!quickMenu) return;
+        quickMenu.classList.add("hidden");
+        quickMenuOpen = false;
+        btnActionMenu?.setAttribute("aria-expanded", "false");
+        // Restore focus to opener for accessibility
+        btnActionMenu?.focus({ preventScroll: true });
+      }
+
+      if (quickMenu) {
+        // Keyboard navigation (roving tabindex) for quick menu
+        const getItems = () =>
+          Array.from(
+            quickMenu.querySelectorAll('.quick-item[role="menuitem"]')
+          );
+
+        const moveFocus = (nextIdx) => {
+          const items = getItems();
+          if (!items.length) return;
+          const current = document.activeElement;
+          let idx = Math.max(
+            0,
+            items.findIndex((el) => el === current)
+          );
+          if (Number.isFinite(nextIdx)) {
+            idx = ((nextIdx % items.length) + items.length) % items.length;
+          }
+          items.forEach((el, i) =>
+            el.setAttribute("tabindex", i === idx ? "0" : "-1")
+          );
+          items[idx].focus({ preventScroll: true });
+        };
+
+        quickMenu.addEventListener("keydown", (e) => {
+          if (!quickMenuOpen) return;
+          const items = getItems();
+          if (!items.length) return;
+
+          const idx = items.findIndex((el) => el === document.activeElement);
+
+          switch (e.key) {
+            case "ArrowDown":
+              e.preventDefault();
+              moveFocus(idx + 1);
+              break;
+            case "ArrowUp":
+              e.preventDefault();
+              moveFocus(idx - 1);
+              break;
+            case "Home":
+              e.preventDefault();
+              moveFocus(0);
+              break;
+            case "End":
+              e.preventDefault();
+              moveFocus(items.length - 1);
+              break;
+            case "Enter":
+            case " ":
+              e.preventDefault();
+              if (idx >= 0) items[idx].click();
+              break;
+            case "Escape":
+              e.preventDefault();
+              closeQuickMenu();
+              break;
+            case "Tab":
+              // Close menu and allow natural tab order to continue
+              closeQuickMenu();
+              break;
+          }
+        });
+
+        quickMenu.addEventListener("click", (e) => {
+          const item =
+            e.target && e.target.closest
+              ? e.target.closest(".quick-item")
+              : null;
+          if (!item) return;
+          const action = item.getAttribute("data-menu");
+          if (action === "upload") {
+            if (filePicker && typeof filePicker.click === "function")
+              filePicker.click();
+            closeQuickMenu();
+            setActiveTool("chat");
+            $("chatInput")?.focus();
+            return;
+          }
+          // Mobile special-case: Dialogue opens as full section, not via composer
+          if (action === "dialogue" && isSmallScreen()) {
+            closeQuickMenu();
+            setActiveTool("chat"); // clear composer routing
+            setActive("dialogue");
+            return;
+          }
+          setActiveTool(action);
+          closeQuickMenu();
+          $("chatInput")?.focus();
+        });
+      }
+      if (btnActionMenu) {
+        btnActionMenu.addEventListener("click", (e) => {
+          e.stopPropagation();
+          if (isSmallScreen()) {
+            // Mobile: toggle quick menu
+            if (quickMenuOpen) closeQuickMenu();
+            else openQuickMenu();
+          } else {
+            // Desktop: toggle desktop tools panel
+            if (toolsPanel?.classList.contains("hidden")) openTools("upload");
+            else closeTools();
+          }
+        });
+      }
+
+      // Global mobile floating quick action (+)
+      const btnActionMenuGlobal = $("btnActionMenuGlobal");
+      const quickMenuGlobal = $("quickMenuGlobal");
+      const globalQuickMenuWrap = document.getElementById(
+        "globalQuickMenuWrap"
+      );
+      let quickMenuGlobalOpen = false;
+
+      function updateGlobalQuickButtonVisibility() {
+        const small =
+          (typeof isSmallScreen === "function" && isSmallScreen()) ||
+          (window.matchMedia &&
+            window.matchMedia("(max-width: 639px)").matches);
+        const chatSec = $("sec-chat");
+        const chatHidden = chatSec
+          ? chatSec.classList.contains("hidden")
+          : false;
+
+        // Detect Dialogue visibility
+        const dialogueSec = $("sec-dialogue");
+        const dialogueVisible =
+          dialogueSec && !dialogueSec.classList.contains("hidden");
+
+        if (!globalQuickMenuWrap) return;
+
+        // Wrapper visibility: keep wrapper on small screens when Chat is hidden
+        // so the menu can still open (e.g., from Dialogue inline +).
+        if (small && chatHidden) {
+          globalQuickMenuWrap.classList.remove("hidden");
+        } else {
+          globalQuickMenuWrap.classList.add("hidden");
+          closeQuickMenuGlobal();
+        }
+
+        // Hide only the floating button during Dialogue to avoid duplicate "+".
+        // Keep wrapper visible to host the menu opened by the inline "+".
+        const btnGlobal = $("btnActionMenuGlobal");
+        if (btnGlobal) {
+          if (dialogueVisible) {
+            btnGlobal.classList.add("opacity-0", "pointer-events-none");
+          } else {
+            btnGlobal.classList.remove("opacity-0", "pointer-events-none");
+          }
+        }
+      }
+
+      function openQuickMenuGlobal() {
+        if (!quickMenuGlobal) return;
+        quickMenuGlobal.classList.remove("hidden");
+        quickMenuGlobalOpen = true;
+        btnActionMenuGlobal?.setAttribute("aria-expanded", "true");
+        const items = Array.from(
+          quickMenuGlobal.querySelectorAll('.quick-item[role="menuitem"]')
+        );
+        items.forEach((el, i) =>
+          el.setAttribute("tabindex", i === 0 ? "0" : "-1")
+        );
+        if (items[0]) items[0].focus({ preventScroll: true });
+      }
+      function closeQuickMenuGlobal() {
+        if (!quickMenuGlobal) return;
+        quickMenuGlobal.classList.add("hidden");
+        if (quickMenuGlobalOpen) {
+          quickMenuGlobalOpen = false;
+          btnActionMenuGlobal?.setAttribute("aria-expanded", "false");
+          btnActionMenuGlobal?.focus({ preventScroll: true });
+        }
+      }
+
+      if (quickMenuGlobal) {
+        const getGlobalItems = () =>
+          Array.from(
+            quickMenuGlobal.querySelectorAll('.quick-item[role="menuitem"]')
+          );
+
+        const moveGlobalFocus = (nextIdx) => {
+          const items = getGlobalItems();
+          if (!items.length) return;
+          const current = document.activeElement;
+          let idx = Math.max(
+            0,
+            items.findIndex((el) => el === current)
+          );
+          if (Number.isFinite(nextIdx)) {
+            idx = ((nextIdx % items.length) + items.length) % items.length;
+          }
+          items.forEach((el, i) =>
+            el.setAttribute("tabindex", i === idx ? "0" : "-1")
+          );
+          items[idx].focus({ preventScroll: true });
+        };
+
+        quickMenuGlobal.addEventListener("keydown", (e) => {
+          if (!quickMenuGlobalOpen) return;
+          const items = getGlobalItems();
+          if (!items.length) return;
+
+          const idx = items.findIndex((el) => el === document.activeElement);
+
+          switch (e.key) {
+            case "ArrowDown":
+              e.preventDefault();
+              moveGlobalFocus(idx + 1);
+              break;
+            case "ArrowUp":
+              e.preventDefault();
+              moveGlobalFocus(idx - 1);
+              break;
+            case "Home":
+              e.preventDefault();
+              moveGlobalFocus(0);
+              break;
+            case "End":
+              e.preventDefault();
+              moveGlobalFocus(items.length - 1);
+              break;
+            case "Enter":
+            case " ":
+              e.preventDefault();
+              if (idx >= 0) items[idx].click();
+              break;
+            case "Escape":
+              e.preventDefault();
+              closeQuickMenuGlobal();
+              break;
+            case "Tab":
+              // Close menu and allow natural tab order to continue
+              closeQuickMenuGlobal();
+              break;
+          }
+        });
+
+        quickMenuGlobal.addEventListener("click", (e) => {
+          const item =
+            e.target && e.target.closest
+              ? e.target.closest(".quick-item")
+              : null;
+          if (!item) return;
+          const action = item.getAttribute("data-menu");
+          if (action === "upload") {
+            if (filePicker && typeof filePicker.click === "function")
+              filePicker.click();
+            closeQuickMenuGlobal();
+            setActiveTool("chat");
+            $("chatInput")?.focus();
+            return;
+          }
+          // Mobile special-case: Dialogue opens as full section, not via composer
+          if (action === "dialogue" && isSmallScreen()) {
+            closeQuickMenuGlobal();
+            setActiveTool("chat"); // clear composer routing
+            setActive("dialogue");
+            return;
+          }
+          setActiveTool(action);
+          closeQuickMenuGlobal();
+          $("chatInput")?.focus();
+        });
+      }
+
+      if (btnActionMenuGlobal) {
+        btnActionMenuGlobal.addEventListener("click", (e) => {
+          e.stopPropagation();
+          if (isSmallScreen()) {
+            if (quickMenuGlobalOpen) closeQuickMenuGlobal();
+            else openQuickMenuGlobal();
+          }
+        });
+      }
+
+      // Mobile-only Dialogue inline (+) uses a local anchored quick menu
+      const btnActionMenuDialogue = document.getElementById(
+        "btnActionMenuDialogue"
+      );
+      const quickMenuDialogue = document.getElementById("quickMenuDialogue");
+      let quickMenuDialogueOpen = false;
+
+      function openQuickMenuDialogue() {
+        if (!quickMenuDialogue) return;
+        quickMenuDialogue.classList.remove("hidden");
+        quickMenuDialogueOpen = true;
+        btnActionMenuDialogue?.setAttribute("aria-expanded", "true");
+        // Init roving tabindex + focus first
+        const items = Array.from(
+          quickMenuDialogue.querySelectorAll('.quick-item[role="menuitem"]')
+        );
+        items.forEach((el, i) =>
+          el.setAttribute("tabindex", i === 0 ? "0" : "-1")
+        );
+        if (items[0]) items[0].focus({ preventScroll: true });
+      }
+      function closeQuickMenuDialogue() {
+        if (!quickMenuDialogue) return;
+        quickMenuDialogue.classList.add("hidden");
+        quickMenuDialogueOpen = false;
+        btnActionMenuDialogue?.setAttribute("aria-expanded", "false");
+        btnActionMenuDialogue?.focus({ preventScroll: true });
+      }
+
+      if (btnActionMenuDialogue) {
+        btnActionMenuDialogue.addEventListener("click", (e) => {
+          e.stopPropagation();
+          if (isSmallScreen()) {
+            if (quickMenuDialogueOpen) closeQuickMenuDialogue();
+            else openQuickMenuDialogue();
+          }
+        });
+      }
+
+      if (quickMenuDialogue) {
+        const getDialogueItems = () =>
+          Array.from(
+            quickMenuDialogue.querySelectorAll('.quick-item[role="menuitem"]')
+          );
+
+        const moveDialogueFocus = (nextIdx) => {
+          const items = getDialogueItems();
+          if (!items.length) return;
+          const current = document.activeElement;
+          let idx = Math.max(
+            0,
+            items.findIndex((el) => el === current)
+          );
+          if (Number.isFinite(nextIdx)) {
+            idx = ((nextIdx % items.length) + items.length) % items.length;
+          }
+          items.forEach((el, i) =>
+            el.setAttribute("tabindex", i === idx ? "0" : "-1")
+          );
+          items[idx].focus({ preventScroll: true });
+        };
+
+        quickMenuDialogue.addEventListener("keydown", (e) => {
+          if (!quickMenuDialogueOpen) return;
+          const items = getDialogueItems();
+          if (!items.length) return;
+
+          const idx = items.findIndex((el) => el === document.activeElement);
+
+          switch (e.key) {
+            case "ArrowDown":
+              e.preventDefault();
+              moveDialogueFocus(idx + 1);
+              break;
+            case "ArrowUp":
+              e.preventDefault();
+              moveDialogueFocus(idx - 1);
+              break;
+            case "Home":
+              e.preventDefault();
+              moveDialogueFocus(0);
+              break;
+            case "End":
+              e.preventDefault();
+              moveDialogueFocus(items.length - 1);
+              break;
+            case "Enter":
+            case " ":
+              e.preventDefault();
+              if (idx >= 0) items[idx].click();
+              break;
+            case "Escape":
+              e.preventDefault();
+              closeQuickMenuDialogue();
+              break;
+            case "Tab":
+              // Close menu and allow natural tab order
+              closeQuickMenuDialogue();
+              break;
+          }
+        });
+
+        quickMenuDialogue.addEventListener("click", (e) => {
+          const item =
+            e.target && e.target.closest
+              ? e.target.closest(".quick-item")
+              : null;
+          if (!item) return;
+          const action = item.getAttribute("data-menu");
+          if (action === "upload") {
+            if (filePicker && typeof filePicker.click === "function")
+              filePicker.click();
+            closeQuickMenuDialogue();
+            setActiveTool("chat");
+            $("chatInput")?.focus();
+            return;
+          }
+          // Dialogue on mobile should stay as full section
+          if (action === "dialogue" && isSmallScreen()) {
+            closeQuickMenuDialogue();
+            setActiveTool("chat");
+            setActive("dialogue");
+            return;
+          }
+          setActiveTool(action);
+          closeQuickMenuDialogue();
+          $("chatInput")?.focus();
+        });
+      }
+
+      window.addEventListener("resize", () => {
+        if (typeof updateGlobalQuickButtonVisibility === "function") {
+          try {
+            updateGlobalQuickButtonVisibility();
+          } catch {}
+        }
+      });
+
+      document.addEventListener("click", (e) => {
+        // Close desktop tools panel on outside click
+        if (toolsPanel && !toolsPanel.classList.contains("hidden")) {
+          if (!toolsPanel.contains(e.target) && e.target !== btnActionMenu) {
+            closeTools();
+          }
+        }
+        // Close quick menu on outside click
+        if (
+          quickMenuOpen &&
+          quickMenu &&
+          !quickMenu.contains(e.target) &&
+          e.target !== btnActionMenu
+        ) {
+          closeQuickMenu();
+        }
+        // Close dialogue quick menu on outside click
+        if (
+          quickMenuDialogueOpen &&
+          quickMenuDialogue &&
+          !quickMenuDialogue.contains(e.target) &&
+          e.target !== btnActionMenuDialogue
+        ) {
+          closeQuickMenuDialogue();
+        }
+        // Close global quick menu on outside click
+        if (
+          quickMenuGlobalOpen &&
+          quickMenuGlobal &&
+          !quickMenuGlobal.contains(e.target) &&
+          e.target !== btnActionMenuGlobal
+        ) {
+          closeQuickMenuGlobal();
+        }
+      });
+      document.addEventListener("keydown", (e) => {
+        if (e.key === "Escape") {
+          closeTools();
+          closeQuickMenu();
+          closeQuickMenuDialogue();
+          closeQuickMenuGlobal();
+        }
+      });
+      if (toolsList) {
+        // Mouse/Touch click
+        toolsList.addEventListener("click", (e) => {
+          const btn =
+            e.target && e.target.closest
+              ? e.target.closest("[data-tool]")
+              : null;
+          if (!btn) return;
+          const tool = btn.getAttribute("data-tool");
+          const isSmall =
+            window.matchMedia &&
+            window.matchMedia("(max-width: 639px)").matches;
+
+          if (isSmall) {
+            // Upload stays inside the tools panel so users see the uploader UI.
+            if (tool === "upload") {
+              setActiveTool("chat"); // clear any routing
+              selectTool("upload"); // keep panel open
+              return;
+            }
+            // Dialogue opens as a full section on mobile
+            if (tool === "dialogue") {
+              setActiveTool("chat"); // clear composer routing
+              closeTools();
+              setActive("dialogue");
+              return;
+            }
+            // Other tools: route via main composer (ChatGPT-like), then close panel.
+            setActiveTool(tool);
+            closeTools();
+          } else {
+            // Desktop retains rich panel behavior.
+            selectTool(tool);
+          }
+        });
+
+        // Keyboard navigation for tabs (desktop panel)
+        toolsList.addEventListener("keydown", (e) => {
+          const all = Array.from(
+            toolsList.querySelectorAll('[role="tab"][data-tool]')
+          );
+          if (!all.length) return;
+          const focused =
+            (document.activeElement &&
+              document.activeElement.closest &&
+              document.activeElement.closest('[role="tab"][data-tool]')) ||
+            all.find((t) => t.getAttribute("aria-selected") === "true") ||
+            all[0];
+          let idx = all.indexOf(focused);
+          if (idx < 0) idx = 0;
+
+          const move = (nextIdx) => {
+            const target = all[nextIdx];
+            if (!target) return;
+            selectTool(target.getAttribute("data-tool"));
+            target.focus({ preventScroll: true });
+          };
+
+          switch (e.key) {
+            case "ArrowRight":
+            case "ArrowDown":
+              e.preventDefault();
+              move((idx + 1) % all.length);
+              break;
+            case "ArrowLeft":
+            case "ArrowUp":
+              e.preventDefault();
+              move((idx - 1 + all.length) % all.length);
+              break;
+            case "Home":
+              e.preventDefault();
+              move(0);
+              break;
+            case "End":
+              e.preventDefault();
+              move(all.length - 1);
+              break;
+          }
+        });
+      }
+      if (toolsBackdrop) {
+        toolsBackdrop.addEventListener("click", () => closeTools());
+      }
+
       // Init (Chat first)
+      updateActiveToolBadge();
+      setComposerPlaceholder();
       setActive("chat");
       renderChat();
+      document
+        .getElementById("btnManageAttachments")
+        ?.addEventListener("click", () => {
+          setActive("upload");
+        });
 
       // ===== Dialogue (coached conversation) =====
       let dialogueSessionId = null;
@@ -1340,10 +3270,11 @@
       let dialogueLanguage = null;
       let lastCoachQuestion = "";
 
-      // Append a message to the Dialogue stream
+      // Append a message to the Dialogue stream (bubble style)
       function renderDialogueStreamAppend(role, content) {
         const el = $("dialogueStream");
         if (!el) return;
+        const isYou = !(role === "coach" || role === "ilmatrix");
         const who =
           role === "coach" ? "Coach" : role === "ilmatrix" ? "ilmatrix" : "You";
         const body =
@@ -1352,14 +3283,29 @@
             : "<div class='whitespace-pre-wrap break-words text-sm sm:text-base'>" +
               escapeHtml(content) +
               "</div>";
+
+        const bubbleClass =
+          (isYou ? "bubble-out" : "bubble-in") +
+          " rounded-2xl px-3 py-2 shadow-sm max-w-[85%] transition-all duration-200 ease-out";
+        const rowClass = isYou ? "justify-end" : "justify-start";
+        const avatar =
+          '<div class="avatar shrink-0" aria-hidden="true">' +
+          (isYou ? "U" : escapeHtml(who[0])) +
+          "</div>";
         const html =
-          '<div class="my-2">' +
-          '<div class="text-xs text-gray-500 font-semibold mb-1">' +
-          escapeHtml(who) +
-          ":</div>" +
+          '<div class="my-2 flex ' +
+          rowClass +
+          ' items-start gap-2">' +
+          (isYou ? "" : avatar) +
+          '<div class="' +
+          bubbleClass +
+          '">' +
           body +
+          "</div>" +
+          (isYou ? avatar : "") +
           "</div>";
         el.insertAdjacentHTML("beforeend", html);
+        addCopyButtons(el);
         el.scrollTop = el.scrollHeight;
       }
 
@@ -1397,7 +3343,6 @@
         btnDialogueStart.addEventListener("click", async () => {
           if (!materialId) {
             alert("Upload material first");
-            setActive("upload");
             return;
           }
           try {

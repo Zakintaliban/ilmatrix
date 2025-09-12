@@ -10,6 +10,7 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
       tailwind.config = {
+        darkMode: "class",
         theme: {
           extend: {
             colors: {
@@ -60,6 +61,69 @@
     <style>
       html {
         scroll-behavior: smooth;
+        scrollbar-gutter: stable both-edges;
+      }
+      /* Dark readability helpers for legacy gray utilities */
+      .dark .text-gray-600 {
+        color: #cbd5e1 !important;
+      }
+      .dark .text-gray-700 {
+        color: #cbd5e1 !important;
+      }
+
+      /* Dark brand/text palette to avoid clashes on black */
+      .dark .text-primary {
+        color: #93c5fd !important;
+      } /* sky-300 */
+      .dark .text-secondary {
+        color: #f9a8d4 !important;
+      } /* pink-300 */
+      .dark .text-tertiary {
+        color: #86efac !important;
+      } /* emerald-300 */
+
+      /* Momentum scroll for iOS */
+      .momentum {
+        -webkit-overflow-scrolling: touch;
+      }
+
+      /* Safe-area insets for iOS notch/home bar */
+      :root {
+        --safe-top: env(safe-area-inset-top, 0px);
+        --safe-bottom: env(safe-area-inset-bottom, 0px);
+        --safe-left: env(safe-area-inset-left, 0px);
+        --safe-right: env(safe-area-inset-right, 0px);
+      }
+      body {
+        padding-left: var(--safe-left);
+        padding-right: var(--safe-right);
+        padding-bottom: var(--safe-bottom);
+      }
+      header {
+        padding-top: var(--safe-top);
+      }
+
+      /* Global focus-visible ring for interactive controls */
+      :where(
+          a,
+          button,
+          input,
+          textarea,
+          select,
+          [role="button"]
+        ):focus-visible {
+        outline: 2px solid #6366f1; /* indigo-500 */
+        outline-offset: 2px;
+      }
+
+      /* Reduce mobile tap highlight */
+      * {
+        -webkit-tap-highlight-color: transparent;
+      }
+
+      /* Helper for safe bottom padding on scrollable containers (optional) */
+      .pb-safe {
+        padding-bottom: calc(1rem + var(--safe-bottom));
       }
     </style>
     <!-- Structured data -->
@@ -94,36 +158,60 @@
       }
     </script>
   </head>
-  <body class="bg-gray-50 text-gray-900">
-    <header class="bg-primary text-white">
+  <body
+    class="bg-gray-50 dark:bg-black text-gray-900 dark:text-slate-100 min-h-screen flex flex-col"
+  >
+    <header class="bg-primary text-white dark:bg-black">
       <div
         class="container mx-auto max-w-6xl px-4 py-4 flex items-center justify-between"
       >
         <a href="/" class="text-xl sm:text-2xl font-bold tracking-tight"
           >ILMATRIX</a
         >
-        <nav class="flex items-center gap-2">
-          <a
-            href="/app.html"
-            class="text-xs sm:text-sm px-3 py-2 rounded-md hover:bg-indigo-900"
-            >App</a
+        <div class="flex items-center gap-2">
+          <nav class="flex items-center gap-2">
+            <a
+              href="/app.html"
+              class="text-xs sm:text-sm px-3 py-2 rounded-md hover:bg-indigo-900"
+              >App</a
+            >
+            <a
+              href="/about.html"
+              class="text-xs sm:text-sm px-3 py-2 rounded-md bg-indigo-800 hover:bg-indigo-900"
+              >About</a
+            >
+          </nav>
+          <button
+            id="btnTheme"
+            class="inline-flex items-center gap-1.5 text-xs sm:text-sm px-3 py-2 rounded-xl border border-white/30 ring-1 ring-black/5 bg-white/80 hover:bg-white/90 text-slate-900 shadow-sm transition-all duration-200 ease-out dark:bg-slate-800/80 dark:hover:bg-slate-800 dark:text-slate-100"
+            title="Toggle theme"
+            aria-label="Toggle theme"
           >
-          <a
-            href="/about.html"
-            class="text-xs sm:text-sm px-3 py-2 rounded-md bg-indigo-800 hover:bg-indigo-900"
-            >About</a
-          >
-        </nav>
+            <span
+              class="icon-sun text-yellow-500 dark:hidden"
+              aria-hidden="true"
+              >☀️</span
+            >
+            <span
+              class="icon-moon hidden dark:inline text-slate-100"
+              aria-hidden="true"
+              >🌙</span
+            >
+            Theme
+          </button>
+        </div>
       </div>
     </header>
 
     <main>
-      <section class="bg-white">
+      <section class="bg-white dark:bg-neutral-900">
         <div class="container mx-auto max-w-6xl px-4 py-14 sm:py-20">
           <h2 class="text-3xl sm:text-4xl font-extrabold text-primary">
             About ILMATRIX
           </h2>
-          <p class="mt-4 text-gray-700 text-base sm:text-lg max-w-2xl">
+          <p
+            class="mt-4 text-gray-700 dark:text-slate-300 text-base sm:text-lg max-w-2xl"
+          >
             ILMATRIX is an AI-powered study companion for university students.
             We help you understand materials, practice with quizzes, draft forum
             replies, and prepare for exams responsibly.
@@ -131,18 +219,22 @@
         </div>
       </section>
 
-      <section id="mission" class="bg-gray-50">
+      <section id="mission" class="bg-gray-50 dark:bg-neutral-950">
         <div class="container mx-auto max-w-6xl px-4 py-12">
           <h3 class="text-2xl font-bold text-primary">Mission & Vision</h3>
           <div class="mt-6 grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div class="rounded-lg bg-white ring-1 ring-gray-200 p-5">
+            <div
+              class="rounded-lg bg-white dark:bg-neutral-900 ring-1 ring-gray-200 dark:ring-white/10 p-5"
+            >
               <h4 class="font-semibold text-gray-900">Our Mission</h4>
               <p class="text-sm text-gray-600 mt-1">
                 Make advanced learning assistance accessible, ethical, and
                 effective for every student.
               </p>
             </div>
-            <div class="rounded-lg bg-white ring-1 ring-gray-200 p-5">
+            <div
+              class="rounded-lg bg-white dark:bg-neutral-900 ring-1 ring-gray-200 dark:ring-white/10 p-5"
+            >
               <h4 class="font-semibold text-gray-900">Our Vision</h4>
               <p class="text-sm text-gray-600 mt-1">
                 A future where students learn faster and deeper with AI that
@@ -153,10 +245,10 @@
         </div>
       </section>
 
-      <section id="story" class="bg-white">
+      <section id="story" class="bg-white dark:bg-neutral-900">
         <div class="container mx-auto max-w-6xl px-4 py-12">
           <h3 class="text-2xl font-bold text-primary">Our Story</h3>
-          <p class="text-sm text-gray-700 mt-3 max-w-3xl">
+          <p class="text-sm text-gray-700 dark:text-slate-300 mt-3 max-w-3xl">
             ILMATRIX was created to solve a simple problem: studying from
             diverse materials can be overwhelming. By bringing together document
             parsing (PDF, DOCX, PPTX, and images via OCR) and fast, reliable AI
@@ -166,43 +258,55 @@
         </div>
       </section>
 
-      <section id="values" class="bg-gray-50">
+      <section id="values" class="bg-gray-50 dark:bg-neutral-950">
         <div class="container mx-auto max-w-6xl px-4 py-12">
           <h3 class="text-2xl font-bold text-primary">Our Values</h3>
           <ul class="mt-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            <li class="rounded-lg bg-white ring-1 ring-gray-200 p-5">
+            <li
+              class="rounded-lg bg-white dark:bg-neutral-900 ring-1 ring-gray-200 dark:ring-white/10 p-5"
+            >
               <h4 class="font-semibold text-gray-900">Integrity</h4>
               <p class="text-sm text-gray-600 mt-1">
                 We promote honest learning and discourage misuse.
               </p>
             </li>
-            <li class="rounded-lg bg-white ring-1 ring-gray-200 p-5">
+            <li
+              class="rounded-lg bg-white dark:bg-neutral-900 ring-1 ring-gray-200 dark:ring-white/10 p-5"
+            >
               <h4 class="font-semibold text-gray-900">Clarity</h4>
               <p class="text-sm text-gray-600 mt-1">
                 We explain with structure, citing from your materials where
                 possible.
               </p>
             </li>
-            <li class="rounded-lg bg-white ring-1 ring-gray-200 p-5">
+            <li
+              class="rounded-lg bg-white dark:bg-neutral-900 ring-1 ring-gray-200 dark:ring-white/10 p-5"
+            >
               <h4 class="font-semibold text-gray-900">Accessibility</h4>
               <p class="text-sm text-gray-600 mt-1">
                 Fast to start, easy to use, and works well on serverless.
               </p>
             </li>
-            <li class="rounded-lg bg-white ring-1 ring-gray-200 p-5">
+            <li
+              class="rounded-lg bg-white dark:bg-neutral-900 ring-1 ring-gray-200 dark:ring-white/10 p-5"
+            >
               <h4 class="font-semibold text-gray-900">Performance</h4>
               <p class="text-sm text-gray-600 mt-1">
                 Powered by Groq for low-latency responses.
               </p>
             </li>
-            <li class="rounded-lg bg-white ring-1 ring-gray-200 p-5">
+            <li
+              class="rounded-lg bg-white dark:bg-neutral-900 ring-1 ring-gray-200 dark:ring-white/10 p-5"
+            >
               <h4 class="font-semibold text-gray-900">Privacy</h4>
               <p class="text-sm text-gray-600 mt-1">
                 Uploads are processed for study use; bring your own API key
                 backend.
               </p>
             </li>
-            <li class="rounded-lg bg-white ring-1 ring-gray-200 p-5">
+            <li
+              class="rounded-lg bg-white dark:bg-neutral-900 ring-1 ring-gray-200 dark:ring-white/10 p-5"
+            >
               <h4 class="font-semibold text-gray-900">Support</h4>
               <p class="text-sm text-gray-600 mt-1">
                 We iterate with your feedback to improve the experience.
@@ -212,11 +316,11 @@
         </div>
       </section>
 
-      <section id="technology" class="bg-white">
+      <section id="technology" class="bg-white dark:bg-neutral-900">
         <div class="container mx-auto max-w-6xl px-4 py-12">
           <h3 class="text-2xl font-bold text-primary">Technology</h3>
           <ul
-            class="mt-3 text-sm text-gray-700 list-disc list-inside space-y-1"
+            class="mt-3 text-sm text-gray-700 dark:text-slate-300 list-disc list-inside space-y-1"
           >
             <li>Hono.js backend with serverless-ready adapters.</li>
             <li>Groq SDK using Meta Llama models.</li>
@@ -228,46 +332,58 @@
         </div>
       </section>
 
-      <section id="offer" class="bg-gray-50">
+      <section id="offer" class="bg-gray-50 dark:bg-neutral-950">
         <div class="container mx-auto max-w-6xl px-4 py-12">
           <h3 class="text-2xl font-bold text-primary">What we offer</h3>
           <div
             class="mt-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4"
           >
-            <div class="rounded-lg bg-white ring-1 ring-gray-200 p-5">
+            <div
+              class="rounded-lg bg-white dark:bg-neutral-900 ring-1 ring-gray-200 dark:ring-white/10 p-5"
+            >
               <h4 class="font-semibold text-gray-900">Explain material</h4>
               <p class="text-sm text-gray-600 mt-1">
                 Concise, structured explanations that cite short snippets from
                 your materials.
               </p>
             </div>
-            <div class="rounded-lg bg-white ring-1 ring-gray-200 p-5">
+            <div
+              class="rounded-lg bg-white dark:bg-neutral-900 ring-1 ring-gray-200 dark:ring-white/10 p-5"
+            >
               <h4 class="font-semibold text-gray-900">MCQ Quiz</h4>
               <p class="text-sm text-gray-600 mt-1">
                 Generate multiple‑choice questions and get deterministic grading
                 with per‑question feedback.
               </p>
             </div>
-            <div class="rounded-lg bg-white ring-1 ring-gray-200 p-5">
+            <div
+              class="rounded-lg bg-white dark:bg-neutral-900 ring-1 ring-gray-200 dark:ring-white/10 p-5"
+            >
               <h4 class="font-semibold text-gray-900">Flashcards</h4>
               <p class="text-sm text-gray-600 mt-1">
                 Auto‑generated flip cards grounded in your materials for fast
                 review.
               </p>
             </div>
-            <div class="rounded-lg bg-white ring-1 ring-gray-200 p-5">
+            <div
+              class="rounded-lg bg-white dark:bg-neutral-900 ring-1 ring-gray-200 dark:ring-white/10 p-5"
+            >
               <h4 class="font-semibold text-gray-900">Forum reply</h4>
               <p class="text-sm text-gray-600 mt-1">
                 Draft respectful, academically sound replies for discussions.
               </p>
             </div>
-            <div class="rounded-lg bg-white ring-1 ring-gray-200 p-5">
+            <div
+              class="rounded-lg bg-white dark:bg-neutral-900 ring-1 ring-gray-200 dark:ring-white/10 p-5"
+            >
               <h4 class="font-semibold text-gray-900">Exam helper</h4>
               <p class="text-sm text-gray-600 mt-1">
                 Study‑first guidance and planning with integrity in mind.
               </p>
             </div>
-            <div class="rounded-lg bg-white ring-1 ring-gray-200 p-5">
+            <div
+              class="rounded-lg bg-white dark:bg-neutral-900 ring-1 ring-gray-200 dark:ring-white/10 p-5"
+            >
               <h4 class="font-semibold text-gray-900">Chat with context</h4>
               <p class="text-sm text-gray-600 mt-1">
                 Ask anything and get answers that reference your uploaded
@@ -285,7 +401,7 @@
         </div>
       </section>
 
-      <section id="contact" class="bg-gray-50">
+      <section id="contact" class="bg-gray-50 dark:bg-neutral-950">
         <div class="container mx-auto max-w-6xl px-4 py-12">
           <div
             class="rounded-xl bg-primary text-white p-6 sm:p-8 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4"
@@ -312,16 +428,69 @@
       </section>
     </main>
 
-    <footer class="border-t border-gray-200">
-      <div class="container mx-auto max-w-6xl px-4 py-6 text-xs text-gray-500">
+    <footer class="border-t border-gray-200 dark:border-white/10">
+      <div
+        class="container mx-auto max-w-6xl px-4 py-6 text-xs text-gray-500 dark:text-slate-400"
+      >
         Theme colors:
         <span class="font-medium text-primary">Resistance Blue</span> ·
         <span class="font-medium text-secondary">Brave Pink</span> ·
         <span class="font-medium text-tertiary">Hero Green</span>
       </div>
-      <div class="container mx-auto max-w-6xl px-4 py-6 text-xs text-gray-500">
+      <div
+        class="container mx-auto max-w-6xl px-4 py-6 text-xs text-gray-500 dark:text-slate-400"
+      >
         <p>Made with ❤️ by ILMATRIX</p>
       </div>
     </footer>
+
+    <script>
+      // Theme init + toggle (persistent via localStorage + cookie; icon swaps via Tailwind dark:)
+      (function () {
+        const root = document.documentElement;
+        const getCookie = (name) => {
+          const parts = document.cookie.split("; ").filter(Boolean);
+          const hit = parts.find((p) => p.startsWith(name + "="));
+          return hit
+            ? decodeURIComponent(hit.split("=").slice(1).join("="))
+            : null;
+        };
+        const persist = (mode) => {
+          try {
+            localStorage.setItem("theme", mode);
+          } catch {}
+          try {
+            document.cookie =
+              "theme=" +
+              encodeURIComponent(mode) +
+              "; max-age=31536000; path=/; SameSite=Lax";
+          } catch {}
+        };
+        const getSaved = () => {
+          let v = null;
+          try {
+            v = localStorage.getItem("theme");
+          } catch {}
+          if (!v) v = getCookie("theme");
+          return v;
+        };
+        const saved = getSaved();
+        const prefersDark =
+          window.matchMedia &&
+          window.matchMedia("(prefers-color-scheme: dark)").matches;
+        const initial = saved ? saved : prefersDark ? "dark" : "light";
+        root.classList.toggle("dark", initial === "dark");
+        if (!saved) persist(initial);
+
+        const btn = document.getElementById("btnTheme");
+        if (btn) {
+          btn.addEventListener("click", () => {
+            const newMode = root.classList.contains("dark") ? "light" : "dark";
+            root.classList.toggle("dark", newMode === "dark");
+            persist(newMode);
+          });
+        }
+      })();
+    </script>
   </body>
 </html>
