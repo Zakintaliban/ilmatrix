@@ -675,4 +675,67 @@ api.get("/health", (c) =>
   })
 );
 
+/** ===== Material TTL auto-cleaner (auto delete old uploads) =====
+ * Deletes uploads/<materialId>.txt files older than MATERIAL_TTL_MINUTES.
+ * - Default TTL: 60 minutes
+ * - Sweep interval: derived from TTL (bounded between 1–10 minutes)
+ * - Silent/defensive: ignores errors so it never crashes the API
+ */
+const MATERIAL_TTL_MINUTES = Number(process.env.MATERIAL_TTL_MINUTES || "60");
+const CLEAN_SWEEP_INTERVAL_MS = (() => {
+  const ttlMs = Math.max(1, MATERIAL_TTL_MINUTES) * 60_000;
+  // Aim ~6 sweeps per TTL; clamp between 1 min and 10 min
+  const target = Math.floor(ttlMs / 6);
+  return Math.max(60_000, Math.min(10 * 60_000, target || 10 * 60_000));
+})();
+
+let cleanerStarted = false;
+
+async function cleanupOldMaterials() {
+  try {
+    await ensureUploads();
+    const ttlMs =
+      Math.max(
+        1,
+        Number(process.env.MATERIAL_TTL_MINUTES || MATERIAL_TTL_MINUTES) || 60
+      ) * 60_000;
+    const cutoff = Date.now() - ttlMs;
+
+    // Read uploads directory (if missing, ensureUploads already created it)
+    const names = await fs.readdir(uploadsDir).catch(() => []);
+    for (const name of names) {
+      if (!name.endsWith(".txt")) continue;
+      const p = join(uploadsDir, name);
+      try {
+        const st = await fs.stat(p);
+        const mtime =
+          (st as any).mtimeMs ??
+          (st.mtime instanceof Date ? st.mtime.getTime() : 0);
+        if (Number(mtime) > 0 && mtime < cutoff) {
+          await fs.unlink(p).catch(() => {});
+        }
+      } catch {
+        // Ignore per-file errors to keep the sweep resilient
+      }
+    }
+  } catch {
+    // Ignore sweep-level errors
+  }
+}
+
+function startMaterialCleaner() {
+  if (cleanerStarted) return;
+  cleanerStarted = true;
+  // Initial delayed sweep (avoid blocking cold start)
+  setTimeout(() => {
+    cleanupOldMaterials().catch(() => {});
+  }, 30_000);
+  // Periodic sweep
+  setInterval(() => {
+    cleanupOldMaterials().catch(() => {});
+  }, CLEAN_SWEEP_INTERVAL_MS);
+}
+
+startMaterialCleaner();
+
 export default api;
