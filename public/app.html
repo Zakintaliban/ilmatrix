@@ -37,7 +37,38 @@
       content="index,follow,max-snippet:-1,max-image-preview:large,max-video-preview:-1"
     />
     <meta name="author" content="ILMATRIX" />
-    <meta name="theme-color" content="#0f0e85" />
+    <!-- Browser UI colors (progressive enhancement) -->
+    <meta name="color-scheme" content="light dark" />
+    <meta name="msapplication-TileColor" content="#0f0e85" />
+    <meta
+      name="apple-mobile-web-app-status-bar-style"
+      content="black-translucent"
+    />
+    <script>
+      (function () {
+        try {
+          var lightColor = "#0f0e85";
+          var darkColor = "#000000";
+          var mql =
+            window.matchMedia &&
+            window.matchMedia("(prefers-color-scheme: dark)");
+          var apply = function () {
+            var content = mql && mql.matches ? darkColor : lightColor;
+            var meta = document.querySelector('meta[name="theme-color"]');
+            if (!meta) {
+              meta = document.createElement("meta");
+              meta.setAttribute("name", "theme-color");
+              document.head.appendChild(meta);
+            }
+            meta.setAttribute("content", content);
+          };
+          apply();
+          if (mql && mql.addEventListener)
+            mql.addEventListener("change", apply);
+          else if (mql && mql.addListener) mql.addListener(apply);
+        } catch (e) {}
+      })();
+    </script>
     <!-- Open Graph -->
     <meta property="og:type" content="website" />
     <meta
@@ -96,7 +127,12 @@
     <style>
       html {
         scroll-behavior: smooth;
-        scrollbar-gutter: stable both-edges;
+      }
+      /* Apply where supported */
+      @supports (scrollbar-gutter: stable) {
+        html {
+          scrollbar-gutter: stable both-edges;
+        }
       }
       /* Flashcard flip styles */
       .fc-scene {
@@ -169,8 +205,8 @@
       .fc-face {
         position: absolute;
         inset: 0;
-        backface-visibility: hidden;
         -webkit-backface-visibility: hidden;
+        backface-visibility: hidden;
         border-radius: 0.75rem; /* rounded-xl */
         border: 1px solid rgb(229 231 235); /* ring-gray-200 */
         background: white;
@@ -325,9 +361,11 @@
         color: #cbd5e1 !important;
       }
 
-      /* Momentum scroll for iOS */
-      .momentum {
-        -webkit-overflow-scrolling: touch;
+      /* Momentum scroll for iOS (applied where supported) */
+      @supports (-webkit-overflow-scrolling: touch) {
+        .momentum {
+          -webkit-overflow-scrolling: touch;
+        }
       }
 
       /* Safe-area insets for iOS notch/home bar */
@@ -337,6 +375,18 @@
         --safe-left: env(safe-area-inset-left, 0px);
         --safe-right: env(safe-area-inset-right, 0px);
       }
+      :root {
+        --mobile-frame-max: 440px;
+      }
+      /* Limit the app frame width on small screens to simulate modern iPhone width (~440px) */
+      @media (max-width: 640px) {
+        #appMobileFrame {
+          max-width: var(--mobile-frame-max);
+          margin-left: auto;
+          margin-right: auto;
+        }
+      }
+
       body {
         padding-left: var(--safe-left);
         padding-right: var(--safe-right);
@@ -376,8 +426,12 @@
 
       /* Safer modal scrolling for in-place tools panel */
       #toolsPanel {
-        overscroll-behavior: contain;
         touch-action: pan-y;
+      }
+      @supports (overscroll-behavior: contain) {
+        #toolsPanel {
+          overscroll-behavior: contain;
+        }
       }
 
       /* Helper for safe bottom padding on scrollable containers */
@@ -448,926 +502,933 @@
   <body
     class="bg-gradient-to-b from-slate-50 to-slate-100 dark:from-black dark:to-black text-slate-900 dark:text-slate-100 min-h-screen flex flex-col antialiased selection:bg-indigo-500/20 selection:text-indigo-900 dark:selection:text-white"
   >
-    <!-- Header -->
-    <header
-      class="sticky top-0 z-40 bg-primary text-white dark:bg-black border-b border-white/20 dark:border-white/10 ring-1 ring-black/5 shadow-lg"
-    >
-      <div
-        class="container mx-auto max-w-6xl px-4 py-4 flex items-center justify-between"
+    <div id="appMobileFrame">
+      <!-- Header -->
+      <header
+        class="sticky top-0 z-40 bg-primary text-white dark:bg-black border-b border-white/20 dark:border-white/10 ring-1 ring-black/5 shadow-lg"
       >
-        <a href="/" class="text-xl sm:text-2xl font-bold tracking-tight"
-          >ILMATRIX</a
+        <div
+          class="container mx-auto max-w-6xl px-4 py-4 flex items-center justify-between"
         >
-        <div class="flex items-center gap-2">
-          <nav class="hidden sm:flex items-center gap-2">
-            <a
-              href="/app.html"
-              class="text-xs sm:text-sm px-3 py-2 rounded-md hover:bg-indigo-900"
-              >App</a
-            >
-            <a
-              href="/about.html"
-              class="text-xs sm:text-sm px-3 py-2 rounded-md hover:bg-indigo-900"
-              >About</a
-            >
-          </nav>
+          <a href="/" class="text-xl sm:text-2xl font-bold tracking-tight"
+            >ILMATRIX</a
+          >
           <div class="flex items-center gap-2">
-            <button
-              id="btnHealth"
-              class="text-xs sm:text-sm bg-secondary hover:bg-pink-500 transition text-white px-3 py-2 rounded-md"
-            >
-              Check API
-            </button>
-            <button
-              id="btnTheme"
-              class="inline-flex items-center gap-1.5 text-xs sm:text-sm px-3 py-2 rounded-xl border border-white/30 ring-1 ring-black/5 bg-white/80 hover:bg-white/90 text-slate-900 shadow-sm transition-all duration-200 ease-out dark:bg-slate-800/80 dark:hover:bg-slate-800 dark:text-slate-100"
-              title="Toggle theme"
-              aria-label="Toggle theme"
-            >
-              <span
-                class="icon-sun text-yellow-500 dark:hidden"
-                aria-hidden="true"
-                >☀️</span
+            <nav class="hidden sm:flex items-center gap-2">
+              <a
+                href="/app.html"
+                class="text-xs sm:text-sm px-3 py-2 rounded-md hover:bg-indigo-900"
+                >App</a
               >
-              <span
-                class="icon-moon hidden dark:inline text-slate-100"
-                aria-hidden="true"
-                >🌙</span
+              <a
+                href="/about.html"
+                class="text-xs sm:text-sm px-3 py-2 rounded-md hover:bg-indigo-900"
+                >About</a
               >
-              Theme
-            </button>
+            </nav>
+            <div class="flex items-center gap-2">
+              <button
+                id="btnHealth"
+                class="text-xs sm:text-sm bg-secondary hover:bg-pink-500 transition text-white px-3 py-2 rounded-md"
+              >
+                Check API
+              </button>
+              <button
+                id="btnTheme"
+                class="inline-flex items-center gap-1.5 text-xs sm:text-sm px-3 py-2 rounded-xl border border-white/30 ring-1 ring-black/5 bg-white/80 hover:bg-white/90 text-slate-900 shadow-sm transition-all duration-200 ease-out dark:bg-slate-800/80 dark:hover:bg-slate-800 dark:text-slate-100"
+                title="Toggle theme"
+                aria-label="Toggle theme"
+              >
+                <span
+                  class="icon-sun text-yellow-500 dark:hidden"
+                  aria-hidden="true"
+                  >☀️</span
+                >
+                <span
+                  class="icon-moon hidden dark:inline text-slate-100"
+                  aria-hidden="true"
+                  >🌙</span
+                >
+                Theme
+              </button>
+            </div>
           </div>
         </div>
-      </div>
-    </header>
+      </header>
 
-    <!-- Nav -->
-    <nav
-      class="hidden sticky top-14 sm:top-16 z-30 bg-white/10 dark:bg-white/5 backdrop-blur-md border-b border-white/20 ring-1 ring-black/5"
-    >
-      <div class="container mx-auto max-w-6xl px-4 overflow-x-auto">
-        <ul class="flex gap-2 sm:gap-3 py-2 text-sm">
-          <li>
-            <button
-              data-tab="chat"
-              class="tab-btn px-3 py-2 rounded-md bg-primary text-white hover:bg-indigo-900"
-            >
-              Chat
-            </button>
-          </li>
-          <li>
-            <button
-              data-tab="upload"
-              class="tab-btn px-3 py-2 rounded-md bg-secondary text-white hover:bg-pink-500"
-            >
-              Upload
-            </button>
-          </li>
-          <li>
-            <button
-              data-tab="explain"
-              class="tab-btn px-3 py-2 rounded-md bg-tertiary text-white hover:bg-green-700"
-            >
-              Explain
-            </button>
-          </li>
-          <li>
-            <button
-              data-tab="quiz"
-              class="tab-btn px-3 py-2 rounded-md bg-tertiary text-white hover:bg-green-700"
-            >
-              Quiz
-            </button>
-          </li>
-          <li>
-            <button
-              data-tab="forum"
-              class="tab-btn px-3 py-2 rounded-md bg-tertiary text-white hover:bg-green-700"
-            >
-              Forum
-            </button>
-          </li>
-          <li>
-            <button
-              data-tab="exam"
-              class="tab-btn px-3 py-2 rounded-md bg-tertiary text-white hover:bg-green-700"
-            >
-              Exam
-            </button>
-          </li>
-          <li>
-            <button
-              data-tab="flashcards"
-              class="tab-btn px-3 py-2 rounded-md bg-tertiary text-white hover:bg-green-700"
-            >
-              Flashcards
-            </button>
-          </li>
-          <li>
-            <button
-              data-tab="dialogue"
-              class="tab-btn px-3 py-2 rounded-md bg-tertiary text-white hover:bg-green-700"
-            >
-              Dialogue
-            </button>
-          </li>
-        </ul>
-      </div>
-    </nav>
-
-    <!-- Main -->
-    <main
-      class="container mx-auto max-w-6xl px-4 py-6 space-y-6 flex-1 pb-safe"
-    >
-      <!-- Chat (General) -->
-      <section
-        id="sec-chat"
-        class="card bg-white dark:bg-neutral-900 rounded-xl shadow-sm ring-1 ring-gray-200 dark:ring-white/10"
+      <!-- Nav -->
+      <nav
+        class="hidden sticky top-14 sm:top-16 z-30 bg-white/10 dark:bg-white/5 backdrop-blur-md border-b border-white/20 ring-1 ring-black/5"
       >
-        <div class="p-5 sm:p-6">
-          <h2 class="text-lg sm:text-xl font-semibold text-primary mb-4">
-            Chat (General)
-          </h2>
-          <div class="relative">
-            <div
-              id="chat"
-              class="w-full rounded-2xl border border-white/20 dark:border-white/10 ring-1 ring-black/5 bg-white/40 dark:bg-neutral-900 backdrop-blur-md p-4 sm:p-5 min-h-[140px] max-h-[360px] overflow-auto momentum text-sm transition-all duration-200 ease-out"
-            ></div>
-            <div
-              id="activeToolBadge"
-              class="hidden absolute bottom-2 left-2 z-10 shrink-0 items-center gap-1 px-2 py-1 rounded-md border border-white/20 ring-1 ring-black/5 bg-white/70 dark:bg-white/10 text-slate-900 dark:text-slate-100 text-xs"
-            >
-              <span id="activeToolLabel">Explain</span>
+        <div class="container mx-auto max-w-6xl px-4 overflow-x-auto">
+          <ul class="flex gap-2 sm:gap-3 py-2 text-sm">
+            <li>
               <button
-                id="activeToolClear"
-                class="ml-1 inline-flex items-center justify-center w-4 h-4 rounded hover:bg-black/5 dark:hover:bg-white/10"
-                title="Clear tool"
-                aria-label="Clear tool"
+                data-tab="chat"
+                class="tab-btn px-3 py-2 rounded-md bg-primary text-white hover:bg-indigo-900"
               >
-                &times;
+                Chat
+              </button>
+            </li>
+            <li>
+              <button
+                data-tab="upload"
+                class="tab-btn px-3 py-2 rounded-md bg-secondary text-white hover:bg-pink-500"
+              >
+                Upload
+              </button>
+            </li>
+            <li>
+              <button
+                data-tab="explain"
+                class="tab-btn px-3 py-2 rounded-md bg-tertiary text-white hover:bg-green-700"
+              >
+                Explain
+              </button>
+            </li>
+            <li>
+              <button
+                data-tab="quiz"
+                class="tab-btn px-3 py-2 rounded-md bg-tertiary text-white hover:bg-green-700"
+              >
+                Quiz
+              </button>
+            </li>
+            <li>
+              <button
+                data-tab="forum"
+                class="tab-btn px-3 py-2 rounded-md bg-tertiary text-white hover:bg-green-700"
+              >
+                Forum
+              </button>
+            </li>
+            <li>
+              <button
+                data-tab="exam"
+                class="tab-btn px-3 py-2 rounded-md bg-tertiary text-white hover:bg-green-700"
+              >
+                Exam
+              </button>
+            </li>
+            <li>
+              <button
+                data-tab="flashcards"
+                class="tab-btn px-3 py-2 rounded-md bg-tertiary text-white hover:bg-green-700"
+              >
+                Flashcards
+              </button>
+            </li>
+            <li>
+              <button
+                data-tab="dialogue"
+                class="tab-btn px-3 py-2 rounded-md bg-tertiary text-white hover:bg-green-700"
+              >
+                Dialogue
+              </button>
+            </li>
+          </ul>
+        </div>
+      </nav>
+
+      <!-- Main -->
+      <main
+        class="container mx-auto max-w-6xl px-4 py-6 space-y-6 flex-1 pb-safe"
+      >
+        <!-- Chat (General) -->
+        <section
+          id="sec-chat"
+          class="card bg-white dark:bg-neutral-900 rounded-xl shadow-sm ring-1 ring-gray-200 dark:ring-white/10"
+        >
+          <div class="p-5 sm:p-6">
+            <h2 class="text-lg sm:text-xl font-semibold text-primary mb-4">
+              Chat (General)
+            </h2>
+            <div class="relative">
+              <div
+                id="chat"
+                class="w-full rounded-2xl border border-white/20 dark:border-white/10 ring-1 ring-black/5 bg-white/40 dark:bg-neutral-900 backdrop-blur-md p-4 sm:p-5 min-h-[140px] max-h-[360px] overflow-auto momentum text-sm transition-all duration-200 ease-out"
+              ></div>
+              <div
+                id="activeToolBadge"
+                class="hidden absolute bottom-2 left-2 z-10 shrink-0 items-center gap-1 px-2 py-1 rounded-md border border-white/20 ring-1 ring-black/5 bg-white/70 dark:bg-white/10 text-slate-900 dark:text-slate-100 text-xs"
+              >
+                <span id="activeToolLabel">Explain</span>
+                <button
+                  id="activeToolClear"
+                  class="ml-1 inline-flex items-center justify-center w-4 h-4 rounded hover:bg-black/5 dark:hover:bg-white/10"
+                  title="Clear tool"
+                  aria-label="Clear tool"
+                >
+                  &times;
+                </button>
+              </div>
+            </div>
+            <div
+              id="attachmentsBar"
+              class="hidden mt-2 flex items-center justify-between gap-3 rounded-lg border border-white/20 ring-1 ring-black/5 bg-white/60 dark:bg-white/10 px-3 py-2 text-xs"
+            >
+              <div class="truncate">
+                <span
+                  class="text-gray-700 dark:text-slate-300"
+                  id="attachmentsSummary"
+                ></span>
+              </div>
+              <button
+                id="btnClearAttachments"
+                class="shrink-0 inline-flex items-center gap-1 px-2 py-1 rounded-md border border-red-300 dark:border-red-500/40 bg-white dark:bg-neutral-900 text-red-700 dark:text-red-300 hover:bg-red-50 dark:hover:bg-white/10"
+                title="Remove all files from current material"
+              >
+                Remove all
+              </button>
+            </div>
+            <div class="mt-3 flex gap-2 items-start relative">
+              <!-- Quick actions (+) with in-place tools panel -->
+              <div class="relative">
+                <button
+                  id="btnActionMenu"
+                  class="inline-flex items-center justify-center w-9 h-9 rounded-md border border-gray-300 dark:border-white/20 bg-white dark:bg-neutral-900 text-gray-700 dark:text-slate-100 hover:bg-gray-50 dark:hover:bg-white/10 select-none"
+                  title="Open tools"
+                  aria-haspopup="menu"
+                  aria-controls="quickMenu"
+                  aria-expanded="false"
+                >
+                  +
+                </button>
+
+                <!-- Mobile quick menu (ChatGPT-like), shown only on small screens -->
+                <div
+                  id="quickMenu"
+                  class="hidden quick-menu"
+                  role="menu"
+                  aria-label="Quick actions"
+                >
+                  <div class="p-1">
+                    <button
+                      class="quick-item rounded-md"
+                      role="menuitem"
+                      tabindex="-1"
+                      data-menu="upload"
+                    >
+                      ➕ Add files
+                    </button>
+                    <div class="h-px my-1 bg-black/10 dark:bg-white/10"></div>
+                    <button
+                      class="quick-item rounded-md"
+                      role="menuitem"
+                      tabindex="-1"
+                      data-menu="explain"
+                    >
+                      🧠 Explain
+                    </button>
+                    <button
+                      class="quick-item rounded-md"
+                      role="menuitem"
+                      tabindex="-1"
+                      data-menu="quiz"
+                    >
+                      ❓ Quiz
+                    </button>
+                    <button
+                      class="quick-item rounded-md"
+                      role="menuitem"
+                      tabindex="-1"
+                      data-menu="forum"
+                    >
+                      💬 Forum
+                    </button>
+                    <button
+                      class="quick-item rounded-md"
+                      role="menuitem"
+                      tabindex="-1"
+                      data-menu="exam"
+                    >
+                      📝 Exam
+                    </button>
+                    <button
+                      class="quick-item rounded-md"
+                      role="menuitem"
+                      tabindex="-1"
+                      data-menu="flashcards"
+                    >
+                      🃏 Cards
+                    </button>
+                    <button
+                      class="quick-item rounded-md"
+                      role="menuitem"
+                      tabindex="-1"
+                      data-menu="dialogue"
+                    >
+                      🎯 Dialogue
+                    </button>
+                  </div>
+                </div>
+
+                <!-- In-place tools panel (no navigation) -->
+                <div
+                  id="toolsPanel"
+                  class="hidden fixed top-20 sm:top-24 inset-x-4 sm:inset-x-8 z-50 w-auto max-w-screen-xl mx-auto max-h-[80vh] overflow-auto momentum rounded-2xl border border-white/20 dark:border-white/10 ring-1 ring-black/5 bg-white/60 dark:bg-black backdrop-blur-xl shadow-2xl"
+                  role="dialog"
+                  aria-modal="true"
+                  aria-label="Study tools"
+                >
+                  <div class="p-3 panel-inner pb-safe">
+                    <div class="flex gap-3">
+                      <!-- Tools list -->
+                      <div class="w-28 shrink-0">
+                        <ul
+                          id="toolsList"
+                          class="space-y-1 text-sm"
+                          role="tablist"
+                          aria-label="Study tools"
+                          aria-orientation="vertical"
+                        >
+                          <li role="presentation">
+                            <button
+                              id="tab-upload"
+                              role="tab"
+                              aria-selected="true"
+                              tabindex="0"
+                              class="tool-btn w-full text-left px-3 py-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-white/10 hover:text-slate-900 dark:hover:text-slate-100 focus-visible:ring-2 focus-visible:ring-indigo-400 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-offset-black outline-none"
+                              data-tool="upload"
+                            >
+                              Upload
+                            </button>
+                          </li>
+                          <li role="presentation">
+                            <button
+                              id="tab-explain"
+                              role="tab"
+                              aria-selected="false"
+                              tabindex="-1"
+                              class="tool-btn w-full text-left px-3 py-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-white/10 hover:text-slate-900 dark:hover:text-slate-100 focus-visible:ring-2 focus-visible:ring-indigo-400 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-offset-black outline-none"
+                              data-tool="explain"
+                            >
+                              Explain
+                            </button>
+                          </li>
+                          <li role="presentation">
+                            <button
+                              id="tab-quiz"
+                              role="tab"
+                              aria-selected="false"
+                              tabindex="-1"
+                              class="tool-btn w-full text-left px-3 py-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-white/10 hover:text-slate-900 dark:hover:text-slate-100 focus-visible:ring-2 focus-visible:ring-indigo-400 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-offset-black outline-none"
+                              data-tool="quiz"
+                            >
+                              Quiz
+                            </button>
+                          </li>
+                          <li role="presentation">
+                            <button
+                              id="tab-forum"
+                              role="tab"
+                              aria-selected="false"
+                              tabindex="-1"
+                              class="tool-btn w-full text-left px-3 py-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-white/10 hover:text-slate-900 dark:hover:text-slate-100 focus-visible:ring-2 focus-visible:ring-indigo-400 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-offset-black outline-none"
+                              data-tool="forum"
+                            >
+                              Forum
+                            </button>
+                          </li>
+                          <li role="presentation">
+                            <button
+                              id="tab-exam"
+                              role="tab"
+                              aria-selected="false"
+                              tabindex="-1"
+                              class="tool-btn w-full text-left px-3 py-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-white/10 hover:text-slate-900 dark:hover:text-slate-100 focus-visible:ring-2 focus-visible:ring-indigo-400 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-offset-black outline-none"
+                              data-tool="exam"
+                            >
+                              Exam
+                            </button>
+                          </li>
+                          <li role="presentation">
+                            <button
+                              id="tab-flashcards"
+                              role="tab"
+                              aria-selected="false"
+                              tabindex="-1"
+                              class="tool-btn w-full text-left px-3 py-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-white/10 hover:text-slate-900 dark:hover:text-slate-100 focus-visible:ring-2 focus-visible:ring-indigo-400 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-offset-black outline-none"
+                              data-tool="flashcards"
+                            >
+                              Flashcards
+                            </button>
+                          </li>
+                          <li role="presentation">
+                            <button
+                              id="tab-dialogue"
+                              role="tab"
+                              aria-selected="false"
+                              tabindex="-1"
+                              class="tool-btn w-full text-left px-3 py-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-white/10 hover:text-slate-900 dark:hover:text-slate-100 focus-visible:ring-2 focus-visible:ring-indigo-400 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-offset-black outline-none"
+                              data-tool="dialogue"
+                            >
+                              Dialogue
+                            </button>
+                          </li>
+                        </ul>
+                      </div>
+                      <!-- Dynamic content host (feature sections will be moved here at first open) -->
+                      <div
+                        id="toolsContent"
+                        class="flex-1 min-w-0 space-y-2"
+                      ></div>
+                    </div>
+                  </div>
+                </div>
+                <div
+                  id="toolsBackdrop"
+                  class="hidden fixed inset-0 z-40 bg-slate-900/30 dark:bg-black/60"
+                ></div>
+              </div>
+              <textarea
+                id="chatInput"
+                rows="2"
+                placeholder="Tulis pesan..."
+                aria-label="Chat input"
+                class="flex-1 rounded-xl border border-white/20 ring-1 ring-black/5 bg-white px-4 py-3 text-[16px] leading-relaxed font-medium text-black placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-400 dark:bg-neutral-900 dark:text-white dark:placeholder-slate-400 transition-all duration-200 ease-out min-h-[52px]"
+              ></textarea>
+              <button
+                id="btnSend"
+                class="inline-flex items-center justify-center px-4 py-2 rounded-md bg-primary text-white font-medium hover:bg-indigo-900 transition"
+              >
+                Send
               </button>
             </div>
           </div>
-          <div
-            id="attachmentsBar"
-            class="hidden mt-2 flex items-center justify-between gap-3 rounded-lg border border-white/20 ring-1 ring-black/5 bg-white/60 dark:bg-white/10 px-3 py-2 text-xs"
-          >
-            <div class="truncate">
+        </section>
+
+        <!-- Upload -->
+        <section
+          id="sec-upload"
+          class="card rounded-2xl border border-white/20 ring-1 ring-black/5 bg-white/40 dark:bg-white/5 backdrop-blur-md shadow-sm"
+        >
+          <div class="p-5 sm:p-6">
+            <h2 class="text-lg sm:text-xl font-semibold text-primary mb-4">
+              Upload Material (PDF / TXT / PNG / JPG / DOCX / PPTX)
+            </h2>
+
+            <!-- Header bar: current material + actions -->
+            <div class="flex flex-wrap items-center gap-3 mb-3">
+              <div class="text-sm text-gray-700 dark:text-slate-300">
+                Current material:
+                <span
+                  id="currentMaterialLabel"
+                  class="font-semibold text-primary"
+                  >none</span
+                >
+              </div>
+              <button
+                id="btnNewMaterial"
+                class="px-3 py-1.5 rounded-md border border-gray-300 dark:border-white/20 text-sm bg-white dark:bg-neutral-900 dark:text-white hover:bg-gray-50 dark:hover:bg-white/10"
+                title="Start a new material (does not delete existing one)"
+              >
+                Start new material
+              </button>
               <span
-                class="text-gray-700 dark:text-slate-300"
-                id="attachmentsSummary"
+                id="uploadInfo"
+                class="text-sm text-gray-600 dark:text-slate-400"
               ></span>
             </div>
-            <button
-              id="btnClearAttachments"
-              class="shrink-0 inline-flex items-center gap-1 px-2 py-1 rounded-md border border-red-300 dark:border-red-500/40 bg-white dark:bg-neutral-900 text-red-700 dark:text-red-300 hover:bg-red-50 dark:hover:bg-white/10"
-              title="Remove all files from current material"
+
+            <!-- Hidden multi-file picker (triggered by clicking the drop zone) -->
+            <input
+              id="filePicker"
+              class="hidden"
+              type="file"
+              multiple
+              aria-label="Select files"
+              accept=".pdf,.txt,.png,.jpg,.jpeg,.docx,.pptx,image/*,application/pdf,text/plain,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.presentationml.presentation"
+            />
+
+            <!-- Drop zone (click or drag & drop) -->
+            <div
+              id="dropZone"
+              class="rounded-lg border-2 border-dashed border-gray-300 dark:border-white/10 bg-white/60 dark:bg-white/10 hover:bg-white/80 dark:hover:bg-white/15 backdrop-blur transition p-4 sm:p-6 text-center cursor-pointer"
+              role="button"
+              tabindex="0"
+              aria-label="Drop files here or click to select"
             >
-              Remove all
-            </button>
+              <p class="font-medium text-gray-800 dark:text-slate-200">
+                Drag & drop files here
+              </p>
+              <p class="text-xs text-gray-500 dark:text-slate-400">
+                or click to select. Accepted: PDF, TXT, PNG/JPG, DOCX, PPTX.
+                Total limit 10 MB per material.
+              </p>
+            </div>
+
+            <!-- Attachments list -->
+            <div id="attachments" class="mt-4 grid gap-2">
+              <em class="text-gray-500 dark:text-slate-400"
+                >No files yet. Drop or click to upload.</em
+              >
+            </div>
           </div>
-          <div class="mt-3 flex gap-2 items-start relative">
-            <!-- Quick actions (+) with in-place tools panel -->
-            <div class="relative">
+        </section>
+
+        <!-- Explain -->
+        <section
+          id="sec-explain"
+          class="card hidden bg-white dark:bg-neutral-900 rounded-xl shadow-sm ring-1 ring-gray-200 dark:ring-white/10"
+        >
+          <div class="p-5 sm:p-6">
+            <h2 class="text-lg sm:text-xl font-semibold text-primary mb-4">
+              Explain Material
+            </h2>
+            <label
+              for="promptExplain"
+              class="block text-sm font-medium text-gray-700 mb-1"
+              >Prompt / Notes</label
+            >
+            <textarea
+              id="promptExplain"
+              rows="4"
+              class="w-full rounded-xl border border-white/20 ring-1 ring-black/5 px-4 py-3 text-base font-medium text-black placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-400 bg-white dark:bg-neutral-900 dark:text-white dark:placeholder-slate-400 transition-all duration-200 ease-out"
+              placeholder="Jelaskan bab 2..."
+            ></textarea>
+            <div class="mt-3">
               <button
-                id="btnActionMenu"
-                class="inline-flex items-center justify-center w-9 h-9 rounded-md border border-gray-300 dark:border-white/20 bg-white dark:bg-neutral-900 text-gray-700 dark:text-slate-100 hover:bg-gray-50 dark:hover:bg-white/10 select-none"
-                title="Open tools"
-                aria-haspopup="menu"
-                aria-controls="quickMenu"
-                aria-expanded="false"
+                id="btnExplain"
+                class="px-4 py-2 rounded-md bg-secondary text-white hover:bg-pink-500"
               >
-                +
+                Run Explain
               </button>
+            </div>
+            <div
+              id="explainResult"
+              class="mt-4 text-sm bg-gray-50 dark:bg-neutral-900 border border-gray-200 dark:border-white/10 rounded-md p-3 whitespace-pre-wrap break-words overflow-x-auto"
+            ></div>
+          </div>
+        </section>
 
-              <!-- Mobile quick menu (ChatGPT-like), shown only on small screens -->
-              <div
-                id="quickMenu"
-                class="hidden quick-menu"
-                role="menu"
-                aria-label="Quick actions"
-              >
-                <div class="p-1">
-                  <button
-                    class="quick-item rounded-md"
-                    role="menuitem"
-                    tabindex="-1"
-                    data-menu="upload"
-                  >
-                    ➕ Add files
-                  </button>
-                  <div class="h-px my-1 bg-black/10 dark:bg-white/10"></div>
-                  <button
-                    class="quick-item rounded-md"
-                    role="menuitem"
-                    tabindex="-1"
-                    data-menu="explain"
-                  >
-                    🧠 Explain
-                  </button>
-                  <button
-                    class="quick-item rounded-md"
-                    role="menuitem"
-                    tabindex="-1"
-                    data-menu="quiz"
-                  >
-                    ❓ Quiz
-                  </button>
-                  <button
-                    class="quick-item rounded-md"
-                    role="menuitem"
-                    tabindex="-1"
-                    data-menu="forum"
-                  >
-                    💬 Forum
-                  </button>
-                  <button
-                    class="quick-item rounded-md"
-                    role="menuitem"
-                    tabindex="-1"
-                    data-menu="exam"
-                  >
-                    📝 Exam
-                  </button>
-                  <button
-                    class="quick-item rounded-md"
-                    role="menuitem"
-                    tabindex="-1"
-                    data-menu="flashcards"
-                  >
-                    🃏 Cards
-                  </button>
-                  <button
-                    class="quick-item rounded-md"
-                    role="menuitem"
-                    tabindex="-1"
-                    data-menu="dialogue"
-                  >
-                    🎯 Dialogue
-                  </button>
-                </div>
+        <!-- Quiz (Merged: generate + answer + grade) -->
+        <section
+          id="sec-quiz"
+          class="card hidden bg-white dark:bg-neutral-900 rounded-xl shadow-sm ring-1 ring-gray-200 dark:ring-white/10"
+        >
+          <div class="p-5 sm:p-6 space-y-4">
+            <h2 class="text-lg sm:text-xl font-semibold text-primary mb-2">
+              Quiz (MCQ) — Generate • Answer • Grade
+            </h2>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div class="flex flex-col">
+                <label
+                  for="numQuestions"
+                  class="block text-sm font-medium text-gray-700 mb-1"
+                  >Number of questions</label
+                >
+                <input
+                  id="numQuestions"
+                  type="number"
+                  min="1"
+                  max="20"
+                  value="5"
+                  class="w-full rounded-md border border-gray-300 dark:border-white/10 px-3 py-2 text-sm bg-white dark:bg-neutral-900 text-gray-900 dark:text-white"
+                  placeholder="5"
+                  aria-label="Number of generated quiz questions"
+                />
               </div>
+              <div class="flex items-end">
+                <button
+                  id="btnGenerateQuizMCQ"
+                  class="px-4 py-2 rounded-md bg-secondary text-white hover:bg-pink-500"
+                >
+                  Generate MCQ
+                </button>
+              </div>
+            </div>
 
-              <!-- In-place tools panel (no navigation) -->
-              <div
-                id="toolsPanel"
-                class="hidden fixed top-20 sm:top-24 inset-x-4 sm:inset-x-8 z-50 w-auto max-w-screen-xl mx-auto max-h-[80vh] overflow-auto momentum rounded-2xl border border-white/20 dark:border-white/10 ring-1 ring-black/5 bg-white/60 dark:bg-black backdrop-blur-xl shadow-2xl"
-                role="dialog"
-                aria-modal="true"
-                aria-label="Study tools"
+            <div id="quizMCQ" class="space-y-4"></div>
+
+            <div class="space-y-2">
+              <label
+                for="quizAnswers"
+                class="block text-sm font-medium text-gray-700"
+                >Your Answers (format per line: 1 a, 2 b, ...)</label
               >
-                <div class="p-3 panel-inner pb-safe">
-                  <div class="flex gap-3">
-                    <!-- Tools list -->
-                    <div class="w-28 shrink-0">
-                      <ul
-                        id="toolsList"
-                        class="space-y-1 text-sm"
-                        role="tablist"
-                        aria-label="Study tools"
-                        aria-orientation="vertical"
-                      >
-                        <li role="presentation">
-                          <button
-                            id="tab-upload"
-                            role="tab"
-                            aria-selected="true"
-                            tabindex="0"
-                            class="tool-btn w-full text-left px-3 py-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-white/10 hover:text-slate-900 dark:hover:text-slate-100 focus-visible:ring-2 focus-visible:ring-indigo-400 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-offset-black outline-none"
-                            data-tool="upload"
-                          >
-                            Upload
-                          </button>
-                        </li>
-                        <li role="presentation">
-                          <button
-                            id="tab-explain"
-                            role="tab"
-                            aria-selected="false"
-                            tabindex="-1"
-                            class="tool-btn w-full text-left px-3 py-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-white/10 hover:text-slate-900 dark:hover:text-slate-100 focus-visible:ring-2 focus-visible:ring-indigo-400 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-offset-black outline-none"
-                            data-tool="explain"
-                          >
-                            Explain
-                          </button>
-                        </li>
-                        <li role="presentation">
-                          <button
-                            id="tab-quiz"
-                            role="tab"
-                            aria-selected="false"
-                            tabindex="-1"
-                            class="tool-btn w-full text-left px-3 py-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-white/10 hover:text-slate-900 dark:hover:text-slate-100 focus-visible:ring-2 focus-visible:ring-indigo-400 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-offset-black outline-none"
-                            data-tool="quiz"
-                          >
-                            Quiz
-                          </button>
-                        </li>
-                        <li role="presentation">
-                          <button
-                            id="tab-forum"
-                            role="tab"
-                            aria-selected="false"
-                            tabindex="-1"
-                            class="tool-btn w-full text-left px-3 py-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-white/10 hover:text-slate-900 dark:hover:text-slate-100 focus-visible:ring-2 focus-visible:ring-indigo-400 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-offset-black outline-none"
-                            data-tool="forum"
-                          >
-                            Forum
-                          </button>
-                        </li>
-                        <li role="presentation">
-                          <button
-                            id="tab-exam"
-                            role="tab"
-                            aria-selected="false"
-                            tabindex="-1"
-                            class="tool-btn w-full text-left px-3 py-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-white/10 hover:text-slate-900 dark:hover:text-slate-100 focus-visible:ring-2 focus-visible:ring-indigo-400 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-offset-black outline-none"
-                            data-tool="exam"
-                          >
-                            Exam
-                          </button>
-                        </li>
-                        <li role="presentation">
-                          <button
-                            id="tab-flashcards"
-                            role="tab"
-                            aria-selected="false"
-                            tabindex="-1"
-                            class="tool-btn w-full text-left px-3 py-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-white/10 hover:text-slate-900 dark:hover:text-slate-100 focus-visible:ring-2 focus-visible:ring-indigo-400 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-offset-black outline-none"
-                            data-tool="flashcards"
-                          >
-                            Flashcards
-                          </button>
-                        </li>
-                        <li role="presentation">
-                          <button
-                            id="tab-dialogue"
-                            role="tab"
-                            aria-selected="false"
-                            tabindex="-1"
-                            class="tool-btn w-full text-left px-3 py-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-white/10 hover:text-slate-900 dark:hover:text-slate-100 focus-visible:ring-2 focus-visible:ring-indigo-400 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-offset-black outline-none"
-                            data-tool="dialogue"
-                          >
-                            Dialogue
-                          </button>
-                        </li>
-                      </ul>
-                    </div>
-                    <!-- Dynamic content host (feature sections will be moved here at first open) -->
-                    <div
-                      id="toolsContent"
-                      class="flex-1 min-w-0 space-y-2"
-                    ></div>
+              <textarea
+                id="quizAnswers"
+                rows="4"
+                class="w-full rounded-xl border border-white/20 ring-1 ring-black/5 px-4 py-3 text-base font-medium text-black placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-400 bg-white dark:bg-neutral-900 dark:text-white dark:placeholder-slate-400 transition-all duration-200 ease-out"
+                placeholder="1 a&#10;2 b&#10;3 c&#10;4 d&#10;5 e"
+              ></textarea>
+              <div>
+                <button
+                  id="btnSubmitQuizMCQ"
+                  class="px-4 py-2 rounded-md bg-tertiary text-white hover:bg-green-700"
+                >
+                  Submit & Grade
+                </button>
+              </div>
+            </div>
+
+            <div
+              id="quizResult"
+              class="text-sm bg-gray-50 dark:bg-neutral-900 border border-gray-200 dark:border-white/10 rounded-md p-3 whitespace-pre-wrap break-words overflow-x-auto"
+            ></div>
+          </div>
+        </section>
+
+        <!-- Forum -->
+        <section
+          id="sec-forum"
+          class="card hidden bg-white dark:bg-neutral-900 rounded-xl shadow-sm ring-1 ring-gray-200 dark:ring-white/10"
+        >
+          <div class="p-5 sm:p-6">
+            <h2 class="text-lg sm:text-xl font-semibold text-primary mb-4">
+              Forum Reply
+            </h2>
+            <label
+              for="promptForum"
+              class="block text-sm font-medium text-gray-700 mb-1"
+              >Prompt</label
+            >
+            <textarea
+              id="promptForum"
+              rows="4"
+              class="w-full rounded-xl border border-white/20 ring-1 ring-black/5 px-4 py-3 text-base font-medium text-black placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-400 bg-white dark:bg-neutral-900 dark:text-white dark:placeholder-slate-400 transition-all duration-200 ease-out"
+              placeholder="Pertanyaan/Topik forum..."
+            ></textarea>
+            <div class="mt-3">
+              <button
+                id="btnForum"
+                class="px-4 py-2 rounded-md bg-secondary text-white hover:bg-pink-500"
+              >
+                Draft Reply
+              </button>
+            </div>
+            <div
+              id="forumResult"
+              class="mt-4 text-sm bg-gray-50 dark:bg-neutral-900 border border-gray-200 dark:border-white/10 rounded-md p-3 whitespace-pre-wrap break-words overflow-x-auto"
+            ></div>
+          </div>
+        </section>
+
+        <!-- Exam -->
+        <section
+          id="sec-exam"
+          class="card hidden bg-white dark:bg-neutral-900 rounded-xl shadow-sm ring-1 ring-gray-200 dark:ring-white/10"
+        >
+          <div class="p-5 sm:p-6">
+            <h2 class="text-lg sm:text-xl font-semibold text-primary mb-4">
+              Exam Helper
+            </h2>
+            <label
+              for="promptExam"
+              class="block text-sm font-medium text-gray-700 mb-1"
+              >Prompt</label
+            >
+            <textarea
+              id="promptExam"
+              rows="4"
+              class="w-full rounded-xl border border-white/20 ring-1 ring-black/5 px-4 py-3 text-base font-medium text-black placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-400 bg-white dark:bg-neutral-900 dark:text-white dark:placeholder-slate-400 transition-all duration-200 ease-out"
+              placeholder="Petunjuk / pertanyaan terkait exam..."
+            ></textarea>
+            <div class="mt-3">
+              <button
+                id="btnExam"
+                class="px-4 py-2 rounded-md bg-secondary text-white hover:bg-pink-500"
+              >
+                Run Exam Helper
+              </button>
+            </div>
+            <div
+              id="examResult"
+              class="mt-4 text-sm bg-gray-50 dark:bg-neutral-900 border border-gray-200 dark:border-white/10 rounded-md p-3 whitespace-pre-wrap break-words overflow-x-auto"
+            ></div>
+          </div>
+        </section>
+
+        <!-- Flashcards -->
+        <section
+          id="sec-flashcards"
+          class="card hidden bg-white dark:bg-neutral-900 rounded-xl shadow-sm ring-1 ring-gray-200 dark:ring-white/10"
+        >
+          <div class="p-5 sm:p-6 space-y-4">
+            <h2 class="text-lg sm:text-xl font-semibold text-primary">
+              Flashcards
+            </h2>
+
+            <div class="flex flex-wrap gap-3 items-end">
+              <div>
+                <label for="numCards" class="block text-xs text-gray-600"
+                  >Number of flashcards</label
+                >
+                <input
+                  id="numCards"
+                  type="number"
+                  min="1"
+                  max="50"
+                  value="5"
+                  class="w-28 rounded-md border border-gray-300 dark:border-white/10 px-2 py-2 text-sm bg-white dark:bg-neutral-900 text-gray-900 dark:text-white"
+                  placeholder="5"
+                  aria-label="Number of flashcards"
+                />
+              </div>
+              <button
+                id="btnGenerateCards"
+                class="px-3 py-2 rounded-md bg-secondary text-white hover:bg-pink-500"
+              >
+                Generate Flashcards
+              </button>
+            </div>
+
+            <div
+              id="flashcardsList"
+              class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4"
+            ></div>
+          </div>
+        </section>
+        <!-- Dialogue -->
+        <section
+          id="sec-dialogue"
+          class="card hidden bg-white dark:bg-neutral-900 rounded-xl shadow-sm ring-1 ring-gray-200 dark:ring-white/10"
+        >
+          <div class="p-5 sm:p-6">
+            <div class="flex items-start justify-between gap-2">
+              <h2 class="text-lg sm:text-xl font-semibold text-primary">
+                Dialogue
+              </h2>
+              <button
+                id="btnDialogueHint"
+                class="hidden text-xs sm:text-sm border border-gray-300 px-3 py-1.5 rounded-md hover:bg-gray-50"
+                title="Get a hint for the current topic"
+              >
+                I'm stuck
+              </button>
+            </div>
+
+            <p class="text-sm text-gray-600 mt-1">
+              Guided, topic-based coaching grounded in your uploaded material.
+            </p>
+
+            <div class="mt-4 flex items-center gap-3">
+              <button
+                id="btnDialogueStart"
+                class="px-3 py-2 rounded-md bg-secondary text-white hover:bg-pink-500"
+              >
+                Start
+              </button>
+              <button
+                id="btnDialogueBegin"
+                class="hidden px-3 py-2 rounded-md bg-tertiary text-white hover:bg-green-700"
+              >
+                Let's get started!
+              </button>
+            </div>
+
+            <div
+              id="dialogueStream"
+              class="mt-4 text-sm bg-gray-50 dark:bg-neutral-900 border border-gray-200 dark:border-white/10 rounded-md p-3 markdown"
+            >
+              <em class="text-gray-500">Click Start to begin Dialogue.</em>
+            </div>
+
+            <div class="mt-3 flex gap-2 items-start">
+              <!-- Mobile-only inline quick (+) for Dialogue -->
+              <div class="relative sm:hidden">
+                <button
+                  id="btnActionMenuDialogue"
+                  class="inline-flex items-center justify-center w-9 h-9 rounded-md border border-gray-300 dark:border-white/20 bg-white dark:bg-neutral-900 text-gray-700 dark:text-slate-100 hover:bg-gray-50 dark:hover:bg-white/10 select-none"
+                  title="Open tools"
+                  aria-haspopup="menu"
+                  aria-controls="quickMenuDialogue"
+                  aria-expanded="false"
+                >
+                  +
+                </button>
+
+                <!-- Local quick menu anchored to the inline + (mobile) -->
+                <div
+                  id="quickMenuDialogue"
+                  class="hidden quick-menu"
+                  role="menu"
+                  aria-label="Quick actions"
+                >
+                  <div class="p-1">
+                    <button
+                      class="quick-item rounded-md"
+                      role="menuitem"
+                      tabindex="-1"
+                      data-menu="upload"
+                    >
+                      ➕ Add files
+                    </button>
+                    <div class="h-px my-1 bg-black/10 dark:bg-white/10"></div>
+                    <button
+                      class="quick-item rounded-md"
+                      role="menuitem"
+                      tabindex="-1"
+                      data-menu="explain"
+                    >
+                      🧠 Explain
+                    </button>
+                    <button
+                      class="quick-item rounded-md"
+                      role="menuitem"
+                      tabindex="-1"
+                      data-menu="quiz"
+                    >
+                      ❓ Quiz
+                    </button>
+                    <button
+                      class="quick-item rounded-md"
+                      role="menuitem"
+                      tabindex="-1"
+                      data-menu="forum"
+                    >
+                      💬 Forum
+                    </button>
+                    <button
+                      class="quick-item rounded-md"
+                      role="menuitem"
+                      tabindex="-1"
+                      data-menu="exam"
+                    >
+                      📝 Exam
+                    </button>
+                    <button
+                      class="quick-item rounded-md"
+                      role="menuitem"
+                      tabindex="-1"
+                      data-menu="flashcards"
+                    >
+                      🃏 Cards
+                    </button>
+                    <button
+                      class="quick-item rounded-md"
+                      role="menuitem"
+                      tabindex="-1"
+                      data-menu="dialogue"
+                    >
+                      🎯 Dialogue
+                    </button>
                   </div>
                 </div>
               </div>
-              <div
-                id="toolsBackdrop"
-                class="hidden fixed inset-0 z-40 bg-slate-900/30 dark:bg-black/60"
-              ></div>
-            </div>
-            <textarea
-              id="chatInput"
-              rows="2"
-              placeholder="Tulis pesan..."
-              aria-label="Chat input"
-              class="flex-1 rounded-xl border border-white/20 ring-1 ring-black/5 bg-white px-4 py-3 text-[16px] leading-relaxed font-medium text-black placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-400 dark:bg-neutral-900 dark:text-white dark:placeholder-slate-400 transition-all duration-200 ease-out min-h-[52px]"
-            ></textarea>
-            <button
-              id="btnSend"
-              class="inline-flex items-center justify-center px-4 py-2 rounded-md bg-primary text-white font-medium hover:bg-indigo-900 transition"
-            >
-              Send
-            </button>
-          </div>
-        </div>
-      </section>
 
-      <!-- Upload -->
-      <section
-        id="sec-upload"
-        class="card rounded-2xl border border-white/20 ring-1 ring-black/5 bg-white/40 dark:bg-white/5 backdrop-blur-md shadow-sm"
-      >
-        <div class="p-5 sm:p-6">
-          <h2 class="text-lg sm:text-xl font-semibold text-primary mb-4">
-            Upload Material (PDF / TXT / PNG / JPG / DOCX / PPTX)
-          </h2>
-
-          <!-- Header bar: current material + actions -->
-          <div class="flex flex-wrap items-center gap-3 mb-3">
-            <div class="text-sm text-gray-700 dark:text-slate-300">
-              Current material:
-              <span id="currentMaterialLabel" class="font-semibold text-primary"
-                >none</span
-              >
-            </div>
-            <button
-              id="btnNewMaterial"
-              class="px-3 py-1.5 rounded-md border border-gray-300 dark:border-white/20 text-sm bg-white dark:bg-neutral-900 dark:text-white hover:bg-gray-50 dark:hover:bg-white/10"
-              title="Start a new material (does not delete existing one)"
-            >
-              Start new material
-            </button>
-            <span
-              id="uploadInfo"
-              class="text-sm text-gray-600 dark:text-slate-400"
-            ></span>
-          </div>
-
-          <!-- Hidden multi-file picker (triggered by clicking the drop zone) -->
-          <input
-            id="filePicker"
-            class="hidden"
-            type="file"
-            multiple
-            aria-label="Select files"
-            accept=".pdf,.txt,.png,.jpg,.jpeg,.docx,.pptx,image/*,application/pdf,text/plain,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.presentationml.presentation"
-          />
-
-          <!-- Drop zone (click or drag & drop) -->
-          <div
-            id="dropZone"
-            class="rounded-lg border-2 border-dashed border-gray-300 dark:border-white/10 bg-white/60 dark:bg-white/10 hover:bg-white/80 dark:hover:bg-white/15 backdrop-blur transition p-4 sm:p-6 text-center cursor-pointer"
-            role="button"
-            tabindex="0"
-            aria-label="Drop files here or click to select"
-          >
-            <p class="font-medium text-gray-800 dark:text-slate-200">
-              Drag & drop files here
-            </p>
-            <p class="text-xs text-gray-500 dark:text-slate-400">
-              or click to select. Accepted: PDF, TXT, PNG/JPG, DOCX, PPTX. Total
-              limit 10 MB per material.
-            </p>
-          </div>
-
-          <!-- Attachments list -->
-          <div id="attachments" class="mt-4 grid gap-2">
-            <em class="text-gray-500 dark:text-slate-400"
-              >No files yet. Drop or click to upload.</em
-            >
-          </div>
-        </div>
-      </section>
-
-      <!-- Explain -->
-      <section
-        id="sec-explain"
-        class="card hidden bg-white dark:bg-neutral-900 rounded-xl shadow-sm ring-1 ring-gray-200 dark:ring-white/10"
-      >
-        <div class="p-5 sm:p-6">
-          <h2 class="text-lg sm:text-xl font-semibold text-primary mb-4">
-            Explain Material
-          </h2>
-          <label
-            for="promptExplain"
-            class="block text-sm font-medium text-gray-700 mb-1"
-            >Prompt / Notes</label
-          >
-          <textarea
-            id="promptExplain"
-            rows="4"
-            class="w-full rounded-xl border border-white/20 ring-1 ring-black/5 px-4 py-3 text-base font-medium text-black placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-400 bg-white dark:bg-neutral-900 dark:text-white dark:placeholder-slate-400 transition-all duration-200 ease-out"
-            placeholder="Jelaskan bab 2..."
-          ></textarea>
-          <div class="mt-3">
-            <button
-              id="btnExplain"
-              class="px-4 py-2 rounded-md bg-secondary text-white hover:bg-pink-500"
-            >
-              Run Explain
-            </button>
-          </div>
-          <div
-            id="explainResult"
-            class="mt-4 text-sm bg-gray-50 dark:bg-neutral-900 border border-gray-200 dark:border-white/10 rounded-md p-3 whitespace-pre-wrap break-words overflow-x-auto"
-          ></div>
-        </div>
-      </section>
-
-      <!-- Quiz (Merged: generate + answer + grade) -->
-      <section
-        id="sec-quiz"
-        class="card hidden bg-white dark:bg-neutral-900 rounded-xl shadow-sm ring-1 ring-gray-200 dark:ring-white/10"
-      >
-        <div class="p-5 sm:p-6 space-y-4">
-          <h2 class="text-lg sm:text-xl font-semibold text-primary mb-2">
-            Quiz (MCQ) — Generate • Answer • Grade
-          </h2>
-
-          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div class="flex flex-col">
-              <label
-                for="numQuestions"
-                class="block text-sm font-medium text-gray-700 mb-1"
-                >Number of questions</label
-              >
-              <input
-                id="numQuestions"
-                type="number"
-                min="1"
-                max="20"
-                value="5"
-                class="w-full rounded-md border border-gray-300 dark:border-white/10 px-3 py-2 text-sm bg-white dark:bg-neutral-900 text-gray-900 dark:text-white"
-                placeholder="5"
-                aria-label="Number of generated quiz questions"
-              />
-            </div>
-            <div class="flex items-end">
+              <textarea
+                id="dialogueInput"
+                class="flex-1 rounded-xl border border-white/20 ring-1 ring-black/5 bg-white px-4 py-3 text-base font-medium text-black placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-400 dark:bg-neutral-900 dark:text-white dark:placeholder-slate-400 transition-all duration-200 ease-out min-h-[52px]"
+                rows="2"
+                placeholder="Type your answer (tip: ask 'How am I doing?')"
+              ></textarea>
               <button
-                id="btnGenerateQuizMCQ"
-                class="px-4 py-2 rounded-md bg-secondary text-white hover:bg-pink-500"
+                id="btnDialogueSend"
+                class="px-4 py-2 rounded-md bg-primary text-white font-medium hover:bg-indigo-900 disabled:opacity-50"
+                disabled
               >
-                Generate MCQ
+                Send
               </button>
             </div>
           </div>
+        </section>
+      </main>
 
-          <div id="quizMCQ" class="space-y-4"></div>
-
-          <div class="space-y-2">
-            <label
-              for="quizAnswers"
-              class="block text-sm font-medium text-gray-700"
-              >Your Answers (format per line: 1 a, 2 b, ...)</label
-            >
-            <textarea
-              id="quizAnswers"
-              rows="4"
-              class="w-full rounded-xl border border-white/20 ring-1 ring-black/5 px-4 py-3 text-base font-medium text-black placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-400 bg-white dark:bg-neutral-900 dark:text-white dark:placeholder-slate-400 transition-all duration-200 ease-out"
-              placeholder="1 a&#10;2 b&#10;3 c&#10;4 d&#10;5 e"
-            ></textarea>
-            <div>
-              <button
-                id="btnSubmitQuizMCQ"
-                class="px-4 py-2 rounded-md bg-tertiary text-white hover:bg-green-700"
-              >
-                Submit & Grade
-              </button>
-            </div>
-          </div>
-
-          <div
-            id="quizResult"
-            class="text-sm bg-gray-50 dark:bg-neutral-900 border border-gray-200 dark:border-white/10 rounded-md p-3 whitespace-pre-wrap break-words overflow-x-auto"
-          ></div>
-        </div>
-      </section>
-
-      <!-- Forum -->
-      <section
-        id="sec-forum"
-        class="card hidden bg-white dark:bg-neutral-900 rounded-xl shadow-sm ring-1 ring-gray-200 dark:ring-white/10"
-      >
-        <div class="p-5 sm:p-6">
-          <h2 class="text-lg sm:text-xl font-semibold text-primary mb-4">
-            Forum Reply
-          </h2>
-          <label
-            for="promptForum"
-            class="block text-sm font-medium text-gray-700 mb-1"
-            >Prompt</label
-          >
-          <textarea
-            id="promptForum"
-            rows="4"
-            class="w-full rounded-xl border border-white/20 ring-1 ring-black/5 px-4 py-3 text-base font-medium text-black placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-400 bg-white dark:bg-neutral-900 dark:text-white dark:placeholder-slate-400 transition-all duration-200 ease-out"
-            placeholder="Pertanyaan/Topik forum..."
-          ></textarea>
-          <div class="mt-3">
-            <button
-              id="btnForum"
-              class="px-4 py-2 rounded-md bg-secondary text-white hover:bg-pink-500"
-            >
-              Draft Reply
-            </button>
-          </div>
-          <div
-            id="forumResult"
-            class="mt-4 text-sm bg-gray-50 dark:bg-neutral-900 border border-gray-200 dark:border-white/10 rounded-md p-3 whitespace-pre-wrap break-words overflow-x-auto"
-          ></div>
-        </div>
-      </section>
-
-      <!-- Exam -->
-      <section
-        id="sec-exam"
-        class="card hidden bg-white dark:bg-neutral-900 rounded-xl shadow-sm ring-1 ring-gray-200 dark:ring-white/10"
-      >
-        <div class="p-5 sm:p-6">
-          <h2 class="text-lg sm:text-xl font-semibold text-primary mb-4">
-            Exam Helper
-          </h2>
-          <label
-            for="promptExam"
-            class="block text-sm font-medium text-gray-700 mb-1"
-            >Prompt</label
-          >
-          <textarea
-            id="promptExam"
-            rows="4"
-            class="w-full rounded-xl border border-white/20 ring-1 ring-black/5 px-4 py-3 text-base font-medium text-black placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-400 bg-white dark:bg-neutral-900 dark:text-white dark:placeholder-slate-400 transition-all duration-200 ease-out"
-            placeholder="Petunjuk / pertanyaan terkait exam..."
-          ></textarea>
-          <div class="mt-3">
-            <button
-              id="btnExam"
-              class="px-4 py-2 rounded-md bg-secondary text-white hover:bg-pink-500"
-            >
-              Run Exam Helper
-            </button>
-          </div>
-          <div
-            id="examResult"
-            class="mt-4 text-sm bg-gray-50 dark:bg-neutral-900 border border-gray-200 dark:border-white/10 rounded-md p-3 whitespace-pre-wrap break-words overflow-x-auto"
-          ></div>
-        </div>
-      </section>
-
-      <!-- Flashcards -->
-      <section
-        id="sec-flashcards"
-        class="card hidden bg-white dark:bg-neutral-900 rounded-xl shadow-sm ring-1 ring-gray-200 dark:ring-white/10"
-      >
-        <div class="p-5 sm:p-6 space-y-4">
-          <h2 class="text-lg sm:text-xl font-semibold text-primary">
-            Flashcards
-          </h2>
-
-          <div class="flex flex-wrap gap-3 items-end">
-            <div>
-              <label for="numCards" class="block text-xs text-gray-600"
-                >Number of flashcards</label
-              >
-              <input
-                id="numCards"
-                type="number"
-                min="1"
-                max="50"
-                value="5"
-                class="w-28 rounded-md border border-gray-300 dark:border-white/10 px-2 py-2 text-sm bg-white dark:bg-neutral-900 text-gray-900 dark:text-white"
-                placeholder="5"
-                aria-label="Number of flashcards"
-              />
-            </div>
-            <button
-              id="btnGenerateCards"
-              class="px-3 py-2 rounded-md bg-secondary text-white hover:bg-pink-500"
-            >
-              Generate Flashcards
-            </button>
-          </div>
-
-          <div
-            id="flashcardsList"
-            class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4"
-          ></div>
-        </div>
-      </section>
-      <!-- Dialogue -->
-      <section
-        id="sec-dialogue"
-        class="card hidden bg-white dark:bg-neutral-900 rounded-xl shadow-sm ring-1 ring-gray-200 dark:ring-white/10"
-      >
-        <div class="p-5 sm:p-6">
-          <div class="flex items-start justify-between gap-2">
-            <h2 class="text-lg sm:text-xl font-semibold text-primary">
-              Dialogue
-            </h2>
-            <button
-              id="btnDialogueHint"
-              class="hidden text-xs sm:text-sm border border-gray-300 px-3 py-1.5 rounded-md hover:bg-gray-50"
-              title="Get a hint for the current topic"
-            >
-              I'm stuck
-            </button>
-          </div>
-
-          <p class="text-sm text-gray-600 mt-1">
-            Guided, topic-based coaching grounded in your uploaded material.
-          </p>
-
-          <div class="mt-4 flex items-center gap-3">
-            <button
-              id="btnDialogueStart"
-              class="px-3 py-2 rounded-md bg-secondary text-white hover:bg-pink-500"
-            >
-              Start
-            </button>
-            <button
-              id="btnDialogueBegin"
-              class="hidden px-3 py-2 rounded-md bg-tertiary text-white hover:bg-green-700"
-            >
-              Let's get started!
-            </button>
-          </div>
-
-          <div
-            id="dialogueStream"
-            class="mt-4 text-sm bg-gray-50 dark:bg-neutral-900 border border-gray-200 dark:border-white/10 rounded-md p-3 markdown"
-          >
-            <em class="text-gray-500">Click Start to begin Dialogue.</em>
-          </div>
-
-          <div class="mt-3 flex gap-2 items-start">
-            <!-- Mobile-only inline quick (+) for Dialogue -->
-            <div class="relative sm:hidden">
-              <button
-                id="btnActionMenuDialogue"
-                class="inline-flex items-center justify-center w-9 h-9 rounded-md border border-gray-300 dark:border-white/20 bg-white dark:bg-neutral-900 text-gray-700 dark:text-slate-100 hover:bg-gray-50 dark:hover:bg-white/10 select-none"
-                title="Open tools"
-                aria-haspopup="menu"
-                aria-controls="quickMenuDialogue"
-                aria-expanded="false"
-              >
-                +
-              </button>
-
-              <!-- Local quick menu anchored to the inline + (mobile) -->
-              <div
-                id="quickMenuDialogue"
-                class="hidden quick-menu"
-                role="menu"
-                aria-label="Quick actions"
-              >
-                <div class="p-1">
-                  <button
-                    class="quick-item rounded-md"
-                    role="menuitem"
-                    tabindex="-1"
-                    data-menu="upload"
-                  >
-                    ➕ Add files
-                  </button>
-                  <div class="h-px my-1 bg-black/10 dark:bg-white/10"></div>
-                  <button
-                    class="quick-item rounded-md"
-                    role="menuitem"
-                    tabindex="-1"
-                    data-menu="explain"
-                  >
-                    🧠 Explain
-                  </button>
-                  <button
-                    class="quick-item rounded-md"
-                    role="menuitem"
-                    tabindex="-1"
-                    data-menu="quiz"
-                  >
-                    ❓ Quiz
-                  </button>
-                  <button
-                    class="quick-item rounded-md"
-                    role="menuitem"
-                    tabindex="-1"
-                    data-menu="forum"
-                  >
-                    💬 Forum
-                  </button>
-                  <button
-                    class="quick-item rounded-md"
-                    role="menuitem"
-                    tabindex="-1"
-                    data-menu="exam"
-                  >
-                    📝 Exam
-                  </button>
-                  <button
-                    class="quick-item rounded-md"
-                    role="menuitem"
-                    tabindex="-1"
-                    data-menu="flashcards"
-                  >
-                    🃏 Cards
-                  </button>
-                  <button
-                    class="quick-item rounded-md"
-                    role="menuitem"
-                    tabindex="-1"
-                    data-menu="dialogue"
-                  >
-                    🎯 Dialogue
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            <textarea
-              id="dialogueInput"
-              class="flex-1 rounded-xl border border-white/20 ring-1 ring-black/5 bg-white px-4 py-3 text-base font-medium text-black placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-400 dark:bg-neutral-900 dark:text-white dark:placeholder-slate-400 transition-all duration-200 ease-out min-h-[52px]"
-              rows="2"
-              placeholder="Type your answer (tip: ask 'How am I doing?')"
-            ></textarea>
-            <button
-              id="btnDialogueSend"
-              class="px-4 py-2 rounded-md bg-primary text-white font-medium hover:bg-indigo-900 disabled:opacity-50"
-              disabled
-            >
-              Send
-            </button>
-          </div>
-        </div>
-      </section>
-    </main>
-
-    <footer class="border-t border-gray-200 dark:border-white/10">
-      <div class="container mx-auto max-w-6xl px-4 py-6 text-xs text-gray-500">
-        Theme colors:
-        <span class="font-medium text-primary">Resistance Blue</span> ·
-        <span class="font-medium text-secondary">Brave Pink</span> ·
-        <span class="font-medium text-tertiary">Hero Green</span>
-      </div>
-      <div class="container mx-auto max-w-6xl px-4 py-6 text-xs text-gray-500">
-        <p>Made with ❤️ by ILMATRIX</p>
-      </div>
-    </footer>
-
-    <!-- Global mobile floating quick action (+) -->
-    <div
-      id="globalQuickMenuWrap"
-      class="hidden sm:hidden fixed bottom-16 left-4 z-50"
-    >
-      <div class="relative">
-        <button
-          id="btnActionMenuGlobal"
-          class="inline-flex items-center justify-center w-9 h-9 rounded-md border border-gray-300 dark:border-white/20 bg-white dark:bg-neutral-900 text-gray-700 dark:text-slate-100 hover:bg-gray-50 dark:hover:bg-white/10 select-none"
-          title="Open tools"
-          aria-haspopup="menu"
-          aria-controls="quickMenuGlobal"
-          aria-expanded="false"
-        >
-          +
-        </button>
-
+      <footer class="border-t border-gray-200 dark:border-white/10">
         <div
-          id="quickMenuGlobal"
-          class="hidden quick-menu"
-          role="menu"
-          aria-label="Quick actions"
+          class="container mx-auto max-w-6xl px-4 py-6 text-xs text-gray-500"
         >
-          <div class="p-1">
-            <button
-              class="quick-item rounded-md"
-              role="menuitem"
-              tabindex="-1"
-              data-menu="upload"
-            >
-              ➕ Add files
-            </button>
-            <div class="h-px my-1 bg-black/10 dark:bg-white/10"></div>
-            <button
-              class="quick-item rounded-md"
-              role="menuitem"
-              tabindex="-1"
-              data-menu="explain"
-            >
-              🧠 Explain
-            </button>
-            <button
-              class="quick-item rounded-md"
-              role="menuitem"
-              tabindex="-1"
-              data-menu="quiz"
-            >
-              ❓ Quiz
-            </button>
-            <button
-              class="quick-item rounded-md"
-              role="menuitem"
-              tabindex="-1"
-              data-menu="forum"
-            >
-              💬 Forum
-            </button>
-            <button
-              class="quick-item rounded-md"
-              role="menuitem"
-              tabindex="-1"
-              data-menu="exam"
-            >
-              📝 Exam
-            </button>
-            <button
-              class="quick-item rounded-md"
-              role="menuitem"
-              tabindex="-1"
-              data-menu="flashcards"
-            >
-              🃏 Cards
-            </button>
-            <button
-              class="quick-item rounded-md"
-              role="menuitem"
-              tabindex="-1"
-              data-menu="dialogue"
-            >
-              🎯 Dialogue
-            </button>
+          Theme colors:
+          <span class="font-medium text-primary">Resistance Blue</span> ·
+          <span class="font-medium text-secondary">Brave Pink</span> ·
+          <span class="font-medium text-tertiary">Hero Green</span>
+        </div>
+        <div
+          class="container mx-auto max-w-6xl px-4 py-6 text-xs text-gray-500"
+        >
+          <p>Made with ❤️ by ILMATRIX</p>
+        </div>
+      </footer>
+
+      <!-- Global mobile floating quick action (+) -->
+      <div
+        id="globalQuickMenuWrap"
+        class="hidden sm:hidden fixed bottom-16 left-4 z-50"
+      >
+        <div class="relative">
+          <button
+            id="btnActionMenuGlobal"
+            class="inline-flex items-center justify-center w-9 h-9 rounded-md border border-gray-300 dark:border-white/20 bg-white dark:bg-neutral-900 text-gray-700 dark:text-slate-100 hover:bg-gray-50 dark:hover:bg-white/10 select-none"
+            title="Open tools"
+            aria-haspopup="menu"
+            aria-controls="quickMenuGlobal"
+            aria-expanded="false"
+          >
+            +
+          </button>
+
+          <div
+            id="quickMenuGlobal"
+            class="hidden quick-menu"
+            role="menu"
+            aria-label="Quick actions"
+          >
+            <div class="p-1">
+              <button
+                class="quick-item rounded-md"
+                role="menuitem"
+                tabindex="-1"
+                data-menu="upload"
+              >
+                ➕ Add files
+              </button>
+              <div class="h-px my-1 bg-black/10 dark:bg-white/10"></div>
+              <button
+                class="quick-item rounded-md"
+                role="menuitem"
+                tabindex="-1"
+                data-menu="explain"
+              >
+                🧠 Explain
+              </button>
+              <button
+                class="quick-item rounded-md"
+                role="menuitem"
+                tabindex="-1"
+                data-menu="quiz"
+              >
+                ❓ Quiz
+              </button>
+              <button
+                class="quick-item rounded-md"
+                role="menuitem"
+                tabindex="-1"
+                data-menu="forum"
+              >
+                💬 Forum
+              </button>
+              <button
+                class="quick-item rounded-md"
+                role="menuitem"
+                tabindex="-1"
+                data-menu="exam"
+              >
+                📝 Exam
+              </button>
+              <button
+                class="quick-item rounded-md"
+                role="menuitem"
+                tabindex="-1"
+                data-menu="flashcards"
+              >
+                🃏 Cards
+              </button>
+              <button
+                class="quick-item rounded-md"
+                role="menuitem"
+                tabindex="-1"
+                data-menu="dialogue"
+              >
+                🎯 Dialogue
+              </button>
+            </div>
           </div>
         </div>
       </div>
     </div>
-
     <script>
       // State
       let materialId = null;
