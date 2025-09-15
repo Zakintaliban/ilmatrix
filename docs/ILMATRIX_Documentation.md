@@ -19,7 +19,9 @@ Tech core: Hono.js API, Groq (Meta Llama models), PDF/DOCX/PPTX/OCR extraction, 
 
 - Upload
   - Supported: PDF, TXT, PNG, JPG/JPEG, DOCX, PPTX
-  - Extracts text and stores a materialId for referencing
+  - Extracts text from each file and stores only the extracted text under a single materialId; original binaries are not persisted
+  - Attachments bar: per-file “Remove” buttons and a “Remove all” toolbar action; total per-material cap is 10 MB
+  - Retention: a background cleaner auto‑deletes material text files after a TTL (default 60 minutes, configurable via MATERIAL_TTL_MINUTES)
 - Explain
   - Structured and concise explanations, with short citations from material when possible
 - Quiz (MCQ)
@@ -93,6 +95,7 @@ UI color scheme:
 - Click "Let's get started!" to get the first coach question for Topic 1.
 - Answer in the input and press Send. Ask "How am I doing?" anytime to get progress.
 - Click "I'm stuck" for a short hint. After 3 topics, you'll receive final feedback and input will be disabled.
+- Mobile UX: a local “+” beside the Dialogue input opens a compact quick menu; the global floating “+” is hidden to avoid duplicates.
 
 ## 4) High-level Architecture
 
@@ -104,7 +107,7 @@ UI color scheme:
   - Hono.js app exposing /api routes
   - Groq SDK (Meta Llama models) for generation/analysis
   - Extraction utilities for PDF (pdfjs-dist), DOCX/PPTX (JSZip), OCR for images (tesseract.js)
-  - Temp file storage for extracted text; returns a materialId
+  - Stores extracted text as uploads/<materialId>.txt; a background cleaner auto‑deletes files older than MATERIAL_TTL_MINUTES (default 60)
 - Deployment
   - Netlify-compatible (functions for API, static hosting for /public)
 
@@ -297,14 +300,16 @@ Base: /api
   - Each feature renders its result within its own section
   - No “Result” tab; reduce context switching
   - Keyboard focus moves to the first element of the active tab
+  - Upload attachments bar shows per-file Remove buttons and a “Remove all” action
+  - Dialogue on mobile uses a local “+” quick menu anchored next to the input
   - Flashcards render as flip cards with smooth rotation and keyboard accessibility
 
 ## 8) Extraction Support
 
-- PDF: pdfjs-dist configured with fonts and CMaps; supports local and serverless paths
+- PDF: pdfjs-dist configured with fonts and CMaps; supports local and serverless paths. PDF extraction is concurrency‑limited (PDF_EXTRACT_CONCURRENCY, default 2) and frees resources eagerly (page.cleanup(), pdf.cleanup(), pdf.destroy(), loadingTask.destroy()) to prevent memory leaks.
 - DOCX: JSZip reads word/document.xml and related parts; converts XML to text
 - PPTX: JSZip reads ppt/slides/slideN.xml; extracts <a:t> runs as text
-- Images (PNG/JPG): tesseract.js OCR; language fallback from “eng+ind” to “eng”
+- Images (PNG/JPG): tesseract.js OCR; language fallback from “eng+ind” to “eng”; OCR runs with a hard timeout (OCR_TIMEOUT_MS, default 30000) and each worker is terminated to avoid lingering threads.
 - TXT: read as-is
 
 Performance tips:
@@ -316,8 +321,15 @@ Performance tips:
 
 - Environment
   - GROQ_API_KEY must be set for the backend
-  - ESM with TypeScript in NodeNext mode; ensure .js extensions on local imports post-emit
+  - GROQ_MODEL sets the model id (optional; default in code)
+  - PORT overrides server port (default 8787)
   - MATERIAL_CLAMP sets the max characters of materials included per request (default 100000). Increase for better recall (higher token usage), decrease to save tokens.
+  - MATERIAL_TTL_MINUTES controls on-disk retention of material .txt files (default 60). A background cleaner periodically deletes files older than this TTL.
+  - GROQ_CONCURRENCY caps concurrent LLM requests (default 4)
+  - GROQ_TIMEOUT_MS per-request timeout for LLM calls in ms (default 45000)
+  - PDF_EXTRACT_CONCURRENCY caps concurrent PDF parses (default 2)
+  - OCR_TIMEOUT_MS per-recognition timeout for OCR in ms (default 30000)
+  - ESM with TypeScript in NodeNext mode; ensure .js extensions on local imports post-emit
 - Local development
   - Install dependencies; run dev/start scripts
   - Open /public/index.html (Home) or /public/app.html (App) in the served site, or deploy to Netlify
@@ -350,7 +362,7 @@ Performance tips:
 - Q: Do I need an account?
   - A: For local usage, no. For public deployments, you may add auth.
 - Q: How private are my uploads?
-  - A: Files are processed for study purposes and stored temporarily. Review and customize retention for your deployment.
+  - A: Files are processed for study purposes and stored temporarily as extracted text (.txt), and by default auto‑deleted after ~60 minutes (configurable via MATERIAL_TTL_MINUTES). Review and customize retention for your deployment.
 - Q: Can it handle photos/screenshots of slides?
   - A: Yes, via OCR (tesseract.js), but clarity and contrast improve results.
 - Q: Which models are used?
@@ -453,6 +465,14 @@ curl -X POST http://localhost:8787/api/flashcards \
 
 Open the App: /public/app.html
 Explore marketing pages: /public/index.html and /public/about.html
+
+## 16) Performance & Memory Safety
+
+- LLM requests are bounded by GROQ_CONCURRENCY and GROQ_TIMEOUT_MS and routed through a single shared client to prevent runaway concurrency and hung requests.
+- PDF extraction uses PDF_EXTRACT_CONCURRENCY and explicitly cleans up page and document resources (page.cleanup(), pdf.cleanup(), pdf.destroy(), loadingTask.destroy()) to avoid leaks even on errors/timeouts.
+- OCR extraction applies OCR_TIMEOUT_MS and always terminates the Tesseract worker after each recognition to avoid background threads lingering.
+- The material TTL cleaner timers use unref() so they do not keep the event loop alive and can be stopped on shutdown; the server installs SIGINT/SIGTERM/beforeExit handlers to clear timers and close the server.
+- Recommended defaults: GROQ_CONCURRENCY=4, GROQ_TIMEOUT_MS=45000, PDF_EXTRACT_CONCURRENCY=2, OCR_TIMEOUT_MS=30000, MATERIAL_TTL_MINUTES=60.
 
 ---
 

@@ -2,7 +2,7 @@ import "dotenv/config";
 import { Hono } from "hono";
 import { serve } from "@hono/node-server";
 import { serveStatic } from "@hono/node-server/serve-static";
-import api from "./routes.js";
+import api, { stopMaterialCleaner } from "./routes.js";
 import { createServer } from "node:net";
 
 /** StudyAI server bootstrap */
@@ -44,7 +44,40 @@ findOpenPort(basePort)
     console.log(
       `[StudyAI] starting on http://localhost:${port} (model=${model})`
     );
-    serve({ fetch: app.fetch, port });
+    const server: any = serve({ fetch: app.fetch, port }) as any;
+
+    const closeServer = (
+      server && typeof server.close === "function"
+        ? () => {
+            try {
+              server.close();
+            } catch {}
+          }
+        : undefined
+    ) as undefined | (() => void);
+
+    const shutdown = (code = 0) => {
+      try {
+        stopMaterialCleaner?.();
+      } catch {}
+      try {
+        closeServer?.();
+      } catch {}
+      try {
+        if (code !== null) process.exit(code);
+      } catch {}
+    };
+
+    process.on("SIGINT", () => shutdown(0));
+    process.on("SIGTERM", () => shutdown(0));
+    process.on("beforeExit", () => {
+      try {
+        stopMaterialCleaner?.();
+      } catch {}
+      try {
+        closeServer?.();
+      } catch {}
+    });
   })
   .catch((err) => {
     console.error("Failed to bind to a port:", err);

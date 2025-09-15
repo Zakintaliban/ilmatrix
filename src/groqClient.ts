@@ -3,8 +3,86 @@ import Groq from "groq-sdk";
 
 type Task = "explain" | "quiz" | "forum" | "exam";
 
+/** ===== Safety: shared Groq client, concurrency limiter, and timeouts ===== */
 const MODEL =
   process.env.GROQ_MODEL || "meta-llama/llama-4-maverick-17b-128e-instruct";
+
+const GROQ_CONCURRENCY = Math.max(1, Number(process.env.GROQ_CONCURRENCY || 4));
+const GROQ_TIMEOUT_MS = Math.max(
+  1000,
+  Number(process.env.GROQ_TIMEOUT_MS || 45000)
+);
+
+let _groqClient: Groq | null = null;
+function getGroq(): Groq {
+  const apiKey = process.env.GROQ_API_KEY;
+  if (!_groqClient) {
+    _groqClient = new Groq({ apiKey: apiKey || "" });
+  }
+  return _groqClient!;
+}
+
+// Minimal p-limit implementation (no external dep)
+function createLimiter(concurrency: number) {
+  let active = 0;
+  const queue: Array<() => void> = [];
+
+  const next = () => {
+    if (active >= concurrency) return;
+    const job = queue.shift();
+    if (!job) return;
+    active++;
+    job();
+  };
+
+  return function limit<T>(fn: () => Promise<T>): Promise<T> {
+    return new Promise<T>((resolve, reject) => {
+      const run = () => {
+        fn()
+          .then(resolve)
+          .catch(reject)
+          .finally(() => {
+            active--;
+            next();
+          });
+      };
+      queue.push(run);
+      next();
+    });
+  };
+}
+
+const groqLimit = createLimiter(GROQ_CONCURRENCY);
+
+// Timeout helper that passes AbortSignal into SDK if supported
+async function withTimeout<T>(
+  factory: (signal: AbortSignal) => Promise<T>,
+  ms: number
+): Promise<T> {
+  const ctrl = new AbortController();
+  const to = setTimeout(() => {
+    try {
+      ctrl.abort();
+    } catch {}
+  }, ms);
+  try {
+    return await factory(ctrl.signal);
+  } finally {
+    clearTimeout(to);
+  }
+}
+
+// Centralized chat completion wrapper with limiter + timeout
+function callGroqChat(params: any) {
+  return groqLimit(() =>
+    withTimeout(
+      (signal) =>
+        // Pass signal inside params; many SDKs honor it even if not typed
+        getGroq().chat.completions.create({ ...params, signal } as any),
+      GROQ_TIMEOUT_MS
+    )
+  );
+}
 
 const systemPrompt = `You are StudyAI, a study assistant for university students, especially those who prefer studying quietly.
 Core rules:
@@ -32,7 +110,6 @@ export async function generateAnswer(params: {
   if (!apiKey) {
     return "Server is missing GROQ_API_KEY. Set it in .env and restart.";
   }
-  const groq = new Groq({ apiKey });
 
   const { task, materialText, userInput } = params;
 
@@ -56,7 +133,7 @@ ${clamp(materialText)}
 User Input:
 ${userInput ?? ""}`;
 
-  const completion = await groq.chat.completions.create({
+  const completion = await callGroqChat({
     model: MODEL,
     messages: [
       { role: "system", content: systemPrompt },
@@ -82,7 +159,6 @@ export async function generateChat(params: {
   if (!apiKey) {
     return "Server is missing GROQ_API_KEY. Set it in .env and restart.";
   }
-  const groq = new Groq({ apiKey });
 
   const { materialText = "", messages } = params;
 
@@ -114,7 +190,7 @@ export async function generateChat(params: {
     chatMessages.push({ role, content: String(m.content) });
   }
 
-  const completion = await groq.chat.completions.create({
+  const completion = await callGroqChat({
     model: MODEL,
     messages: chatMessages,
     temperature: 0.3,
@@ -173,7 +249,6 @@ export async function generateQuizTrainerMCQ(params: {
 }): Promise<MCQSet> {
   const apiKey = process.env.GROQ_API_KEY;
   if (!apiKey) return { questions: [] };
-  const groq = new Groq({ apiKey });
 
   const prompt = `From the materials ONLY, generate ${params.numQuestions} multiple-choice questions (MCQ) if the materials in Indonesia language, then give the result in Indonesia language, and if in english then give the result in english and always follow with what the language from the materials is.
 Return ONLY JSON with this exact shape:
@@ -201,7 +276,7 @@ Rules:
 - Output valid JSON only (no markdown fences, no commentary).
 `;
 
-  const completion = await groq.chat.completions.create({
+  const completion = await callGroqChat({
     model: MODEL,
     messages: [
       { role: "system", content: systemPrompt },
@@ -376,7 +451,6 @@ export async function generateFlashcards(params: {
 }): Promise<{ cards: Flashcard[] }> {
   const apiKey = process.env.GROQ_API_KEY;
   if (!apiKey) return { cards: [] };
-  const groq = new Groq({ apiKey });
 
   const n = Math.max(1, Math.min(50, Number(params.numCards || 5)));
 
@@ -396,7 +470,7 @@ Rules:
 - Output exactly ${n} items in the "cards" array.
 `;
 
-  const completion = await groq.chat.completions.create({
+  const completion = await callGroqChat({
     model: MODEL,
     messages: [
       { role: "system", content: systemPrompt },
@@ -488,7 +562,6 @@ export async function dialogueStart(params: {
         "Please configure your GROQ API key and restart the server.",
     };
   }
-  const groq = new Groq({ apiKey });
 
   const langHint = detectLangFromText(params.materialText);
 
@@ -515,7 +588,7 @@ Rules:
 - Do NOT wrap JSON in markdown fences. No commentary. JSON only.
 `;
 
-  const completion = await groq.chat.completions.create({
+  const completion = await callGroqChat({
     model: MODEL,
     messages: [
       { role: "system", content: systemPrompt },
@@ -604,7 +677,6 @@ export async function dialogueStep(params: {
         "Dialogue cannot proceed because GROQ_API_KEY is missing on the server.",
     };
   }
-  const groq = new Groq({ apiKey });
 
   const prompt = `
 You are a concise coach. Evaluate whether the user's message sufficiently addresses the CURRENT TOPIC. Use ONLY the provided materials for grounding. Output JSON only.
@@ -640,7 +712,7 @@ USER MESSAGE:
 ${params.userMessage}
 `;
 
-  const completion = await groq.chat.completions.create({
+  const completion = await callGroqChat({
     model: MODEL,
     messages: [
       { role: "system", content: systemPrompt },
@@ -672,7 +744,6 @@ export async function dialogueHint(params: {
 }): Promise<DialogueHintResult> {
   const apiKey = process.env.GROQ_API_KEY;
   if (!apiKey) return { hint: "Server missing GROQ_API_KEY." };
-  const groq = new Groq({ apiKey });
 
   const prompt = `
 Give ONE short hint (1–2 sentences) to help the learner progress on the CURRENT TOPIC. Use the materials only. Output JSON only: { "hint": "..." } in the detected language. No fences, no commentary.`;
@@ -687,7 +758,7 @@ ${clamp(params.materialText)}
 ---
 `;
 
-  const completion = await groq.chat.completions.create({
+  const completion = await callGroqChat({
     model: MODEL,
     messages: [
       { role: "system", content: systemPrompt },
@@ -723,7 +794,6 @@ export async function dialogueFeedback(params: {
       improvements: [],
     };
   }
-  const groq = new Groq({ apiKey });
 
   const prompt = `
 Based on the short Dialogue history and the topics, provide final feedback in the detected language. Output JSON only:
@@ -759,7 +829,7 @@ ${clamp(convoText, 8000)}
 ---
 `;
 
-  const completion = await groq.chat.completions.create({
+  const completion = await callGroqChat({
     model: MODEL,
     messages: [
       { role: "system", content: systemPrompt },

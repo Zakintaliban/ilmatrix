@@ -44,12 +44,12 @@ cp .env.example .env
 npm run dev
 ```
 
-Server (default): http://localhost:8787
+Server (default): <http://localhost:8787>
 
 ## Open the UI
 
-- Home (marketing): http://localhost:8787/ (public/index.html)
-- App (features): http://localhost:8787/app.html
+- Home (marketing): <http://localhost:8787/> (public/index.html)
+- App (features): <http://localhost:8787/app.html>
 
 ## Environment variables
 
@@ -57,6 +57,19 @@ Server (default): http://localhost:8787
 - GROQ_MODEL: Groq model id (default set in code)
 - PORT: Server port (default: 8787)
 - MATERIAL_CLAMP: Max characters of materials included per request (default 100000). Increase for better recall (higher cost), decrease to save tokens.
+
+- MATERIAL_TTL_MINUTES: Minutes to keep uploaded materials before auto-deletion (default 60). A background cleaner periodically removes old .txt material files from the uploads folder. See [src/routes.ts](src/routes.ts).
+
+## Storage & retention
+
+- What’s stored:
+  - The app extracts text from your uploaded files (PDF/DOCX/PPTX/Images/TXT) and stores only the extracted text as uploads/&lt;materialId&gt;.txt. Originals are not saved.
+- Size limits:
+  - 10 MB total per material (enforced at upload/append).
+- Auto delete (TTL):
+  - A background cleaner deletes material .txt files older than MATERIAL_TTL_MINUTES (default 60). This runs at intervals and is designed to be resilient. Implemented in [src/routes.ts](src/routes.ts).
+- Persistence on PaaS:
+  - If you deploy to platforms with ephemeral disks, data may vanish on redeploy. Use a persistent volume/path if you need durability, or rely on the default TTL cleaner to avoid storage growth.
 
 ## API
 
@@ -172,11 +185,12 @@ curl -H "Content-Type: application/json" \
 
 ## Frontend usage
 
-- Open http://localhost:8787/app.html
+- Open <http://localhost:8787/app.html>
 - Drag & drop or click the upload drop zone to select multiple files. Upload starts automatically:
   - The first batch creates a new materialId.
   - Subsequent drops/selections append to the same material automatically (10 MB total cap).
   - Remove any file’s content from the current material by clicking “Remove” next to it.
+  - Use “Remove all” on the attachments bar to clear the current material’s files at once.
   - Use “Start new material” to reset the client-side materialId and begin a new one (existing materials remain on disk).
 - Use tabs:
   - Explain: prompt and run
@@ -186,6 +200,7 @@ curl -H "Content-Type: application/json" \
   - Exam: helper plan
   - Chat: general with optional context
   - Dialogue: coached session (Start → “Let’s get started!” → Send). Use “I’m stuck” for a short hint; after 3 topics you’ll get final feedback.
+    - Mobile: a local “+” button next to the Dialogue input opens quick actions; the global floating “+” is hidden on Dialogue to avoid duplicates.
 - Results appear within each section (no result-only tab)
 
 ## Prompts and guardrails

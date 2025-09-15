@@ -690,6 +690,9 @@ const CLEAN_SWEEP_INTERVAL_MS = (() => {
 })();
 
 let cleanerStarted = false;
+// Keep handles so we can stop on shutdown and allow process to exit
+let initialCleanerTimeout: ReturnType<typeof setTimeout> | null = null;
+let cleanerInterval: ReturnType<typeof setInterval> | null = null;
 
 async function cleanupOldMaterials() {
   try {
@@ -727,13 +730,32 @@ function startMaterialCleaner() {
   if (cleanerStarted) return;
   cleanerStarted = true;
   // Initial delayed sweep (avoid blocking cold start)
-  setTimeout(() => {
+  initialCleanerTimeout = setTimeout(() => {
     cleanupOldMaterials().catch(() => {});
   }, 30_000);
+  // Don't keep the event loop alive
+  (initialCleanerTimeout as any)?.unref?.();
+
   // Periodic sweep
-  setInterval(() => {
+  cleanerInterval = setInterval(() => {
     cleanupOldMaterials().catch(() => {});
   }, CLEAN_SWEEP_INTERVAL_MS);
+  (cleanerInterval as any)?.unref?.();
+}
+
+export function stopMaterialCleaner() {
+  try {
+    if (initialCleanerTimeout) {
+      clearTimeout(initialCleanerTimeout);
+      initialCleanerTimeout = null;
+    }
+  } catch {}
+  try {
+    if (cleanerInterval) {
+      clearInterval(cleanerInterval);
+      cleanerInterval = null;
+    }
+  } catch {}
 }
 
 startMaterialCleaner();
