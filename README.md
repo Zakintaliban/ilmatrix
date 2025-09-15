@@ -57,8 +57,13 @@ Server (default): <http://localhost:8787>
 - GROQ_MODEL: Groq model id (default set in code)
 - PORT: Server port (default: 8787)
 - MATERIAL_CLAMP: Max characters of materials included per request (default 100000). Increase for better recall (higher cost), decrease to save tokens.
-
-- MATERIAL_TTL_MINUTES: Minutes to keep uploaded materials before auto-deletion (default 60). A background cleaner periodically removes old .txt material files from the uploads folder. See [src/routes.ts](src/routes.ts).
+- MATERIAL_TTL_MINUTES: Minutes to keep uploaded materials before auto-deletion (default 60). A background cleaner periodically removes old .txt material files from the uploads folder. See [src/routes.ts](src/routes.ts:735).
+- RATE_LIMIT_MAX: Requests per minute per IP (default 120). Lightweight token bucket applied to all /api routes. See [middleware](src/routes.ts:70).
+- PDF_MAX_PAGES: Max PDF pages extracted per file (default 200). See [extractPdfTextImpl()](src/extract/pdf.ts:50).
+- OCR_CONCURRENCY: Max concurrent OCR workers for images (default 1). See [extractImageText()](src/extract/image.ts:1).
+- OCR_TIMEOUT_MS: Per-image OCR timeout in ms (default 30000).
+- GROQ_CONCURRENCY: Concurrent LLM requests (default 4). See [createLimiter()](src/groqClient.ts:26).
+- GROQ_TIMEOUT_MS: Per-request LLM timeout in ms (default 45000). See [withTimeout()](src/groqClient.ts:58).
 
 ## Storage & retention
 
@@ -70,6 +75,19 @@ Server (default): <http://localhost:8787>
   - A background cleaner deletes material .txt files older than MATERIAL_TTL_MINUTES (default 60). This runs at intervals and is designed to be resilient. Implemented in [src/routes.ts](src/routes.ts).
 - Persistence on PaaS:
   - If you deploy to platforms with ephemeral disks, data may vanish on redeploy. Use a persistent volume/path if you need durability, or rely on the default TTL cleaner to avoid storage growth.
+
+## Security & accessibility
+
+- Security hardening:
+  - Path traversal protection for materials I/O; only UUID v4-like ids are accepted and paths are validated inside uploads/ (see [routes](src/routes.ts:614) and [upload append](src/routes.ts:196)).
+  - Global per-IP rate limiting (default 120 req/min) via a lightweight token bucket (see [middleware](src/routes.ts:71)). Tune with RATE_LIMIT_MAX.
+  - CSP applied to static pages to restrict sources (see [app](public/app.html), [index](public/index.html), [about](public/about.html)).
+  - Best-effort Content-Length guard on uploads to quickly reject oversized requests (see [upload](src/routes.ts:89)).
+- Accessibility:
+  - Live regions announce new chat and dialogue messages for screen readers (see [app live regions](public/app.html)).
+  - Tool trigger buttons include aria-label/controls/expanded for improved navigation.
+
+Note on SRI (Subresource Integrity): in production, pin CDN versions and add integrity/crossorigin attributes for Tailwind, marked, and DOMPurify.
 
 ## API
 
@@ -226,6 +244,7 @@ curl -H "Content-Type: application/json" \
 - npm run dev → start with hot reload
 - npm run start → start without nodemon
 - npm run build → type-check and emit
+- npm test → run smoke tests via tsx (see [tests/smoke.test.ts](tests/smoke.test.ts))
 
 ## Notes and next steps
 

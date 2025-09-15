@@ -4,6 +4,10 @@
     <meta charset="utf-8" />
     <link rel="icon" type="image/svg+xml" href="./logo.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self'; font-src 'self' data:; object-src 'none'; base-uri 'self'; frame-ancestors 'none'"
+    />
     <title>ILMATRIX — App</title>
 
     <!-- Tailwind CDN -->
@@ -646,6 +650,9 @@
             <div class="relative">
               <div
                 id="chat"
+                role="log"
+                aria-live="polite"
+                aria-relevant="additions text"
                 class="w-full rounded-2xl border border-white/20 dark:border-white/10 ring-1 ring-black/5 bg-white/40 dark:bg-neutral-900 backdrop-blur-md p-4 sm:p-5 min-h-[140px] max-h-[360px] overflow-auto momentum text-sm transition-all duration-200 ease-out"
               ></div>
               <div
@@ -688,6 +695,7 @@
                   id="btnActionMenu"
                   class="inline-flex items-center justify-center w-9 h-9 rounded-md border border-gray-300 dark:border-white/20 bg-white dark:bg-neutral-900 text-gray-700 dark:text-slate-100 hover:bg-gray-50 dark:hover:bg-white/10 select-none"
                   title="Open tools"
+                  aria-label="Open tools"
                   aria-haspopup="menu"
                   aria-controls="quickMenu"
                   aria-expanded="false"
@@ -1221,6 +1229,9 @@
 
             <div
               id="dialogueStream"
+              role="log"
+              aria-live="polite"
+              aria-relevant="additions text"
               class="mt-4 text-sm bg-gray-50 dark:bg-neutral-900 border border-gray-200 dark:border-white/10 rounded-md p-3 markdown"
             >
               <em class="text-gray-500">Click Start to begin Dialogue.</em>
@@ -1233,6 +1244,7 @@
                   id="btnActionMenuDialogue"
                   class="inline-flex items-center justify-center w-9 h-9 rounded-md border border-gray-300 dark:border-white/20 bg-white dark:bg-neutral-900 text-gray-700 dark:text-slate-100 hover:bg-gray-50 dark:hover:bg-white/10 select-none"
                   title="Open tools"
+                  aria-label="Open tools"
                   aria-haspopup="menu"
                   aria-controls="quickMenuDialogue"
                   aria-expanded="false"
@@ -1353,6 +1365,7 @@
             id="btnActionMenuGlobal"
             class="inline-flex items-center justify-center w-9 h-9 rounded-md border border-gray-300 dark:border-white/20 bg-white dark:bg-neutral-900 text-gray-700 dark:text-slate-100 hover:bg-gray-50 dark:hover:bg-white/10 select-none"
             title="Open tools"
+            aria-label="Open tools"
             aria-haspopup="menu"
             aria-controls="quickMenuGlobal"
             aria-expanded="false"

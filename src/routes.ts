@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { promises as fs } from "fs";
-import { join } from "path";
+import { join, resolve, sep } from "path";
 import { randomUUID } from "crypto";
 import { extractPdfText } from "./extract/pdf.js";
 import { extractImageText } from "./extract/image.js";
@@ -36,11 +36,66 @@ async function readMaterial(
   return await fs.readFile(join(uploadsDir, `${materialId}.txt`), "utf8");
 }
 
+/** ===== Security helpers and rate limiting ===== */
+const RATE_LIMIT_WINDOW_MS = 60_000;
+const RATE_LIMIT_MAX = Math.max(1, Number(process.env.RATE_LIMIT_MAX || 120));
+const _rateBuckets = new Map<string, { tokens: number; resetAt: number }>();
+
+function getClientIp(c: any): string {
+  return (
+    c.req.header("x-forwarded-for")?.split(",")[0]?.trim() ||
+    c.req.header("x-real-ip") ||
+    (c.req.raw as any)?.socket?.remoteAddress ||
+    "local"
+  );
+}
+
+function isValidMaterialId(id?: string): boolean {
+  // Accept UUID v4-like pattern used by randomUUID()
+  return !!id && /^[a-f0-9-]{36}$/i.test(id);
+}
+
+function resolveMaterialPathSafe(id: string): { ok: boolean; path: string } {
+  const root = resolve(uploadsDir);
+  const p = resolve(join(uploadsDir, `${id}.txt`));
+  // Ensure the resolved path stays within uploadsDir
+  if (!(p.startsWith(root + sep) || p === root)) {
+    return { ok: false, path: p };
+  }
+  return { ok: true, path: p };
+}
+
 const api = new Hono();
+
+// Apply lightweight per-IP rate limiting to all API routes
+api.use("/*", async (c, next) => {
+  try {
+    const ip = getClientIp(c);
+    const now = Date.now();
+    let b = _rateBuckets.get(ip);
+    if (!b || now >= b.resetAt) {
+      b = { tokens: RATE_LIMIT_MAX, resetAt: now + RATE_LIMIT_WINDOW_MS };
+    }
+    if (b.tokens <= 0) {
+      c.header("Retry-After", String(Math.ceil((b.resetAt - now) / 1000)));
+      return c.json({ error: "Rate limit exceeded" }, 429);
+    }
+    b.tokens -= 1;
+    _rateBuckets.set(ip, b);
+  } catch {}
+  await next();
+});
 
 api.post("/upload", async (c) => {
   try {
     await ensureUploads();
+
+    // Early guard by Content-Length to reject oversized requests (best-effort)
+    const cl = Number(c.req.header("content-length") || 0);
+    if (Number.isFinite(cl) && cl > 12 * 1024 * 1024) {
+      return c.json({ error: "Request too large", limit: "12MB" }, 413);
+    }
+
     const body = await c.req.parseBody();
 
     // Collect every file-like value from multipart body (support multiple "file" fields)
@@ -155,10 +210,16 @@ api.post("/upload", async (c) => {
           400
         );
       }
-      const path = join(uploadsDir, `${targetId}.txt`);
+      if (!isValidMaterialId(targetId)) {
+        return c.json({ error: "invalid materialId format" }, 400);
+      }
+      const safe = resolveMaterialPathSafe(targetId);
+      if (!safe.ok) {
+        return c.json({ error: "invalid material path" }, 400);
+      }
       let existing = "";
       try {
-        existing = await fs.readFile(path, "utf8");
+        existing = await fs.readFile(safe.path, "utf8");
       } catch (e: any) {
         if (e?.code === "ENOENT") {
           return c.json(
@@ -177,13 +238,14 @@ api.post("/upload", async (c) => {
       }
       const stamp = new Date().toISOString();
       finalText = `${existing}\n\n===== APPEND BATCH ${stamp} =====\n${combined}`;
-      await fs.writeFile(path, finalText, "utf8");
+      await fs.writeFile(safe.path, finalText, "utf8");
       materialId = targetId;
     } else {
       materialId = randomUUID();
-      const path = join(uploadsDir, `${materialId}.txt`);
+      const safe = resolveMaterialPathSafe(materialId);
+      if (!safe.ok) return c.json({ error: "invalid material path" }, 400);
       finalText = combined;
-      await fs.writeFile(path, finalText, "utf8");
+      await fs.writeFile(safe.path, finalText, "utf8");
     }
 
     const totalSize = Buffer.byteLength(finalText, "utf8");
@@ -501,10 +563,6 @@ type FileSegment = {
   end: number;
 };
 
-function escapeRegExp(s: string) {
-  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
-
 function parseFileSegments(text: string): FileSegment[] {
   const fileRe = /(^|\n)===== FILE: ([^\n]+) =====\n/g;
   const appendRe = /(^|\n)===== APPEND BATCH [^\n]* =====\n/g;
@@ -564,9 +622,11 @@ api.get("/material/:id", async (c) => {
   try {
     await ensureUploads();
     const id = c.req.param("id");
-    if (!id) return c.json({ error: "material id required" }, 400);
-    const path = join(uploadsDir, `${id}.txt`);
-    const text = await fs.readFile(path, "utf8").catch(() => "");
+    if (!isValidMaterialId(id))
+      return c.json({ error: "invalid material id" }, 400);
+    const safe = resolveMaterialPathSafe(id);
+    if (!safe.ok) return c.json({ error: "invalid material path" }, 400);
+    const text = await fs.readFile(safe.path, "utf8").catch(() => "");
     if (!text) {
       return c.json({
         materialId: id,
@@ -606,14 +666,17 @@ api.post("/material/:id/remove", async (c) => {
   try {
     await ensureUploads();
     const id = c.req.param("id");
-    if (!id) return c.json({ error: "material id required" }, 400);
+    if (!isValidMaterialId(id))
+      return c.json({ error: "invalid material id" }, 400);
+    const safe = resolveMaterialPathSafe(id);
+    if (!safe.ok) return c.json({ error: "invalid material path" }, 400);
+
     const { name } = await c.req.json();
     if (!name || typeof name !== "string") {
       return c.json({ error: "name is required" }, 400);
     }
 
-    const path = join(uploadsDir, `${id}.txt`);
-    let text = await fs.readFile(path, "utf8").catch((e) => {
+    let text = await fs.readFile(safe.path, "utf8").catch((e) => {
       if (e?.code === "ENOENT") return "";
       throw e;
     });
@@ -639,7 +702,7 @@ api.post("/material/:id/remove", async (c) => {
     if (cursor < text.length) parts.push(text.slice(cursor));
     let updated = parts.join("").trim();
 
-    await fs.writeFile(path, updated, "utf8");
+    await fs.writeFile(safe.path, updated, "utf8");
 
     // Return updated listing
     const segsAfter = parseFileSegments(updated);
@@ -668,12 +731,7 @@ api.post("/material/:id/remove", async (c) => {
   }
 });
 
-api.get("/health", (c) =>
-  c.json({
-    ok: true,
-    uptime: Math.round(process.uptime()),
-  })
-);
+/* removed duplicate /api/health route (single health handler lives in server bootstrap) */
 
 /** ===== Material TTL auto-cleaner (auto delete old uploads) =====
  * Deletes uploads/<materialId>.txt files older than MATERIAL_TTL_MINUTES.

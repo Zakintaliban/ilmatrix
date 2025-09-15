@@ -120,7 +120,7 @@ Key files (for reference):
 - src/routes.ts — API routes (upload, explain, quiz, forum, exam, chat, mcq-trainer, flashcards)
 - src/groqClient.ts — Groq client and prompting logic, MCQ JSON generation, deterministic scoring, flashcards generation
 - src/extract/\*.ts — extraction utilities (pdf, docx, pptx, image)
-- netlify.toml + netlify/functions/api.ts — serverless adapter and routing
+- Optional serverless adapters may be added for Netlify/Vercel; by default the app runs as a Node server via Hono.
 
 ## 5) Flowcharts (Mermaid)
 
@@ -309,7 +309,7 @@ Base: /api
 - PDF: pdfjs-dist configured with fonts and CMaps; supports local and serverless paths. PDF extraction is concurrency‑limited (PDF_EXTRACT_CONCURRENCY, default 2) and frees resources eagerly (page.cleanup(), pdf.cleanup(), pdf.destroy(), loadingTask.destroy()) to prevent memory leaks.
 - DOCX: JSZip reads word/document.xml and related parts; converts XML to text
 - PPTX: JSZip reads ppt/slides/slideN.xml; extracts <a:t> runs as text
-- Images (PNG/JPG): tesseract.js OCR; language fallback from “eng+ind” to “eng”; OCR runs with a hard timeout (OCR_TIMEOUT_MS, default 30000) and each worker is terminated to avoid lingering threads.
+- Images (PNG/JPG): tesseract.js OCR; language fallback from “eng+ind” to “eng”; OCR runs with a hard timeout (OCR_TIMEOUT_MS, default 30000), each worker is terminated to avoid lingering threads, and OCR_CONCURRENCY limits parallel workers (default 1).
 - TXT: read as-is
 
 Performance tips:
@@ -343,10 +343,18 @@ Performance tips:
 - Material-first prompts encourage quoting short snippets for transparency
 - No chain-of-thought; focus on succinct, verifiable reasoning
 - Exam Helper and other tasks include academic integrity guidance
-- Consider adding:
-  - Basic auth or key gating if deploying publicly
-  - Rate limiting and file size limits
-  - Redaction for PII in uploaded materials if needed
+- Backend hardening implemented:
+  - Path traversal protection for material files (only UUID-like ids accepted; safe path resolution constrained to uploads/)
+  - Global per-IP rate limiting (token bucket; default 120 req/min)
+  - Best-effort Content-Length guard for uploads to quickly reject oversized requests
+- Static site security:
+  - Content-Security-Policy (CSP) applied to static pages (index/app/about). In production, pin CDN versions and add Subresource Integrity (SRI).
+- Accessibility:
+  - Live regions (aria-live="polite", role="log") for chat and dialogue updates
+  - Tool buttons include accessible labels/controls/expanded state
+- Consider adding next:
+  - Basic auth or key gating for public deployments
+  - Redaction for PII in uploaded materials where required
 
 ## 11) Roadmap Ideas
 

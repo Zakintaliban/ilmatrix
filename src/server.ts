@@ -17,7 +17,8 @@ app.use("/*", serveStatic({ root: "./public" }));
 app.get("/", (c) => c.redirect("/index.html"));
 
 const basePort = Number(process.env.PORT || 8787);
-const model = process.env.GROQ_MODEL || "llama-3.1-70b-versatile";
+const model =
+  process.env.GROQ_MODEL || "meta-llama/llama-4-maverick-17b-128e-instruct";
 
 function findOpenPort(start: number, attempts = 10): Promise<number> {
   return new Promise((resolve, reject) => {

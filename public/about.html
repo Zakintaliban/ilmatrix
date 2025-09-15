@@ -4,6 +4,10 @@
     <meta charset="utf-8" />
     <link rel="icon" type="image/svg+xml" href="./logo.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self'; font-src 'self' data:; object-src 'none'; base-uri 'self'; frame-ancestors 'none'"
+    />
     <title>ILMATRIX — About Us</title>
 
     <!-- Tailwind CDN -->
@@ -186,6 +190,7 @@
             class="inline-flex items-center gap-1.5 text-xs sm:text-sm px-3 py-2 rounded-xl border border-white/30 ring-1 ring-black/5 bg-white/80 hover:bg-white/90 text-slate-900 shadow-sm transition-all duration-200 ease-out dark:bg-slate-800/80 dark:hover:bg-slate-800 dark:text-slate-100"
             title="Toggle theme"
             aria-label="Toggle theme"
+            aria-pressed="false"
           >
             <span
               class="icon-sun text-yellow-500 dark:hidden"

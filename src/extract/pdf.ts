@@ -114,7 +114,11 @@ async function extractPdfTextImpl(buffer: Buffer): Promise<string> {
     pdf = await loadingTask.promise;
 
     let text = "";
-    for (let p = 1; p <= pdf.numPages; p++) {
+    // Cap the number of pages processed to protect latency and memory
+    const MAX_PAGES = Math.max(1, Number(process.env.PDF_MAX_PAGES || 200));
+    const pageCount = Math.min(Number(pdf.numPages || 0), MAX_PAGES);
+
+    for (let p = 1; p <= pageCount; p++) {
       const page = await pdf.getPage(p);
       try {
         const content = await page.getTextContent();
