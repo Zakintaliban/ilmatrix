@@ -54,31 +54,32 @@ function createLimiter(concurrency: number) {
 
 const groqLimit = createLimiter(GROQ_CONCURRENCY);
 
-// Timeout helper that passes AbortSignal into SDK if supported
+/** Timeout helper that races the operation against a timer (SDK does not support AbortSignal) */
 async function withTimeout<T>(
-  factory: (signal: AbortSignal) => Promise<T>,
+  promiseFactory: () => Promise<T>,
   ms: number
 ): Promise<T> {
-  const ctrl = new AbortController();
-  const to = setTimeout(() => {
-    try {
-      ctrl.abort();
-    } catch {}
-  }, ms);
-  try {
-    return await factory(ctrl.signal);
-  } finally {
-    clearTimeout(to);
-  }
+  return await new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => {
+      reject(new Error("Request timeout"));
+    }, ms);
+    promiseFactory()
+      .then((v) => {
+        clearTimeout(timer);
+        resolve(v);
+      })
+      .catch((e) => {
+        clearTimeout(timer);
+        reject(e);
+      });
+  });
 }
 
 // Centralized chat completion wrapper with limiter + timeout
 function callGroqChat(params: any) {
   return groqLimit(() =>
     withTimeout(
-      (signal) =>
-        // Pass signal inside params; many SDKs honor it even if not typed
-        getGroq().chat.completions.create({ ...params, signal } as any),
+      () => getGroq().chat.completions.create({ ...params }),
       GROQ_TIMEOUT_MS
     )
   );
