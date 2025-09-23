@@ -85,7 +85,7 @@ function callGroqChat(params: any) {
   );
 }
 
-const systemPrompt = `You are StudyAI, a study assistant for university students, especially those who prefer studying quietly.
+const systemPrompt = `You are Ilmatrix, a study assistant for university students, especially those who prefer studying quietly.
 Core rules:
 - Use the provided materials as the primary source. Quote short snippets (<= 120 characters) where relevant.
 - Be concise, structured, and actionable.

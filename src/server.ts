@@ -5,7 +5,7 @@ import { serveStatic } from "@hono/node-server/serve-static";
 import api, { stopMaterialCleaner } from "./routes.js";
 import { createServer } from "node:net";
 
-/** StudyAI server bootstrap */
+/** Ilmatrix server bootstrap */
 const app = new Hono();
 
 app.get("/api/health", (c) => c.json({ ok: true }));
@@ -43,7 +43,7 @@ function findOpenPort(start: number, attempts = 10): Promise<number> {
 findOpenPort(basePort)
   .then((port) => {
     console.log(
-      `[StudyAI] starting on http://localhost:${port} (model=${model})`
+      `[Ilmatrix] starting on http://localhost:${port} (model=${model})`
     );
     const server: any = serve({ fetch: app.fetch, port }) as any;
 
