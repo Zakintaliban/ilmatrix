@@ -160,33 +160,173 @@ export class AIController {
     }
   }
 
-  // Placeholder methods for dialogue features
+  // Dialogue feature methods
   async startDialogue(c: Context) {
-    return c.json(
-      { error: "Dialogue feature not implemented in refactor yet" },
-      501
-    );
+    try {
+      const { materialId, materialText } = await c.req.json();
+      const text = await materialService.readMaterial(materialId, materialText);
+
+      const result = await groqService.dialogueStart({ materialText: text });
+
+      // Frontend keeps session; we attach a pseudo id for convenience
+      return c.json({ sessionId: crypto.randomUUID(), ...result });
+    } catch (error) {
+      console.error("Dialogue start error:", error);
+      return c.json(
+        {
+          error: "Dialogue start failed",
+          detail: error instanceof Error ? error.message : String(error),
+        },
+        500
+      );
+    }
   }
 
   async stepDialogue(c: Context) {
-    return c.json(
-      { error: "Dialogue feature not implemented in refactor yet" },
-      501
-    );
+    try {
+      const {
+        materialId,
+        materialText,
+        topics,
+        currentTopicIndex,
+        userMessage,
+        lastCoachQuestion,
+        language,
+      } = await c.req.json();
+
+      const text = await materialService.readMaterial(materialId, materialText);
+
+      // Special checkpoint: "How am I doing?"
+      const isHowAmIDoing =
+        typeof userMessage === "string" &&
+        /^\s*how\s+am\s+i\s+doing\??\s*$/i.test(userMessage);
+
+      if (isHowAmIDoing) {
+        const total = Array.isArray(topics) ? topics.length : 3;
+        const currentIdx = Math.max(
+          0,
+          Math.min(Number(currentTopicIndex || 0), total - 1)
+        );
+        const title =
+          (Array.isArray(topics) &&
+            topics[currentIdx] &&
+            topics[currentIdx].title) ||
+          (language === "id" ? "topik saat ini" : "the current topic");
+
+        // If we're on the last topic and just received congratulations,
+        // we've completed all topics
+        const isOnLastTopic = currentIdx >= total - 1;
+        const justGotCongrats =
+          lastCoachQuestion &&
+          /congratulations|congrats|completed|well done|excellent/i.test(
+            lastCoachQuestion
+          );
+
+        let completed;
+        if (isOnLastTopic && justGotCongrats) {
+          // We've just completed the final topic
+          completed = total;
+          const msg =
+            language === "id"
+              ? `Selamat! Kamu telah menyelesaikan semua ${total} topik diskusi dengan baik!`
+              : `Congratulations! You have successfully completed all ${total} discussion topics!`;
+          return c.json({
+            addressed: false,
+            moveToNext: false,
+            coachMessage: msg,
+          });
+        } else {
+          // We've completed all topics before the current one we're working on
+          completed = currentIdx;
+          const msg =
+            language === "id"
+              ? `Kamu telah menyelesaikan ${completed} dari ${total} topik, dan saat ini kita membahas "${title}". Untuk melanjutkan: ${
+                  lastCoachQuestion || "silakan jawab pertanyaan terakhir."
+                }`
+              : `You've completed ${completed} of ${total} topics, and we are currently working on "${title}". To pick up where we left off: ${
+                  lastCoachQuestion || "please respond to the last question."
+                }`;
+          return c.json({
+            addressed: false,
+            moveToNext: false,
+            coachMessage: msg,
+          });
+        }
+      }
+
+      const result = await groqService.dialogueStep({
+        materialText: text,
+        topics,
+        currentTopicIndex: Number(currentTopicIndex || 0),
+        userMessage,
+        lastCoachQuestion,
+        language,
+      });
+
+      return c.json(result);
+    } catch (error) {
+      console.error("Dialogue step error:", error);
+      return c.json(
+        {
+          error: "Dialogue step failed",
+          detail: error instanceof Error ? error.message : String(error),
+        },
+        500
+      );
+    }
   }
 
   async hintDialogue(c: Context) {
-    return c.json(
-      { error: "Dialogue feature not implemented in refactor yet" },
-      501
-    );
+    try {
+      const { materialId, materialText, currentTopicTitle, language } =
+        await c.req.json();
+
+      const text = await materialService.readMaterial(materialId, materialText);
+
+      const result = await groqService.dialogueHint({
+        materialText: text,
+        currentTopicTitle,
+        language,
+      });
+
+      return c.json(result);
+    } catch (error) {
+      console.error("Dialogue hint error:", error);
+      return c.json(
+        {
+          error: "Dialogue hint failed",
+          detail: error instanceof Error ? error.message : String(error),
+        },
+        500
+      );
+    }
   }
 
   async feedbackDialogue(c: Context) {
-    return c.json(
-      { error: "Dialogue feature not implemented in refactor yet" },
-      501
-    );
+    try {
+      const { materialId, materialText, topics, history, language } =
+        await c.req.json();
+
+      const text = await materialService.readMaterial(materialId, materialText);
+
+      const result = await groqService.dialogueFeedback({
+        materialText: text,
+        topics,
+        history,
+        language,
+      });
+
+      return c.json(result);
+    } catch (error) {
+      console.error("Dialogue feedback error:", error);
+      return c.json(
+        {
+          error: "Dialogue feedback failed",
+          detail: error instanceof Error ? error.message : String(error),
+        },
+        500
+      );
+    }
   }
 }
 

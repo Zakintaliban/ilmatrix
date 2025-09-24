@@ -23,6 +23,36 @@ export interface FlashCard {
   back: string;
 }
 
+export interface DialogueTopic {
+  id: number;
+  title: string;
+}
+
+export interface DialogueStartResult {
+  language: string; // e.g., "id" or "en"
+  intro: string; // opener text to show after Start
+  topics: DialogueTopic[]; // exactly 3 topics
+  firstCoachPrompt: string; // first coach question to begin topic 1
+}
+
+export interface DialogueStepResult {
+  addressed: boolean; // did user's answer sufficiently address current topic?
+  moveToNext: boolean; // if true and there is a next topic, UI should advance
+  coachMessage: string; // coach reply to show
+  nextCoachQuestion?: string; // if moving to next topic, the first question for that topic
+  isComplete?: boolean; // if true, the dialogue session is finished
+}
+
+export interface DialogueHintResult {
+  hint: string;
+}
+
+export interface DialogueFeedbackResult {
+  feedback: string; // final feedback paragraph(s)
+  strengths: string[];
+  improvements: string[];
+}
+
 export interface DialogueSession {
   sessionId: string;
   language: string;
@@ -340,26 +370,394 @@ Rules:
   // Dialogue methods would be implemented here with similar patterns...
   // For brevity, I'll add placeholders
 
+  /**
+   * Detect language from text for dialogue
+   */
+  private detectLangFromText(text: string): "id" | "en" | "auto" {
+    // Light heuristic for language detection
+    const sample = (text || "").slice(0, 400).toLowerCase();
+    const hasIndo =
+      /\b(yang|dan|atau|dengan|adalah|tidak|untuk|dari|pada|dalam|itu|ini)\b/.test(
+        sample
+      );
+    return hasIndo ? "id" : "auto";
+  }
+
+  /**
+   * Start a dialogue session
+   */
   async dialogueStart(params: {
     materialText: string;
-  }): Promise<DialogueSession> {
-    // Implementation similar to existing code but with proper error handling
-    throw new Error("Dialogue start not implemented in refactor yet");
+  }): Promise<DialogueStartResult> {
+    if (!this.hasApiKey) {
+      throw new Error("GROQ_API_KEY required for dialogue features");
+    }
+
+    const { materialText } = params;
+    const material = this.clampText(materialText);
+    const langHint = this.detectLangFromText(materialText);
+
+    const content = `Based on this material, create a dialogue session with exactly 3 topics for discussion.
+
+Material:
+${material}
+
+Language preference: ${
+      langHint === "id"
+        ? "Bahasa Indonesia"
+        : "English or auto-detect from material"
+    }
+
+Create a dialogue session with:
+1. A welcoming introduction 
+2. Exactly 3 discussion topics derived from the material
+3. A first coaching question to begin topic 1
+
+Response format (JSON only):
+{
+  "language": "${langHint === "id" ? "id" : "en"}",
+  "intro": "Welcoming introduction text explaining the dialogue format",
+  "topics": [
+    {"id": 1, "title": "First topic title"},
+    {"id": 2, "title": "Second topic title"}, 
+    {"id": 3, "title": "Third topic title"}
+  ],
+  "firstCoachPrompt": "Opening question for topic 1"
+}
+
+Important: Return ONLY the JSON object, no extra text.`;
+
+    try {
+      const response = await this.makeRequest({
+        messages: [
+          {
+            role: "system",
+            content: this.systemPrompt,
+          },
+          { role: "user", content },
+        ],
+        temperature: 0.4,
+        max_tokens: 1500,
+      });
+
+      const result = this.extractJsonBlock(response);
+      if (!result || !result.topics || !Array.isArray(result.topics)) {
+        throw new Error("Invalid response format");
+      }
+
+      return {
+        language: String(result.language || "en"),
+        intro: String(result.intro || ""),
+        topics: result.topics.slice(0, 3).map((t: any, i: number) => ({
+          id: t.id || i + 1,
+          title: String(t.title || `Topic ${i + 1}`),
+        })),
+        firstCoachPrompt: String(result.firstCoachPrompt || ""),
+      };
+    } catch (error) {
+      throw new Error(
+        `Failed to start dialogue: ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      );
+    }
   }
 
-  async dialogueStep(params: any): Promise<DialogueStepResult> {
-    // Implementation similar to existing code but with proper error handling
-    throw new Error("Dialogue step not implemented in refactor yet");
+  /**
+   * Process a dialogue step
+   */
+  async dialogueStep(params: {
+    materialText: string;
+    topics: DialogueTopic[];
+    currentTopicIndex: number;
+    userMessage: string;
+    lastCoachQuestion?: string;
+    language?: "id" | "en";
+  }): Promise<DialogueStepResult> {
+    if (!this.hasApiKey) {
+      throw new Error("GROQ_API_KEY required for dialogue features");
+    }
+
+    const {
+      materialText,
+      topics,
+      currentTopicIndex,
+      userMessage,
+      lastCoachQuestion,
+      language = "en",
+    } = params;
+
+    const material = this.clampText(materialText);
+    const currentTopic = topics[currentTopicIndex];
+    const isLastTopic = currentTopicIndex >= topics.length - 1;
+
+    // If it's the last topic, we need to determine if the dialogue should end
+    if (isLastTopic) {
+      const content = `You are a dialogue coach helping a student discuss material. Evaluate if the student has adequately completed the final topic.
+
+Material:
+${material}
+
+Final Topic: ${currentTopic?.title || "Unknown"}
+Last Coach Question: ${lastCoachQuestion || "None"}  
+Student Response: ${userMessage}
+
+Language: ${language === "id" ? "Bahasa Indonesia" : "English"}
+
+Determine if the student's response adequately addresses the final topic. If yes, provide completion congratulations. If no, provide guidance to help them complete it.
+
+Response format (JSON only):
+{
+  "addressed": "boolean - whether student adequately addressed the final topic",
+  "isComplete": "boolean - if true, the dialogue session is finished",
+  "coachMessage": "Your response: either completion congratulations or guidance for final topic",
+  "nextCoachQuestion": "null if isComplete=true, otherwise a follow-up question for the final topic"
+}
+
+Important: Return ONLY the JSON object, no extra text.`;
+
+      try {
+        const response = await this.makeRequest({
+          messages: [
+            {
+              role: "system",
+              content: this.systemPrompt,
+            },
+            { role: "user", content },
+          ],
+          temperature: 0.5,
+          max_tokens: 1500,
+        });
+
+        const result = this.extractJsonBlock(response);
+        if (!result) {
+          throw new Error("Invalid response format");
+        }
+
+        return {
+          addressed: Boolean(result.addressed),
+          moveToNext: false, // Never move to next on last topic
+          isComplete: Boolean(result.isComplete),
+          coachMessage: String(result.coachMessage || ""),
+          nextCoachQuestion: result.isComplete
+            ? undefined
+            : String(result.nextCoachQuestion || ""),
+        };
+      } catch (error) {
+        throw new Error(
+          `Failed to process final dialogue step: ${
+            error instanceof Error ? error.message : String(error)
+          }`
+        );
+      }
+    }
+
+    // For non-final topics, use the original logic
+    const content = `You are a dialogue coach helping a student discuss material. Evaluate their response and guide the conversation.
+
+Material:
+${material}
+
+Current Topic: ${currentTopic?.title || "Unknown"}
+Last Coach Question: ${lastCoachQuestion || "None"}
+Student Response: ${userMessage}
+
+Topics remaining: ${topics.map((t, i) => `${i + 1}. ${t.title}`).join(", ")}
+Current topic index: ${currentTopicIndex + 1}/${topics.length}
+
+Language: ${language === "id" ? "Bahasa Indonesia" : "English"}
+
+Evaluate if the student's response adequately addresses the current topic. Provide coaching feedback and decide whether to move to the next topic.
+
+Response format (JSON only):
+{
+  "addressed": "boolean - whether student adequately addressed current topic",
+  "moveToNext": "boolean - if true, advance to next topic", 
+  "coachMessage": "Your coaching response to the student",
+  "nextCoachQuestion": "Question for next topic if moveToNext is true, otherwise null"
+}
+
+Important: Return ONLY the JSON object, no extra text.`;
+
+    try {
+      const response = await this.makeRequest({
+        messages: [
+          {
+            role: "system",
+            content: this.systemPrompt,
+          },
+          { role: "user", content },
+        ],
+        temperature: 0.5,
+        max_tokens: 1500,
+      });
+
+      const result = this.extractJsonBlock(response);
+      if (!result) {
+        throw new Error("Invalid response format");
+      }
+
+      return {
+        addressed: Boolean(result.addressed),
+        moveToNext: Boolean(result.moveToNext && !isLastTopic),
+        coachMessage: String(result.coachMessage || ""),
+        nextCoachQuestion: result.nextCoachQuestion
+          ? String(result.nextCoachQuestion)
+          : undefined,
+      };
+    } catch (error) {
+      throw new Error(
+        `Failed to process dialogue step: ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      );
+    }
   }
 
-  async dialogueHint(params: any): Promise<string> {
-    // Implementation similar to existing code but with proper error handling
-    throw new Error("Dialogue hint not implemented in refactor yet");
+  /**
+   * Provide a hint for current topic
+   */
+  async dialogueHint(params: {
+    materialText: string;
+    currentTopicTitle: string;
+    language?: "id" | "en";
+  }): Promise<DialogueHintResult> {
+    if (!this.hasApiKey) {
+      throw new Error("GROQ_API_KEY required for dialogue features");
+    }
+
+    const { materialText, currentTopicTitle, language = "en" } = params;
+    const material = this.clampText(materialText);
+
+    const content = `Provide a helpful hint for the current dialogue topic.
+
+Material:
+${material}
+
+Current Topic: ${currentTopicTitle}
+Language: ${language === "id" ? "Bahasa Indonesia" : "English"}
+
+Give a short, encouraging hint (1-2 sentences) to help the student think about this topic without giving away the full answer.
+
+Response format (JSON only):
+{
+  "hint": "Brief, encouraging hint text"
+}
+
+Important: Return ONLY the JSON object, no extra text.`;
+
+    try {
+      const response = await this.makeRequest({
+        messages: [
+          {
+            role: "system",
+            content: this.systemPrompt,
+          },
+          { role: "user", content },
+        ],
+        temperature: 0.6,
+        max_tokens: 500,
+      });
+
+      const result = this.extractJsonBlock(response);
+      if (!result) {
+        throw new Error("Invalid response format");
+      }
+
+      return {
+        hint: String(
+          result.hint || "Try to think about the key concepts in this topic."
+        ),
+      };
+    } catch (error) {
+      throw new Error(
+        `Failed to generate hint: ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      );
+    }
   }
 
-  async dialogueFeedback(params: any): Promise<DialogueFeedbackResult> {
-    // Implementation similar to existing code but with proper error handling
-    throw new Error("Dialogue feedback not implemented in refactor yet");
+  /**
+   * Generate final feedback for dialogue session
+   */
+  async dialogueFeedback(params: {
+    materialText: string;
+    topics: DialogueTopic[];
+    history?: Array<{
+      role: "coach" | "user" | "ilmatrix" | "system";
+      content: string;
+    }>;
+    language?: "id" | "en";
+  }): Promise<DialogueFeedbackResult> {
+    if (!this.hasApiKey) {
+      throw new Error("GROQ_API_KEY required for dialogue features");
+    }
+
+    const { materialText, topics, history = [], language = "en" } = params;
+    const material = this.clampText(materialText);
+
+    const historyText = history
+      .map((h) => `${h.role}: ${h.content}`)
+      .join("\n");
+
+    const content = `Provide final feedback for this dialogue session.
+
+Material:
+${material}
+
+Topics Covered: ${topics.map((t) => t.title).join(", ")}
+
+Conversation History:
+${historyText}
+
+Language: ${language === "id" ? "Bahasa Indonesia" : "English"}
+
+Provide constructive feedback about the student's participation, understanding, and areas for improvement.
+
+Response format (JSON only):
+{
+  "feedback": "Overall feedback paragraph about the session",
+  "strengths": ["Strength 1", "Strength 2", "Strength 3"],
+  "improvements": ["Improvement area 1", "Improvement area 2", "Improvement area 3"]
+}
+
+Important: Return ONLY the JSON object, no extra text.`;
+
+    try {
+      const response = await this.makeRequest({
+        messages: [
+          {
+            role: "system",
+            content: this.systemPrompt,
+          },
+          { role: "user", content },
+        ],
+        temperature: 0.4,
+        max_tokens: 1500,
+      });
+
+      const result = this.extractJsonBlock(response);
+      if (!result) {
+        throw new Error("Invalid response format");
+      }
+
+      return {
+        feedback: String(result.feedback || ""),
+        strengths: Array.isArray(result.strengths)
+          ? result.strengths.slice(0, 3).map(String)
+          : [],
+        improvements: Array.isArray(result.improvements)
+          ? result.improvements.slice(0, 3).map(String)
+          : [],
+      };
+    } catch (error) {
+      throw new Error(
+        `Failed to generate feedback: ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      );
+    }
   }
 }
 

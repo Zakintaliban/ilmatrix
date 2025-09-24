@@ -1,11 +1,49 @@
 # ILMATRIX (Hono + Groq + Meta Llama)
 
-An AI study companion for uni- What's stored:
+An AI study companion for university students. Core features:
 
-- The app extracts text from your uploaded files (PDF/DOCX/PPTX/Images/TXT) and stores only the extracted text as uploads/&lt;materialId&gt;.txt. Originals are not saved.
-- Si## Architecture Overview
+- Upload course materials (PDF/TXT/Images## Storage & Retention
 
-The codebase follows clean architecture principles with clear separation of concerns:
+### What's Stored
+
+- The app extracts text from uploaded files (PDF/DOCX/PPTX/Images/TXT) and stores only the extracted text as `uploads/<materialId>.txt`
+- **Original files are never saved** - only the extracted text content
+
+### Size Limits
+
+- **10 MB total** per material (enforced at upload/append)
+- Individual file size limits handled by extraction services
+
+### Auto-Delete (TTL)
+
+- Background cleaner deletes material files older than `MATERIAL_TTL_MINUTES` (default: 60 minutes)
+- Runs at intervals with proper resource management (`unref()` timers for graceful shutdown)
+- Implemented in [backgroundTaskService](src/services/backgroundTaskService.ts)
+
+### PaaS Deployment
+
+- On platforms with ephemeral disks, data may vanish on redeploy
+- Use persistent volume/path for durability, or rely on TTL cleaner to prevent storage growth) and get help:
+  - **Explain** material (concise + short citations)
+  - **MCQ Quiz** (generate, answer with simple "1 a" format, deterministic grading, per-question feedback for wrong answers only)
+  - **Flashcards** (auto‑generated flip cards from your materials)
+  - **Forum** reply drafter
+  - **Exam** helper (study‑first, responsible use)
+  - **Chat** with context (optional, based on uploaded materials)
+  - **Dialogue** (coached conversation; topic-based with 3 topics; Start/Begin/Send/Hint; grounded in uploaded materials)
+
+Tech stack:
+
+- **Hono.js** (Node adapter) for API and static hosting
+- **Groq SDK** with Meta Llama models
+- **TypeScript** (ESM, NodeNext) with clean architecture
+- **Extraction**: pdfjs-dist (PDF), tesseract.js (OCR for images), JSZip (DOCX/PPTX)
+- **Tailwind CSS** (CDN)
+- **Netlify-ready** (functions + static publish)
+
+## Architecture Overview
+
+The codebase follows **clean architecture principles** with clear separation of concerns:
 
 - **Configuration**: Centralized environment management in `src/config/`
 - **Services**: Business logic layer in `src/services/` (material, extraction, groq, MCQ scoring, background tasks)
@@ -45,18 +83,24 @@ Test files:
 
 ## Development & Troubleshooting
 
-- "Server is missing GROQ_API_KEY": set GROQ_API_KEY in .env and restart
-- Health is ok but UI fails: check browser console and network panel
-- PDF extraction issues: try another PDF or verify pdfjs-dist is installed
-- TypeScript module warnings in editor: restart TS server/VS Code (runtime resolution is correct)
-- Quiz generation fails: check that `extractJsonBlock` method in groqService properly handles JSON arrays
-- Tests hanging: background tasks now use `unref()` and explicit cleanup for proper exitits:
-  - 10 MB total per material (enforced at upload/append).
-- Auto delete (TTL):
-  - A background cleaner deletes material .txt files older than MATERIAL_TTL_MINUTES (default 60). This runs at intervals with proper resource management (`unref()` timers for graceful shutdown). Implemented in [backgroundTaskService](src/services/backgroundTaskService.ts).
-- Persistence on PaaS:
+### Common Issues
 
-  - If you deploy to platforms with ephemeral disks, data may vanish on redeploy. Use a persistent volume/path if you need durability, or rely on the default TTL cleaner to avoid storage growth.students. Core features:
+- **"Server is missing GROQ_API_KEY"**: Set `GROQ_API_KEY` in `.env` and restart server
+- **Health check passes but UI fails**: Check browser console and network panel for errors
+- **PDF extraction issues**: Try another PDF or verify `pdfjs-dist` is installed correctly
+- **TypeScript module warnings**: Restart TS server/VS Code (runtime resolution works correctly)
+- **Quiz generation fails**: The `extractJsonBlock` method in groqService properly handles JSON arrays
+- **Tests hanging**: Background tasks use `unref()` and explicit cleanup for proper exit
+- **Dialogue completion issues**: Fixed logic for final topic detection and "How am I doing?" status updates
+
+### Recent Fixes & Improvements
+
+- ✅ **Complete refactoring** to clean architecture with services/controllers separation
+- ✅ **Quiz functionality** fixed with proper JSON array parsing for MCQ generation
+- ✅ **Dialogue feature** fully implemented with proper completion detection
+- ✅ **Test suite** runs cleanly without hanging (10 tests total: 7 service + 3 integration)
+- ✅ **Background task management** with proper resource cleanup using `unref()` timers
+- ✅ **"How am I doing?" logic** fixed to show correct completion status
 
 - Upload course materials (PDF/TXT/Images/DOCX/PPTX) and get help:
   - Explain material (concise + short citations)
@@ -193,20 +237,21 @@ Base: /api
     - { materialId: string, numCards: number }
     - → { cards: [{ id, front, back }] }
 
-- Dialogue
+- **Dialogue** (Coached Conversation)
 
-  - POST /api/dialogue/start
-    - { materialId: string }
-    - → { sessionId, language, intro, topics: [{ id, title }], firstCoachPrompt }
-  - POST /api/dialogue/step
-    - { materialId: string, topics: Array<{ id:number, title:string }>, currentTopicIndex: number, userMessage: string, lastCoachQuestion?: string, language?: "id"|"en" }
-    - → { coachMessage: string, addressed: boolean, moveToNext: boolean, nextCoachQuestion?: string }
-  - POST /api/dialogue/hint
-    - { materialId: string, currentTopicTitle: string, language?: "id"|"en" }
-    - → { hint: string }
-  - POST /api/dialogue/feedback
-    - { materialId: string, topics: Array<{ id:number, title:string }>, history?: Array<{ role:"coach"|"user"|"ilmatrix"|"system", content:string }>, language?: "id"|"en" }
-    - → { feedback: string, strengths: string[], improvements: string[] }
+  - **POST /api/dialogue/start**
+    - Body: `{ materialId: string }`
+    - Response: `{ sessionId, language, intro, topics: [{ id, title }], firstCoachPrompt }`
+  - **POST /api/dialogue/step**
+    - Body: `{ materialId: string, topics: Array<{ id:number, title:string }>, currentTopicIndex: number, userMessage: string, lastCoachQuestion?: string, language?: "id"|"en" }`
+    - Response: `{ coachMessage: string, addressed: boolean, moveToNext: boolean, nextCoachQuestion?: string, isComplete?: boolean }`
+    - Special: `userMessage: "How am I doing?"` returns progress status
+  - **POST /api/dialogue/hint**
+    - Body: `{ materialId: string, currentTopicTitle: string, language?: "id"|"en" }`
+    - Response: `{ hint: string }`
+  - **POST /api/dialogue/feedback**
+    - Body: `{ materialId: string, topics: Array<{ id:number, title:string }>, history?: Array<{ role:"coach"|"user"|"ilmatrix"|"system", content:string }>, language?: "id"|"en" }`
+    - Response: `{ feedback: string, strengths: string[], improvements: string[] }`
 
 - Materials
   - GET /api/material/:id

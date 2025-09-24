@@ -1,6 +1,50 @@
 # ILMATRIX — Documentation
 
-ILMATRIX is an AI-powered study companion for university students. It helps explain materials, answer or generate MCQ quizzes with deterministic grading, draft forum replies, prepare for exams responsibly, chat about context, and practice via auto-generated flashcards — all centered on your uploaded materi## 8) Extraction Support
+ILMATRIX is an AI-powered study companion for university students built with **clean architecture principles**. It 3.7 Dialogue (Coached Conversation)
+
+- **Start Session**: Open the Dialogue tab and click "Start" to receive an intro with 3 auto-generated topics from your material
+- **Begin Discussion**: Click "Let's get started!" to receive the first coaching question for Topic 1
+- **Engage & Progress**: Answer questions and engage in guided discussion. The AI coach evaluates your responses and moves between topics
+- **Track Progress**: Ask "How am I doing?" anytime to see completion status (e.g., "2 of 3 topics completed")
+- **Get Hints**: Click "I'm stuck" for contextual hints when needed
+- **Session Completion**: After adequately addressing all 3 topics, receive congratulations and completion confirmation
+- **Final Feedback**: Access detailed feedback on strengths and areas for improvement
+- **Mobile UX**: Local "+" button beside input for quick actions; global floating "+" hidden to avoid duplicates
+
+**Key Features**:
+
+- ✅ **Smart topic progression** based on response quality assessment
+- ✅ **Completion detection** with proper "How am I doing?" status updates
+- ✅ **Language detection** (Indonesian/English) with appropriate responses
+- ✅ **Progress tracking** showing accurate topic completion countsxplain materials, generate MCQ quizzes with deterministic grading, create flashcards, draft forum replies, prepare for exams responsibly, engage in coached dialogue sessions, and chat with context — all centered on your uploaded materials.
+
+## Architecture & Code Quality
+
+**Clean Architecture Implementation**: The codebase has been completely refactored to follow clean architecture principles:
+
+- **Services Layer** (`src/services/`): Core business logic including material management, AI processing, extraction, scoring, and background tasks
+- **Controllers Layer** (`src/controllers/`): HTTP request handling and response formatting
+- **Middleware** (`src/middleware/`): Cross-cutting concerns like rate limiting and authentication
+- **Utilities** (`src/utils/`): Shared helpers for security, concurrency, and validation
+- **Configuration** (`src/config/`): Centralized environment and configuration management
+
+**Key Benefits**:
+
+- **Testable**: Services can be unit tested independently (7 service tests + 3 integration tests)
+- **Maintainable**: Clear module boundaries and dependency injection
+- **Type-safe**: Full TypeScript coverage with proper interfaces and error handling
+- **Scalable**: Easy to extend with new features without breaking existing code
+
+## Recent Improvements & Fixes
+
+- ✅ **Complete architectural refactoring** from monolithic to clean architecture
+- ✅ **Quiz functionality restored** with proper JSON array parsing for MCQ generation
+- ✅ **Dialogue feature fully implemented** with proper completion detection and progress tracking
+- ✅ **Test suite reliability** - all tests run cleanly without hanging (proper resource cleanup with `unref()`)
+- ✅ **Background task management** with graceful shutdown and memory leak prevention
+- ✅ **"How am I doing?" logic** fixed to show accurate completion status in dialogue sessions
+
+## Extraction Support
 
 **Extraction Architecture**: Managed by `ExtractionService` with proper concurrency controls and resource cleanup.
 
@@ -323,20 +367,21 @@ Base: /api
   - JSON: { materialId: string, numCards: number }
   - Response: { cards: { id:number, front:string, back:string }[] }
 
-- Dialogue
+- **Dialogue (Coached Conversation)**
 
-  - POST /api/dialogue/start
-    - JSON: { materialId: string }
-    - Response: { sessionId: string, language: "id"|"en", intro: string, topics: Array<{ id:number, title:string }>, firstCoachPrompt: string }
-  - POST /api/dialogue/step
-    - JSON: { materialId: string, topics: Array<{ id:number, title:string }>, currentTopicIndex: number, userMessage: string, lastCoachQuestion?: string, language?: "id"|"en" }
-    - Response: { coachMessage: string, addressed: boolean, moveToNext: boolean, nextCoachQuestion?: string }
-  - POST /api/dialogue/hint
-    - JSON: { materialId: string, currentTopicTitle: string, language?: "id"|"en" }
-    - Response: { hint: string }
-  - POST /api/dialogue/feedback
-    - JSON: { materialId: string, topics: Array<{ id:number, title:string }>, history?: Array<{ role:"coach"|"user"|"ilmatrix"|"system", content:string }>, language?: "id"|"en" }
-    - Response: { feedback: string, strengths: string[], improvements: string[] }
+  - **POST /api/dialogue/start**
+    - JSON: `{ materialId: string }`
+    - Response: `{ sessionId: string, language: "id"|"en", intro: string, topics: Array<{ id:number, title:string }>, firstCoachPrompt: string }`
+  - **POST /api/dialogue/step**
+    - JSON: `{ materialId: string, topics: Array<{ id:number, title:string }>, currentTopicIndex: number, userMessage: string, lastCoachQuestion?: string, language?: "id"|"en" }`
+    - Response: `{ coachMessage: string, addressed: boolean, moveToNext: boolean, nextCoachQuestion?: string, isComplete?: boolean }`
+    - **Special**: `userMessage: "How am I doing?"` returns progress status with completion tracking
+  - **POST /api/dialogue/hint**
+    - JSON: `{ materialId: string, currentTopicTitle: string, language?: "id"|"en" }`
+    - Response: `{ hint: string }`
+  - **POST /api/dialogue/feedback**
+    - JSON: `{ materialId: string, topics: Array<{ id:number, title:string }>, history?: Array<{ role:"coach"|"user"|"ilmatrix"|"system", content:string }>, language?: "id"|"en" }`
+    - Response: `{ feedback: string, strengths: string[], improvements: string[] }`
 
 - GET /api/material/:id
 
@@ -452,35 +497,36 @@ Performance tips:
 
 ## 11) Testing Strategy
 
-**Test Architecture**: Comprehensive testing with clean resource management and proper separation of concerns.
+**Test Architecture**: Comprehensive testing with clean resource management and proper separation of concerns. **All 10 tests pass reliably** with no hanging or resource leaks.
 
 ### Test Categories
 
-- **Service Layer Tests** (`tests/services/`):
+- **Service Layer Tests** (`tests/services/`) - **7 tests**:
 
-  - Unit tests for business logic services (MCQ scoring, validation, etc.)
+  - Unit tests for business logic services (MCQ scoring, validation, answer parsing, statistics)
   - Fast execution without network calls or external dependencies
-  - Pure logic testing with mock data
-  - Example: MCQ scoring algorithms, answer parsing, validation rules
+  - Pure logic testing with deterministic data
+  - **Coverage**: MCQ scoring (perfect/partial scores), answer parsing (with/without commas), validation, statistics
 
-- **Integration Tests** (`tests/smoke.test.ts`):
+- **Integration Tests** (`tests/smoke.test.ts`) - **3 tests**:
   - API endpoint testing via Hono app `fetch()` method
-  - Tests actual HTTP request/response flow
+  - Tests actual HTTP request/response flow including material validation, chat endpoints, quiz scoring
   - Validates controller → service → response pipeline
-  - Includes proper background task cleanup
+  - **Coverage**: Material API validation, chat behavior with/without API key, MCQ scoring endpoint
 
-### Test Infrastructure
+### Test Infrastructure & Reliability
 
 - **Resource Management**:
 
-  - Background tasks use `unref()` timers to allow test process exit
-  - Explicit cleanup hooks prevent hanging tests
+  - Background tasks use `unref()` timers to allow clean test process exit
+  - Explicit cleanup hooks prevent hanging tests (fixed hanging issue)
   - Proper service lifecycle management in test environment
+  - Background cleanup task properly started/stopped during integration tests
 
 - **Test Execution**:
 
   ```bash
-  npm test              # Full test suite (services + integration)
+  npm test              # Full test suite (7 services + 3 integration = 10 total)
   npm run test:services # Service layer only (fast)
   npm run test:smoke    # Integration tests (API endpoints)
   ```
