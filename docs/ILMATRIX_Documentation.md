@@ -1,10 +1,37 @@
 # ILMATRIX — Documentation
 
-ILMATRIX is an AI-powered study companion for university students. It helps explain materials, answer or generate MCQ quizzes with deterministic grading, draft forum replies, prepare for exams responsibly, chat about context, and practice via auto-generated flashcards — all centered on your uploaded materials.
+ILMATRIX is an AI-powered study companion for university students. It helps explain materials, answer or generate MCQ quizzes with deterministic grading, draft forum replies, prepare for exams responsibly, chat about context, and practice via auto-generated flashcards — all centered on your uploaded materi## 8) Extraction Support
 
-Brand: ILMATRIX
-Primary audience: Students and educators
-Tech core: Hono.js API, Groq (Meta Llama models), PDF/DOCX/PPTX/OCR extraction, static Tailwind UI, Netlify-ready
+**Extraction Architecture**: Managed by `ExtractionService` with proper concurrency controls and resource cleanup.
+
+- **PDF**:## 13) FAQ (Concise)
+
+- Q: Do I need an account?
+  - A: For local usage, no. For public deployments, you may add auth.
+- Q: How private are my uploads?
+  - A: Files are processed for study purposes and stored temporarily as extracted text (.txt), and by default auto‑deleted after ~60 minutes (configurable via MATERIAL_TTL_MINUTES). Review and customize retention for your deployment.
+- Q: Can it handle photos/screenshots of slides?
+  - A: Yes, via OCR (tesseract.js), but clarity and contrast improve results.
+- Q: Which models are used?
+  - A: Groq with Meta Llama models (configurable).
+- Q: Why do tests sometimes hang?
+  - A: Fixed in current version with proper `unref()` timers and explicit cleanup hooks. Background tasks no longer prevent test process exit.
+- Q: How do I run specific tests?
+  - A: Use `npm run test:services` for unit tests or `npm run test:smoke` for integration tests.t configured with fonts and CMaps; supports local and serverless paths. PDF extraction is concurrency‑limited (EXTRACTION_CONCURRENCY, default 2) and frees resources eagerly (page.cleanup(), pdf.cleanup(), pdf.destroy(), loadingTask.destroy()) to prevent memory leaks.
+- **DOCX**: JSZip reads word/document.xml and related parts; converts XML to text
+- **PPTX**: JSZip reads ppt/slides/slideN.xml; extracts <a:t> runs as text
+- **Images (PNG/JPG)**: tesseract.js OCR; language fallback from "eng+ind" to "eng"; OCR runs with a hard timeout (OCR_TIMEOUT_MS, default 30000), each worker is terminated to avoid lingering threads, and OCR_CONCURRENCY limits parallel workers (default 1).
+- **TXT**: read as-is
+
+**Concurrency Management**: All extraction operations use p-limit pattern for resource control, implemented in `src/utils/concurrency.ts` and coordinated through `ExtractionService`.
+
+**Performance tips**:
+
+- Prefer textual PDFs over image-only for faster and cleaner extraction
+- Large DOCX/PPTX may need extra time; avoid extremely large uploads on serverless
+- Extraction service automatically manages memory cleanup and prevents resource leaksd: ILMATRIX
+  Primary audience: Students and educators
+  Tech core: Hono.js API, Groq (Meta Llama models), PDF/DOCX/PPTX/OCR extraction, static Tailwind UI, Netlify-ready
 
 ## 1) Product Overview
 
@@ -99,28 +126,61 @@ UI color scheme:
 
 ## 4) High-level Architecture
 
-- Frontend
+ILMATRIX follows clean architecture principles with clear separation of concerns:
+
+- **Frontend**
+
   - Static HTML (Tailwind CSS via CDN) in /public
   - Tabs per feature; each tab renders its own results (no result-only page)
   - App page: public/app.html
-- Backend
-  - Hono.js app exposing /api routes
+
+- **Backend Architecture**
+  - **Configuration Layer**: Centralized environment management (`src/config/`)
+  - **Service Layer**: Business logic services (`src/services/`)
+    - MaterialService: Material storage and retrieval
+    - ExtractionService: File text extraction coordination
+    - GroqService: AI/LLM integration and prompting
+    - MCQScoringService: Deterministic quiz scoring
+    - BackgroundTaskService: TTL cleanup and maintenance
+  - **Controller Layer**: HTTP request handling (`src/controllers/`)
+    - UploadController: File upload and material management
+    - MaterialController: Material CRUD operations
+    - AIController: AI feature endpoints (explain, quiz, chat, etc.)
+  - **Middleware Layer**: Request processing (`src/middleware/`)
+    - Rate limiting with token bucket algorithm
+  - **Utility Layer**: Shared helpers (`src/utils/`)
+    - Security: Path traversal protection, ID validation
+    - Concurrency: p-limit pattern for resource management
+  - **API Routes**: Clean route definitions (`src/routes.ts`)
+- **Data Flow**
+
+  - Hono.js app exposing /api routes with middleware pipeline
   - Groq SDK (Meta Llama models) for generation/analysis
   - Extraction utilities for PDF (pdfjs-dist), DOCX/PPTX (JSZip), OCR for images (tesseract.js)
-  - Stores extracted text as uploads/<materialId>.txt; a background cleaner auto‑deletes files older than MATERIAL_TTL_MINUTES (default 60)
-- Deployment
+  - Stores extracted text as uploads/<materialId>.txt; background cleaner auto‑deletes files older than MATERIAL_TTL_MINUTES (default 60)
+
+- **Deployment**
   - Netlify-compatible (functions for API, static hosting for /public)
 
-Key files (for reference):
+**Key Architecture Benefits:**
 
-- public/app.html — app UI (tabs/features)
-- public/index.html — marketing-style Home
-- public/about.html — About Us page
-- src/server.ts — Hono server/bootstrap
-- src/routes.ts — API routes (upload, explain, quiz, forum, exam, chat, mcq-trainer, flashcards)
-- src/groqClient.ts — Groq client and prompting logic, MCQ JSON generation, deterministic scoring, flashcards generation
-- src/extract/\*.ts — extraction utilities (pdf, docx, pptx, image)
-- Optional serverless adapters may be added for Netlify/Vercel; by default the app runs as a Node server via Hono.
+- **Separation of Concerns**: Controllers handle HTTP, services handle business logic
+- **Testability**: Services can be unit tested independently
+- **Maintainability**: Clear module boundaries and dependencies
+- **Type Safety**: Full TypeScript coverage with proper interfaces
+- **Scalability**: Easy to extend with new features or services
+
+**Key files (refactored structure):**
+
+- **Frontend**: public/app.html, public/index.html, public/about.html
+- **Configuration**: src/config/env.ts
+- **Services**: src/services/\*.ts (material, extraction, groq, mcqScoring, backgroundTask)
+- **Controllers**: src/controllers/\*.ts (upload, material, ai)
+- **Middleware**: src/middleware/rateLimit.ts
+- **Utilities**: src/utils/\*.ts (security, concurrency)
+- **API Routes**: src/routes.ts
+- **Server Bootstrap**: src/server.ts
+- **Extraction**: src/extract/\*.ts (pdf, docx, pptx, image)
 
 ## 5) Flowcharts (Mermaid)
 
@@ -319,44 +379,127 @@ Performance tips:
 
 ## 9) Configuration & Deployment
 
-- Environment
+**Configuration Management**: Centralized in `src/config/env.ts` with type-safe environment variable handling.
+
+- **Environment Variables**
+
   - GROQ_API_KEY must be set for the backend
   - GROQ_MODEL sets the model id (optional; default in code)
   - PORT overrides server port (default 8787)
   - MATERIAL_CLAMP sets the max characters of materials included per request (default 100000). Increase for better recall (higher token usage), decrease to save tokens.
-  - MATERIAL_TTL_MINUTES controls on-disk retention of material .txt files (default 60). A background cleaner periodically deletes files older than this TTL.
-  - GROQ_CONCURRENCY caps concurrent LLM requests (default 4)
+  - MATERIAL_TTL_MINUTES controls on-disk retention of material .txt files (default 60). Managed by `BackgroundTaskService`.
+  - GROQ_CONCURRENCY caps concurrent LLM requests (default 4). Enforced by `GroqService`.
   - GROQ_TIMEOUT_MS per-request timeout for LLM calls in ms (default 45000)
-  - PDF_EXTRACT_CONCURRENCY caps concurrent PDF parses (default 2)
+  - EXTRACTION_CONCURRENCY caps concurrent file extraction operations (default 2). Managed by `ExtractionService`.
   - OCR_TIMEOUT_MS per-recognition timeout for OCR in ms (default 30000)
+  - RATE_LIMIT_MAX requests per minute per IP (default 120). Enforced by `rateLimit` middleware.
+
+- **Development Setup**
+
   - ESM with TypeScript in NodeNext mode; ensure .js extensions on local imports post-emit
-- Local development
+  - Clean architecture with dependency injection and service-based design
+  - Comprehensive test suite with service layer testing
+
+- **Local Development**
+
   - Install dependencies; run dev/start scripts
   - Open /public/index.html (Home) or /public/app.html (App) in the served site, or deploy to Netlify
-- Netlify
+  - All services are independently testable and mockable
+  - Comprehensive test suite with `npm test` ensures code quality and clean exits
+
+- **Netlify Deployment**
   - netlify.toml routes /api/\* to functions
   - Static site lives in /public
   - Functions adapter wraps Hono app
+  - Services maintain state properly in serverless environment
 
 ## 10) Security, Safety, Integrity
 
-- Material-first prompts encourage quoting short snippets for transparency
-- No chain-of-thought; focus on succinct, verifiable reasoning
-- Exam Helper and other tasks include academic integrity guidance
-- Backend hardening implemented:
-  - Path traversal protection for material files (only UUID-like ids accepted; safe path resolution constrained to uploads/)
-  - Global per-IP rate limiting (token bucket; default 120 req/min)
-  - Best-effort Content-Length guard for uploads to quickly reject oversized requests
-- Static site security:
+**Security Architecture**: Multi-layered security approach implemented across services and middleware.
+
+- **Content & AI Safety**
+
+  - Material-first prompts encourage quoting short snippets for transparency
+  - No chain-of-thought; focus on succinct, verifiable reasoning
+  - Exam Helper and other tasks include academic integrity guidance
+
+- **Backend Security Hardening** (Implemented in service and utility layers):
+
+  - **Path Traversal Protection**: Managed by `src/utils/security.ts` - only UUID-like ids accepted; safe path resolution constrained to uploads/
+  - **Rate Limiting**: Token bucket algorithm in `src/middleware/rateLimit.ts` (default 120 req/min per IP)
+  - **Input Validation**: Content-Length guard in upload controllers to quickly reject oversized requests
+  - **Resource Management**: Concurrency controls prevent resource exhaustion attacks
+
+- **Static Site Security**:
+
   - Content-Security-Policy (CSP) applied to static pages (index/app/about). In production, pin CDN versions and add Subresource Integrity (SRI).
-- Accessibility:
+
+- **Accessibility**:
+
   - Live regions (aria-live="polite", role="log") for chat and dialogue updates
   - Tool buttons include accessible labels/controls/expanded state
-- Consider adding next:
+
+- **Service Layer Security**:
+
+  - `MaterialService`: Validates all material IDs and file operations
+  - `ExtractionService`: Safe file processing with timeout and resource cleanup
+  - `BackgroundTaskService`: Secure TTL cleanup with proper file validation
+
+- **Future Enhancements**:
   - Basic auth or key gating for public deployments
   - Redaction for PII in uploaded materials where required
+  - Service-level audit logging and monitoring
 
-## 11) Roadmap Ideas
+## 11) Testing Strategy
+
+**Test Architecture**: Comprehensive testing with clean resource management and proper separation of concerns.
+
+### Test Categories
+
+- **Service Layer Tests** (`tests/services/`):
+
+  - Unit tests for business logic services (MCQ scoring, validation, etc.)
+  - Fast execution without network calls or external dependencies
+  - Pure logic testing with mock data
+  - Example: MCQ scoring algorithms, answer parsing, validation rules
+
+- **Integration Tests** (`tests/smoke.test.ts`):
+  - API endpoint testing via Hono app `fetch()` method
+  - Tests actual HTTP request/response flow
+  - Validates controller → service → response pipeline
+  - Includes proper background task cleanup
+
+### Test Infrastructure
+
+- **Resource Management**:
+
+  - Background tasks use `unref()` timers to allow test process exit
+  - Explicit cleanup hooks prevent hanging tests
+  - Proper service lifecycle management in test environment
+
+- **Test Execution**:
+
+  ```bash
+  npm test              # Full test suite (services + integration)
+  npm run test:services # Service layer only (fast)
+  npm run test:smoke    # Integration tests (API endpoints)
+  ```
+
+- **Test Isolation**:
+  - Services can be unit tested independently
+  - Integration tests run with controlled environment
+  - Proper cleanup between test runs
+
+### Test Coverage
+
+Current test coverage includes:
+
+- MCQ scoring service (7 test cases)
+- API endpoint validation (3 integration tests)
+- Error handling and edge cases
+- Background task lifecycle management
+
+## 12) Roadmap Ideas
 
 - Streaming responses (SSE) for better perceived latency
 - Persist chat and quiz sessions (localStorage or backend session)
@@ -364,6 +507,7 @@ Performance tips:
 - Per-user profiles and saved materials
 - Multi-language OCR packs as optional downloads
 - Export to DOCX/PDF of generated study notes and flashcards
+- Enhanced test coverage with end-to-end browser testing
 
 ## 12) FAQ (Concise)
 
@@ -476,11 +620,39 @@ Explore marketing pages: /public/index.html and /public/about.html
 
 ## 16) Performance & Memory Safety
 
-- LLM requests are bounded by GROQ_CONCURRENCY and GROQ_TIMEOUT_MS and routed through a single shared client to prevent runaway concurrency and hung requests.
-- PDF extraction uses PDF_EXTRACT_CONCURRENCY and explicitly cleans up page and document resources (page.cleanup(), pdf.cleanup(), pdf.destroy(), loadingTask.destroy()) to avoid leaks even on errors/timeouts.
-- OCR extraction applies OCR_TIMEOUT_MS and always terminates the Tesseract worker after each recognition to avoid background threads lingering.
-- The material TTL cleaner timers use unref() so they do not keep the event loop alive and can be stopped on shutdown; the server installs SIGINT/SIGTERM/beforeExit handlers to clear timers and close the server.
-- Recommended defaults: GROQ_CONCURRENCY=4, GROQ_TIMEOUT_MS=45000, PDF_EXTRACT_CONCURRENCY=2, OCR_TIMEOUT_MS=30000, MATERIAL_TTL_MINUTES=60.
+**Service-Based Resource Management**: The refactored architecture provides improved resource management through dedicated services.
+
+- **LLM Request Management** (`GroqService`):
+
+  - Requests bounded by GROQ_CONCURRENCY and GROQ_TIMEOUT_MS
+  - Single shared client prevents runaway concurrency and hung requests
+  - p-limit pattern for controlled concurrent execution
+
+- **Extraction Resource Management** (`ExtractionService`):
+
+  - PDF extraction uses EXTRACTION_CONCURRENCY with explicit resource cleanup (page.cleanup(), pdf.cleanup(), pdf.destroy(), loadingTask.destroy())
+  - OCR extraction applies OCR_TIMEOUT_MS and terminates workers after each recognition
+  - Centralized concurrency control across all extraction types
+
+- **Background Task Management** (`BackgroundTaskService`):
+
+  - Material TTL cleaner timers use unref() to allow Node.js process exit when appropriate
+  - Graceful shutdown handlers (SIGINT/SIGTERM/beforeExit) clean up timers
+  - Resilient cleanup with proper error handling
+  - Test-friendly design with explicit cleanup hooks for integration tests
+
+- **Concurrency Utilities** (`src/utils/concurrency.ts`):
+
+  - Standardized p-limit pattern across all services
+  - Configurable concurrency limits per operation type
+  - Timeout handling with resource cleanup
+
+- **Configuration** (`src/config/env.ts`):
+  - Type-safe environment variable management
+  - Validated defaults for all performance settings
+  - Centralized configuration prevents misconfiguration
+
+**Recommended defaults**: GROQ_CONCURRENCY=4, GROQ_TIMEOUT_MS=45000, EXTRACTION_CONCURRENCY=2, OCR_TIMEOUT_MS=30000, MATERIAL_TTL_MINUTES=60.
 
 ---
 

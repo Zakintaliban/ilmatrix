@@ -1,6 +1,62 @@
 # ILMATRIX (Hono + Groq + Meta Llama)
 
-An AI study companion for university students. Core features:
+An AI study companion for uni- What's stored:
+
+- The app extracts text from your uploaded files (PDF/DOCX/PPTX/Images/TXT) and stores only the extracted text as uploads/&lt;materialId&gt;.txt. Originals are not saved.
+- Si## Architecture Overview
+
+The codebase follows clean architecture principles with clear separation of concerns:
+
+- **Configuration**: Centralized environment management in `src/config/`
+- **Services**: Business logic layer in `src/services/` (material, extraction, groq, MCQ scoring, background tasks)
+- **Controllers**: HTTP request handling in `src/controllers/` (upload, material, AI endpoints)
+- **Middleware**: Request processing in `src/middleware/` (rate limiting, etc.)
+- **Utilities**: Shared helpers in `src/utils/` (security, concurrency, validation)
+- **Routes**: Clean API route definitions in `src/routes.ts`
+
+Key benefits:
+
+- **Testable**: Services can be unit tested independently
+- **Maintainable**: Clear module boundaries and dependencies
+- **Scalable**: Easy to extend with new features or services
+- **Type-safe**: Full TypeScript coverage with proper interfaces
+
+## Testing
+
+The project uses a comprehensive test suite with proper resource management:
+
+- **Service Tests**: Unit tests for business logic services (MCQ scoring, validation, etc.)
+- **Integration Tests**: API endpoint testing via Hono app fetch
+- **Test Separation**: Services and integration tests run separately to prevent resource conflicts
+- **Clean Exit**: Background tasks properly cleaned up with `unref()` timers and explicit cleanup hooks
+
+Run tests:
+
+```bash
+npm test              # Full test suite (services + integration)
+npm run test:services # Service layer only (fast, no API calls)
+npm run test:smoke    # Integration tests (API endpoints)
+```
+
+Test files:
+
+- `tests/services/` - Service layer unit tests
+- `tests/smoke.test.ts` - API integration tests
+
+## Development & Troubleshooting
+
+- "Server is missing GROQ_API_KEY": set GROQ_API_KEY in .env and restart
+- Health is ok but UI fails: check browser console and network panel
+- PDF extraction issues: try another PDF or verify pdfjs-dist is installed
+- TypeScript module warnings in editor: restart TS server/VS Code (runtime resolution is correct)
+- Quiz generation fails: check that `extractJsonBlock` method in groqService properly handles JSON arrays
+- Tests hanging: background tasks now use `unref()` and explicit cleanup for proper exitits:
+  - 10 MB total per material (enforced at upload/append).
+- Auto delete (TTL):
+  - A background cleaner deletes material .txt files older than MATERIAL_TTL_MINUTES (default 60). This runs at intervals with proper resource management (`unref()` timers for graceful shutdown). Implemented in [backgroundTaskService](src/services/backgroundTaskService.ts).
+- Persistence on PaaS:
+
+  - If you deploy to platforms with ephemeral disks, data may vanish on redeploy. Use a persistent volume/path if you need durability, or rely on the default TTL cleaner to avoid storage growth.students. Core features:
 
 - Upload course materials (PDF/TXT/Images/DOCX/PPTX) and get help:
   - Explain material (concise + short citations)
@@ -15,7 +71,7 @@ Tech stack:
 
 - Hono.js (Node adapter) for API and static hosting
 - Groq SDK with Meta Llama models
-- TypeScript (ESM, NodeNext)
+- TypeScript (ESM, NodeNext) with clean architecture
 - Extraction: pdfjs-dist (PDF), tesseract.js (OCR for images), JSZip (DOCX/PPTX)
 - Tailwind CSS (CDN)
 - Netlify-ready (functions + static publish)
@@ -62,8 +118,9 @@ Server (default): <http://localhost:8787>
 - PDF_MAX_PAGES: Max PDF pages extracted per file (default 200). See [extractPdfTextImpl()](src/extract/pdf.ts:50).
 - OCR_CONCURRENCY: Max concurrent OCR workers for images (default 1). See [extractImageText()](src/extract/image.ts:1).
 - OCR_TIMEOUT_MS: Per-image OCR timeout in ms (default 30000).
-- GROQ_CONCURRENCY: Concurrent LLM requests (default 4). See [createLimiter()](src/groqClient.ts:26).
-- GROQ_TIMEOUT_MS: Per-request LLM timeout in ms (default 45000). See [withTimeout()](src/groqClient.ts:58).
+- GROQ_CONCURRENCY: Concurrent LLM requests (default 4). See [groqService](src/services/groqService.ts).
+- GROQ_TIMEOUT_MS: Per-request LLM timeout in ms (default 45000). See [concurrency utils](src/utils/concurrency.ts).
+- EXTRACTION_CONCURRENCY: Max concurrent file extraction operations (default 2). See [extractionService](src/services/extractionService.ts).
 
 ## Storage & retention
 
@@ -79,10 +136,10 @@ Server (default): <http://localhost:8787>
 ## Security & accessibility
 
 - Security hardening:
-  - Path traversal protection for materials I/O; only UUID v4-like ids are accepted and paths are validated inside uploads/ (see [routes](src/routes.ts:614) and [upload append](src/routes.ts:196)).
-  - Global per-IP rate limiting (default 120 req/min) via a lightweight token bucket (see [middleware](src/routes.ts:71)). Tune with RATE_LIMIT_MAX.
+  - Path traversal protection for materials I/O; only UUID v4-like ids are accepted and paths are validated inside uploads/ (see [security utils](src/utils/security.ts)).
+  - Global per-IP rate limiting (default 120 req/min) via a lightweight token bucket (see [rate limit middleware](src/middleware/rateLimit.ts)). Tune with RATE_LIMIT_MAX.
   - CSP applied to static pages to restrict sources (see [app](public/app.html), [index](public/index.html), [about](public/about.html)).
-  - Best-effort Content-Length guard on uploads to quickly reject oversized requests (see [upload](src/routes.ts:89)).
+  - Best-effort Content-Length guard on uploads to quickly reject oversized requests (see [upload controller](src/controllers/uploadController.ts)).
 - Accessibility:
   - Live regions announce new chat and dialogue messages for screen readers (see [app live regions](public/app.html)).
   - Tool trigger buttons include aria-label/controls/expanded for improved navigation.
@@ -244,7 +301,9 @@ curl -H "Content-Type: application/json" \
 - npm run dev → start with hot reload
 - npm run start → start without nodemon
 - npm run build → type-check and emit
-- npm test → run smoke tests via tsx (see [tests/smoke.test.ts](tests/smoke.test.ts))
+- npm test → run complete test suite (services + smoke tests)
+- npm run test:services → run service layer unit tests
+- npm run test:smoke → run API integration tests
 
 ## Notes and next steps
 

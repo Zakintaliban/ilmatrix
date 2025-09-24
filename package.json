@@ -5,10 +5,17 @@
   "type": "module",
   "scripts": {
     "dev": "nodemon --watch src --exec \"tsx src/server.ts\"",
+    "dev:legacy": "nodemon --watch backup/legacy --exec \"tsx backup/legacy/server.ts\"",
     "start": "tsx src/server.ts",
+    "start:legacy": "tsx backup/legacy/server.ts",
     "build": "tsc -p tsconfig.json",
+    "build:prod": "tsc -p tsconfig.json && cp -r public dist/",
     "start:prod": "node dist/server.js",
-    "test": "tsx --test tests/**/*.test.ts"
+    "test": "npm run test:services && npm run test:smoke",
+    "test:services": "tsx --test tests/services/**/*.test.ts",
+    "test:smoke": "tsx --test --test-timeout=15000 tests/smoke.test.ts",
+    "test:legacy": "tsx --test tests/smoke.test.ts --loader=tsx/esm backup/legacy/routes.ts",
+    "cleanup": "tsx -e \"import { backgroundTaskService } from './src/services/backgroundTaskService.js'; await backgroundTaskService.runCleanupNow(); process.exit(0);\""
   },
   "keywords": [],
   "author": "",

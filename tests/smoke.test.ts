@@ -1,6 +1,6 @@
-import test from "node:test";
+import test, { before, after } from "node:test";
 import assert from "node:assert/strict";
-import api from "../src/routes.ts";
+import api, { stopBackgroundTasks } from "../src/routes.js";
 
 // Helper to parse JSON response body
 async function json(res: Response): Promise<any> {
@@ -9,6 +9,22 @@ async function json(res: Response): Promise<any> {
     return JSON.parse(text);
   } catch {
     return { __raw: text };
+  }
+}
+
+let testCount = 0;
+const totalTests = 3;
+
+before(() => {
+  // Count tests for proper cleanup timing
+});
+
+// Cleanup after each test and exit when all done
+function cleanupIfDone() {
+  testCount++;
+  if (testCount >= totalTests) {
+    stopBackgroundTasks();
+    setTimeout(() => process.exit(0), 100);
   }
 }
 
@@ -22,6 +38,7 @@ test("GET /material/:id with invalid id returns 400", async () => {
     body.error?.toLowerCase().includes("invalid"),
     "should return invalid material id"
   );
+  cleanupIfDone();
 });
 
 test("POST /chat behaves correctly with or without GROQ_API_KEY", async () => {
@@ -48,6 +65,7 @@ test("POST /chat behaves correctly with or without GROQ_API_KEY", async () => {
       "answer should mention missing API key when GROQ_API_KEY is not set"
     );
   }
+  cleanupIfDone();
 });
 
 test("POST /quiz/trainer/mcq/score with empty set returns analysis string", async () => {
@@ -66,4 +84,5 @@ test("POST /quiz/trainer/mcq/score with empty set returns analysis string", asyn
   const body = await json(res);
   assert.ok(typeof body.analysis === "string", "analysis should be a string");
   assert.ok(body.analysis.includes("Score:"), "analysis contains score line");
+  cleanupIfDone();
 });

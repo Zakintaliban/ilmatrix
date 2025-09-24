@@ -999,7 +999,7 @@
               <textarea
                 id="chatInput"
                 rows="2"
-                placeholder="Tulis pesan..."
+                placeholder="Write here..."
                 aria-label="Chat input"
                 class="flex-1 rounded-xl border border-white/20 ring-1 ring-black/5 bg-white px-4 py-3 text-[16px] leading-relaxed font-medium text-black placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-400 dark:bg-neutral-900 dark:text-white dark:placeholder-slate-400 transition-all duration-200 ease-out min-h-[52px]"
               ></textarea>
@@ -1100,7 +1100,7 @@
               id="promptExplain"
               rows="4"
               class="w-full rounded-xl border border-white/20 ring-1 ring-black/5 px-4 py-3 text-base font-medium text-black placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-400 bg-white dark:bg-neutral-900 dark:text-white dark:placeholder-slate-400 transition-all duration-200 ease-out"
-              placeholder="Jelaskan bab 2..."
+              placeholder="Explain chapter 2... explain with tables and examples..."
             ></textarea>
             <div class="mt-3">
               <button
@@ -1204,7 +1204,7 @@
               id="promptForum"
               rows="4"
               class="w-full rounded-xl border border-white/20 ring-1 ring-black/5 px-4 py-3 text-base font-medium text-black placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-400 bg-white dark:bg-neutral-900 dark:text-white dark:placeholder-slate-400 transition-all duration-200 ease-out"
-              placeholder="Pertanyaan/Topik forum..."
+              placeholder="Questions/Forum topics..."
             ></textarea>
             <div class="mt-3">
               <button
@@ -1239,7 +1239,7 @@
               id="promptExam"
               rows="4"
               class="w-full rounded-xl border border-white/20 ring-1 ring-black/5 px-4 py-3 text-base font-medium text-black placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-400 bg-white dark:bg-neutral-900 dark:text-white dark:placeholder-slate-400 transition-all duration-200 ease-out"
-              placeholder="Petunjuk / pertanyaan terkait exam..."
+              placeholder="Exam-related instructions/questions..."
             ></textarea>
             <div class="mt-3">
               <button
@@ -1753,15 +1753,15 @@
         const input = $("chatInput");
         if (!input) return;
         const map = {
-          explain: "Explain: tulis catatan/pertanyaan…",
-          forum: "Forum: tulis topik/argumen…",
-          exam: "Exam: tulis pertanyaan/petunjuk…",
+          explain: "Explain: Notes/Questions…",
+          forum: "Forum: Topics/Arguments…",
+          exam: "Exam: Questions/Instructions…",
           quiz: "Quiz: kosongkan lalu Send untuk 5 soal; atau ketik jumlah (mis. 10); atau tempel jawaban '1 a, 2 b, ...'",
         };
         input.placeholder =
           activeTool && activeTool !== "chat"
-            ? map[activeTool] || "Tulis pesan..."
-            : "Tulis pesan...";
+            ? map[activeTool] || "Write here..."
+            : "Write here...";
       }
 
       function setActiveTool(tool) {
@@ -1907,7 +1907,7 @@
         const html = parts.join("");
         $("chat").innerHTML =
           html ||
-          "<em class='text-slate-500'>Mulai chat dengan mengetik pesan…</em>";
+          "<em class='text-slate-500'>Start chat by type your questions...</em>";
         addCopyButtons($("chat"));
         $("chat").scrollTop = $("chat").scrollHeight;
       }
@@ -2700,7 +2700,7 @@
 
         // Forum remains required: block empty sends
         if (activeTool === "forum" && trimmed.length === 0) {
-          alert("Masukkan pertanyaan/topik forum");
+          alert("Masukkan Questions/Forum topics");
           return;
         }
 

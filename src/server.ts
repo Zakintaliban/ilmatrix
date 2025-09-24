@@ -2,85 +2,219 @@ import "dotenv/config";
 import { Hono } from "hono";
 import { serve } from "@hono/node-server";
 import { serveStatic } from "@hono/node-server/serve-static";
-import api, { stopMaterialCleaner } from "./routes.js";
 import { createServer } from "node:net";
+import api, { stopBackgroundTasks } from "./routes.js";
+import config from "./config/env.js";
 
-/** Ilmatrix server bootstrap */
-const app = new Hono();
+/**
+ * ILMATRIX server bootstrap with improved error handling and configuration
+ */
+class IlmatrixServer {
+  private app: Hono;
+  private server: any;
 
-app.get("/api/health", (c) => c.json({ ok: true }));
+  constructor() {
+    this.app = new Hono();
+    this.setupRoutes();
+    this.setupGracefulShutdown();
+  }
 
-app.route("/api", api);
+  /**
+   * Setup application routes and middleware
+   */
+  private setupRoutes(): void {
+    // Health check at root level
+    this.app.get("/api/health", (c) =>
+      c.json({
+        ok: true,
+        uptime: process.uptime(),
+        version: process.env.npm_package_version || "unknown",
+        model: config.groqModel,
+        hasApiKey: !!config.groqApiKey,
+      })
+    );
 
-// Serve frontend
-app.use("/*", serveStatic({ root: "./public" }));
-app.get("/", (c) => c.redirect("/index.html"));
+    // Mount API routes
+    this.app.route("/api", api);
 
-const basePort = Number(process.env.PORT || 8787);
-const model =
-  process.env.GROQ_MODEL || "meta-llama/llama-4-maverick-17b-128e-instruct";
+    // Serve static files from public directory
+    this.app.use("/*", serveStatic({ root: "./public" }));
 
-function findOpenPort(start: number, attempts = 10): Promise<number> {
-  return new Promise((resolve, reject) => {
-    const tryPort = (p: number, left: number) => {
-      const tester = createServer()
-        .once("error", (err: any) => {
-          if ((err as any)?.code === "EADDRINUSE" && left > 0) {
-            tryPort(p + 1, left - 1);
-          } else {
-            reject(err);
-          }
-        })
-        .once("listening", () => {
-          tester.close(() => resolve(p));
-        })
-        .listen(p);
+    // Default redirect to index
+    this.app.get("/", (c) => c.redirect("/index.html"));
+
+    // 404 handler for API routes
+    this.app.notFound((c) => {
+      if (c.req.url.includes("/api/")) {
+        return c.json({ error: "Endpoint not found" }, 404);
+      }
+      // For non-API routes, let static handler deal with it
+      return c.notFound();
+    });
+
+    // Global error handler
+    this.app.onError((error, c) => {
+      console.error("Unhandled error:", error);
+      return c.json(
+        {
+          error: "Internal server error",
+          message: config.isDevelopment ? error.message : undefined,
+        },
+        500
+      );
+    });
+  }
+
+  /**
+   * Find an available port starting from the base port
+   */
+  private async findAvailablePort(
+    startPort: number,
+    maxAttempts = 10
+  ): Promise<number> {
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      const port = startPort + attempt;
+
+      try {
+        await new Promise<void>((resolve, reject) => {
+          const tester = createServer()
+            .once("error", reject)
+            .once("listening", () => {
+              tester.close(() => resolve());
+            })
+            .listen(port);
+        });
+
+        return port;
+      } catch (error: any) {
+        if (error.code !== "EADDRINUSE") {
+          throw error;
+        }
+        // Port is in use, try next one
+      }
+    }
+
+    throw new Error(
+      `Could not find available port after ${maxAttempts} attempts starting from ${startPort}`
+    );
+  }
+
+  /**
+   * Setup graceful shutdown handlers
+   */
+  private setupGracefulShutdown(): void {
+    const shutdown = (signal: string) => {
+      console.log(
+        `\n[ILMATRIX] Received ${signal}, shutting down gracefully...`
+      );
+
+      try {
+        stopBackgroundTasks();
+        console.log("[ILMATRIX] Background tasks stopped");
+      } catch (error) {
+        console.error("[ILMATRIX] Error stopping background tasks:", error);
+      }
+
+      if (this.server?.close) {
+        this.server.close(() => {
+          console.log("[ILMATRIX] Server closed");
+          process.exit(0);
+        });
+
+        // Force exit after 10 seconds
+        setTimeout(() => {
+          console.log("[ILMATRIX] Force exit after timeout");
+          process.exit(1);
+        }, 10000);
+      } else {
+        process.exit(0);
+      }
     };
-    tryPort(start, attempts);
-  });
+
+    process.on("SIGINT", () => shutdown("SIGINT"));
+    process.on("SIGTERM", () => shutdown("SIGTERM"));
+
+    // Handle uncaught exceptions
+    process.on("uncaughtException", (error) => {
+      console.error("[ILMATRIX] Uncaught exception:", error);
+      shutdown("UNCAUGHT_EXCEPTION");
+    });
+
+    process.on("unhandledRejection", (reason, promise) => {
+      console.error(
+        "[ILMATRIX] Unhandled rejection at:",
+        promise,
+        "reason:",
+        reason
+      );
+      // Don't exit on unhandled rejections in production
+      if (config.isDevelopment) {
+        shutdown("UNHANDLED_REJECTION");
+      }
+    });
+  }
+
+  /**
+   * Start the server
+   */
+  async start(): Promise<void> {
+    try {
+      // Validate configuration
+      if (config.isProduction && !config.groqApiKey) {
+        console.warn(
+          "[ILMATRIX] Warning: GROQ_API_KEY not set in production environment"
+        );
+      }
+
+      // Find available port
+      const port = await this.findAvailablePort(config.port);
+
+      if (port !== config.port) {
+        console.log(
+          `[ILMATRIX] Port ${config.port} unavailable, using ${port} instead`
+        );
+      }
+
+      // Start server
+      console.log(`[ILMATRIX] Starting server...`);
+      console.log(
+        `[ILMATRIX] Environment: ${process.env.NODE_ENV || "development"}`
+      );
+      console.log(`[ILMATRIX] Model: ${config.groqModel}`);
+      console.log(
+        `[ILMATRIX] Material TTL: ${config.materialTtlMinutes} minutes`
+      );
+      console.log(
+        `[ILMATRIX] Rate limit: ${config.rateLimitMax} req/min per IP`
+      );
+
+      this.server = serve({
+        fetch: this.app.fetch,
+        port,
+        hostname: config.isDevelopment ? "localhost" : "0.0.0.0",
+      });
+
+      console.log(
+        `[ILMATRIX] Server running on http://${
+          config.isDevelopment ? "localhost" : "0.0.0.0"
+        }:${port}`
+      );
+      console.log(
+        `[ILMATRIX] Health check: http://localhost:${port}/api/health`
+      );
+      console.log(
+        `[ILMATRIX] App interface: http://localhost:${port}/app.html`
+      );
+    } catch (error) {
+      console.error("[ILMATRIX] Failed to start server:", error);
+      process.exit(1);
+    }
+  }
 }
 
-findOpenPort(basePort)
-  .then((port) => {
-    console.log(
-      `[Ilmatrix] starting on http://localhost:${port} (model=${model})`
-    );
-    const server: any = serve({ fetch: app.fetch, port }) as any;
-
-    const closeServer = (
-      server && typeof server.close === "function"
-        ? () => {
-            try {
-              server.close();
-            } catch {}
-          }
-        : undefined
-    ) as undefined | (() => void);
-
-    const shutdown = (code = 0) => {
-      try {
-        stopMaterialCleaner?.();
-      } catch {}
-      try {
-        closeServer?.();
-      } catch {}
-      try {
-        if (code !== null) process.exit(code);
-      } catch {}
-    };
-
-    process.on("SIGINT", () => shutdown(0));
-    process.on("SIGTERM", () => shutdown(0));
-    process.on("beforeExit", () => {
-      try {
-        stopMaterialCleaner?.();
-      } catch {}
-      try {
-        closeServer?.();
-      } catch {}
-    });
-  })
-  .catch((err) => {
-    console.error("Failed to bind to a port:", err);
-    process.exit(1);
-  });
+// Start the server
+const server = new IlmatrixServer();
+server.start().catch((error) => {
+  console.error("[ILMATRIX] Server startup failed:", error);
+  process.exit(1);
+});
