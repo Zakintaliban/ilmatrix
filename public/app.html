@@ -1556,6 +1556,47 @@
       let mcqQuestions = [];
       // Active tool routing for mobile-first UX ("chat" by default)
       let activeTool = "chat";
+
+      // MaterialId persistence functions
+      function saveMaterialId(newId) {
+        materialId = newId;
+        try {
+          if (newId) {
+            localStorage.setItem('ilmatrix_materialId', newId);
+          } else {
+            localStorage.removeItem('ilmatrix_materialId');
+          }
+        } catch (e) {
+          console.warn('Failed to save materialId to localStorage:', e);
+        }
+      }
+
+      function loadMaterialId() {
+        try {
+          const saved = localStorage.getItem('ilmatrix_materialId');
+          if (saved) {
+            materialId = saved;
+            return saved;
+          }
+        } catch (e) {
+          console.warn('Failed to load materialId from localStorage:', e);
+        }
+        return null;
+      }
+
+      async function verifyMaterialExists(id) {
+        if (!id) return false;
+        try {
+          const res = await fetch(`/api/material/${id}`);
+          if (res.ok) {
+            const data = await res.json();
+            return data && data.files && data.files.length > 0;
+          }
+        } catch (e) {
+          console.warn('Failed to verify material exists:', e);
+        }
+        return false;
+      }
       // Quiz behavior mode: "section_mobile" | "always_section" | "composer"
       // - section_mobile: quick menu opens Quiz section on mobile (default)
       // - always_section: always navigate to Quiz section on mobile from any entry
@@ -2040,7 +2081,7 @@
           const res = await fetch("/api/upload", { method: "POST", body: fd });
           const data = await res.json();
           if (data.materialId) {
-            materialId = data.materialId;
+            saveMaterialId(data.materialId);
             setCurrentMaterialLabel();
             uploadInfo.textContent = `Uploaded ${data.files} file(s). size=${
               data.size
@@ -2165,15 +2206,33 @@
 
       // Start new material (client-side reset; does not delete existing server files)
       $("btnNewMaterial").onclick = () => {
-        materialId = null;
+        saveMaterialId(null);
         setCurrentMaterialLabel();
         attachments.innerHTML =
           "<em class='text-gray-500'>New material. Drop or click to upload.</em>";
         uploadInfo.textContent = "";
       };
 
+      // Initialize materialId from localStorage on page load
+      async function initializeMaterial() {
+        const saved = loadMaterialId();
+        if (saved) {
+          const exists = await verifyMaterialExists(saved);
+          if (exists) {
+            setCurrentMaterialLabel();
+            await refreshMaterialList();
+          } else {
+            // Material expired or doesn't exist, clear it
+            saveMaterialId(null);
+            setCurrentMaterialLabel();
+          }
+        } else {
+          setCurrentMaterialLabel();
+        }
+      }
+
       // Initial render
-      setCurrentMaterialLabel();
+      initializeMaterial();
       // No material at first; keep empty list text
 
       // Shared runner to show JSON or answer into a target element
