@@ -1562,24 +1562,24 @@
         materialId = newId;
         try {
           if (newId) {
-            localStorage.setItem('ilmatrix_materialId', newId);
+            localStorage.setItem("ilmatrix_materialId", newId);
           } else {
-            localStorage.removeItem('ilmatrix_materialId');
+            localStorage.removeItem("ilmatrix_materialId");
           }
         } catch (e) {
-          console.warn('Failed to save materialId to localStorage:', e);
+          console.warn("Failed to save materialId to localStorage:", e);
         }
       }
 
       function loadMaterialId() {
         try {
-          const saved = localStorage.getItem('ilmatrix_materialId');
+          const saved = localStorage.getItem("ilmatrix_materialId");
           if (saved) {
             materialId = saved;
             return saved;
           }
         } catch (e) {
-          console.warn('Failed to load materialId from localStorage:', e);
+          console.warn("Failed to load materialId from localStorage:", e);
         }
         return null;
       }
@@ -1593,7 +1593,7 @@
             return data && data.files && data.files.length > 0;
           }
         } catch (e) {
-          console.warn('Failed to verify material exists:', e);
+          console.warn("Failed to verify material exists:", e);
         }
         return false;
       }
