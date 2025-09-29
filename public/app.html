@@ -1559,12 +1559,21 @@
 
       // MaterialId persistence functions
       function saveMaterialId(newId) {
+        const oldId = materialId;
         materialId = newId;
         try {
           if (newId) {
             localStorage.setItem("ilmatrix_materialId", newId);
+            // Load chat history for this material
+            if (newId !== oldId) {
+              loadChatHistory(newId);
+              renderChat();
+            }
           } else {
             localStorage.removeItem("ilmatrix_materialId");
+            // Clear chat when no material
+            chat = [];
+            renderChat();
           }
         } catch (e) {
           console.warn("Failed to save materialId to localStorage:", e);
@@ -1597,6 +1606,78 @@
         }
         return false;
       }
+
+      // Chat history persistence functions
+      function saveChatHistory() {
+        try {
+          if (chat.length > 0) {
+            // Save global chat history (fallback when no materialId)
+            localStorage.setItem("ilmatrix_chat_global", JSON.stringify(chat));
+
+            // Also save per-material if materialId exists
+            if (materialId) {
+              const key = `ilmatrix_chat_${materialId}`;
+              localStorage.setItem(key, JSON.stringify(chat));
+            }
+          }
+        } catch (e) {
+          console.warn("Failed to save chat history to localStorage:", e);
+        }
+      }
+
+      function loadChatHistory(id) {
+        try {
+          // Try to load per-material chat history first
+          if (id) {
+            const key = `ilmatrix_chat_${id}`;
+            const saved = localStorage.getItem(key);
+            if (saved) {
+              const parsed = JSON.parse(saved);
+              if (Array.isArray(parsed)) {
+                chat = parsed;
+                return true;
+              }
+            }
+          }
+
+          // Fallback: try to load global chat history
+          const globalSaved = localStorage.getItem("ilmatrix_chat_global");
+          if (globalSaved) {
+            const parsed = JSON.parse(globalSaved);
+            if (Array.isArray(parsed)) {
+              chat = parsed;
+              return true;
+            }
+          }
+        } catch (e) {
+          console.warn("Failed to load chat history from localStorage:", e);
+        }
+        chat = []; // Reset to empty if load fails
+        return false;
+      }
+
+      function clearChatHistory(id) {
+        try {
+          // Clear per-material chat history
+          if (id) {
+            const key = `ilmatrix_chat_${id}`;
+            localStorage.removeItem(key);
+          }
+          // Also clear global chat history
+          localStorage.removeItem("ilmatrix_chat_global");
+          chat = [];
+        } catch (e) {
+          console.warn("Failed to clear chat history from localStorage:", e);
+        }
+      }
+
+      // Helper function to add message to chat with auto-save
+      function addChatMessage(role, content) {
+        chat.push({ role, content });
+        saveChatHistory();
+        renderChat();
+      }
+
       // Quiz behavior mode: "section_mobile" | "always_section" | "composer"
       // - section_mobile: quick menu opens Quiz section on mobile (default)
       // - always_section: always navigate to Quiz section on mobile from any entry
@@ -1951,6 +2032,9 @@
           "<em class='text-slate-500'>Start chat by type your questions...</em>";
         addCopyButtons($("chat"));
         $("chat").scrollTop = $("chat").scrollHeight;
+
+        // Auto-save chat history after rendering
+        saveChatHistory();
       }
 
       // Health
@@ -2219,15 +2303,21 @@
         if (saved) {
           const exists = await verifyMaterialExists(saved);
           if (exists) {
+            loadChatHistory(saved);
             setCurrentMaterialLabel();
             await refreshMaterialList();
+            renderChat();
           } else {
             // Material expired or doesn't exist, clear it
+            clearChatHistory(saved);
             saveMaterialId(null);
             setCurrentMaterialLabel();
           }
         } else {
+          // No saved materialId, try to load global chat history
+          loadChatHistory(null);
           setCurrentMaterialLabel();
+          renderChat();
         }
       }
 
@@ -2368,11 +2458,9 @@
             const data = await res.json();
             mcqQuestions = Array.isArray(data.questions) ? data.questions : [];
             const md = "Berikut MCQ:\n\n" + mcqToMarkdown(mcqQuestions);
-            chat.push({ role: "assistant", content: md });
-            renderChat();
+            addChatMessage("assistant", md);
           } catch (e) {
-            chat.push({ role: "system", content: "Quiz error: " + e.message });
-            renderChat();
+            addChatMessage("system", "Quiz error: " + e.message);
           }
           return;
         }
@@ -2700,15 +2788,13 @@
             return;
           }
           if (trimmed.length > 0) {
-            chat.push({ role: "user", content: original });
+            addChatMessage("user", original);
           }
           input.value = "";
-          renderChat();
           try {
             await handleQuizComposer(trimmed);
           } catch (e) {
-            chat.push({ role: "system", content: "Quiz error: " + e.message });
-            renderChat();
+            addChatMessage("system", "Quiz error: " + e.message);
           }
           return;
         }
@@ -2766,9 +2852,8 @@
         // For other tools and general chat, keep behavior:
         if (!trimmed) return;
 
-        chat.push({ role: "user", content: original });
+        addChatMessage("user", original);
         input.value = "";
-        renderChat();
         try {
           // Route to selected tool endpoints if any (Explain/Forum/Exam with text)
           if (activeTool && activeTool !== "chat" && TOOL_ROUTES[activeTool]) {
@@ -2785,8 +2870,7 @@
             });
             const data = await res.json();
             const answer = data.answer || JSON.stringify(data);
-            chat.push({ role: "assistant", content: answer });
-            renderChat();
+            addChatMessage("assistant", answer);
             return;
           }
 
@@ -2802,11 +2886,9 @@
           });
           const data = await res.json();
           const answer = data.answer || JSON.stringify(data);
-          chat.push({ role: "assistant", content: answer });
-          renderChat();
+          addChatMessage("assistant", answer);
         } catch (e) {
-          chat.push({ role: "system", content: "Chat error: " + e.message });
-          renderChat();
+          addChatMessage("system", "Chat error: " + e.message);
         }
       }
 
