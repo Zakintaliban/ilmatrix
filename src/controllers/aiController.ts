@@ -93,7 +93,7 @@ export class AIController {
 
       const questions = await groqService.generateQuizTrainerMCQ({
         materialText: material,
-        numQuestions: Math.min(Math.max(1, numQuestions), 20), // Limit 1-20 questions
+        numQuestions: Math.min(Math.max(1, numQuestions), 50), // Limit 1-50 questions
       });
 
       return c.json({ questions });
