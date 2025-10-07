@@ -48,8 +48,8 @@ class IlmatrixServer {
       if (c.req.url.includes("/api/")) {
         return c.json({ error: "Endpoint not found" }, 404);
       }
-      // For non-API routes, let static handler deal with it
-      return c.notFound();
+      // For non-API routes, return 404
+      return c.text("Not Found", 404);
     });
 
     // Global error handler

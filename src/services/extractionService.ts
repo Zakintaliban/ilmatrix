@@ -40,11 +40,30 @@ export class ExtractionService {
         if (this.isPdfFile(name, type)) {
           content = await extractPdfText(buffer);
         } else if (this.isImageFile(name, type)) {
-          content = await extractImageText(buffer);
-          if (!content.trim()) {
-            throw new Error(
-              `Unable to extract text from image "${name}" - OCR returned empty result`
-            );
+          // Try to extract text from image
+          try {
+            content = await extractImageText(buffer);
+          } catch (error) {
+            // OCR failed, will use base64 storage below
+            content = "";
+          }
+          
+          // If no text found or minimal text, store image as base64 for later visual analysis
+          if (!content.trim() || content.length < 50 || /no text|nothing|empty/i.test(content)) {
+            const base64 = buffer.toString("base64");
+            const imageType = this.detectImageType(buffer);
+            const mimeType = imageType === "png" ? "image/png" : "image/jpeg";
+            
+            content = `[IMAGE: ${name}]
+Type: ${mimeType}
+Size: ${Math.round(buffer.length / 1024)}KB
+Encoding: base64
+Note: This image has no extractable text. Image data is preserved for visual analysis.
+
+Base64 Data:
+data:${mimeType};base64,${base64}
+
+Vision API can analyze this image when queried.`;
           }
         } else if (this.isDocxFile(name, type)) {
           content = await extractDocxText(buffer);
@@ -173,6 +192,35 @@ export class ExtractionService {
     if (this.isPptxFile(name, type)) return "pptx";
     if (this.isTextFile(name, type)) return "text";
     return "unknown";
+  }
+
+  /**
+   * Detect image type from buffer header
+   */
+  private detectImageType(buffer: Buffer): "png" | "jpeg" {
+    // PNG signature: 89 50 4E 47
+    if (
+      buffer.length >= 4 &&
+      buffer[0] === 0x89 &&
+      buffer[1] === 0x50 &&
+      buffer[2] === 0x4e &&
+      buffer[3] === 0x47
+    ) {
+      return "png";
+    }
+
+    // JPEG signature: FF D8 FF
+    if (
+      buffer.length >= 3 &&
+      buffer[0] === 0xff &&
+      buffer[1] === 0xd8 &&
+      buffer[2] === 0xff
+    ) {
+      return "jpeg";
+    }
+
+    // Default to jpeg
+    return "jpeg";
   }
 }
 

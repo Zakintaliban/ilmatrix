@@ -117,6 +117,82 @@ Core rules:
   }
 
   /**
+   * Extract embedded images from material text
+   * Returns array of {type: "text"|"image_url", ...}
+   */
+  private extractImagesFromMaterial(materialText: string): any[] {
+    const content: any[] = [];
+    
+    // More precise regex that stops at end of base64, before any additional text
+    const imageMatches = materialText.matchAll(
+      /\[IMAGE:\s*([^\]]+?)\s*\][\s\S]*?Base64 Data:\s*(data:image\/[^;]+;base64,[A-Za-z0-9+/=\s]+?)(?=\n\n|\n[A-Z]|\nVision|\n$|$)/gm
+    );
+
+    let lastIndex = 0;
+    const images: Array<{ start: number; end: number; data: string; name: string }> = [];
+
+    for (const match of imageMatches) {
+      if (match.index !== undefined) {
+        // Clean up base64 string (remove any newlines/spaces/tabs)
+        let cleanBase64 = match[2].trim();
+        
+        // Remove all whitespace characters but preserve the data URI format
+        if (cleanBase64.startsWith('data:image/')) {
+          const [header, base64Part] = cleanBase64.split(',');
+          if (base64Part) {
+            // Clean only the base64 part, keep the header intact
+            const cleanedBase64Part = base64Part.replace(/[\s\r\n\t]+/g, '');
+            cleanBase64 = `${header},${cleanedBase64Part}`;
+          }
+        }
+        
+        images.push({
+          start: match.index,
+          end: match.index + match[0].length,
+          data: cleanBase64,
+          name: match[1].trim(),
+        });
+      }
+    }
+
+    // If no images, return text only
+    if (images.length === 0) {
+      return [{ type: "text", text: this.clampText(materialText) }];
+    }
+
+    // Build content array with text and images interleaved
+    for (let i = 0; i < images.length; i++) {
+      const img = images[i];
+      
+      // Add text before this image
+      if (img.start > lastIndex) {
+        const textSegment = materialText.slice(lastIndex, img.start).trim();
+        if (textSegment && textSegment !== "===== FILE: " + img.name + " =====") {
+          content.push({ type: "text", text: textSegment });
+        }
+      }
+
+      // Add image
+      content.push({
+        type: "image_url",
+        image_url: { url: img.data },
+      });
+
+      lastIndex = img.end;
+    }
+
+    // Add remaining text after last image
+    if (lastIndex < materialText.length) {
+      const textSegment = materialText.slice(lastIndex).trim();
+      if (textSegment) {
+        content.push({ type: "text", text: this.clampText(textSegment) });
+      }
+    }
+
+    return content;
+  }
+
+  /**
    * Make a chat completion request with timeout and rate limiting
    */
   private async makeRequest(params: any): Promise<string> {
@@ -127,10 +203,23 @@ Core rules:
     }
 
     return this.limiter(async () => {
+      // Check if any message contains images
+      const hasImages = params.messages?.some((msg: any) => {
+        if (Array.isArray(msg.content)) {
+          return msg.content.some((c: any) => c.type === "image_url");
+        }
+        return false;
+      });
+
+      // Use vision model if images are present
+      const model = hasImages 
+        ? "meta-llama/llama-4-scout-17b-16e-instruct" 
+        : config.groqModel;
+
       return withTimeout(
         () =>
           this.client.chat.completions.create({
-            model: config.groqModel,
+            model,
             messages: params.messages,
             temperature: params.temperature || 0.3,
             max_tokens: params.max_tokens || 1500,
@@ -206,27 +295,49 @@ ${this.clampText(params.materialText)}
   }
 
   /**
-   * Generate chat response
+   * Generate chat response with multimodal support
    */
   async generateChat(params: {
     materialText: string;
     messages: ChatMessage[];
   }): Promise<string> {
-    const contextMessage = params.materialText
-      ? `\nCONTEXT MATERIALS:\n---\n${this.clampText(
-          params.materialText
-        )}\n---\n`
-      : "";
-
-    const systemMessage = this.systemPrompt + contextMessage;
-
     try {
-      return await this.makeRequest({
-        messages: [
-          { role: "system", content: systemMessage },
-          ...params.messages,
-        ],
-      });
+      // Extract images from material if present
+      const materialContent = this.extractImagesFromMaterial(params.materialText);
+      
+      // Build messages with multimodal support
+      // System message must be plain text only
+      const systemMessage = this.systemPrompt + (params.materialText ? "\n\nContext materials will be provided in the next message." : "");
+      
+      // Build messages array
+      const messages: any[] = [
+        { role: "system", content: systemMessage }
+      ];
+      
+      // If we have material content, add it as a separate user message before the actual user messages
+      if (params.materialText && materialContent.length > 0) {
+        if (materialContent.some((c: any) => c.type === "image_url")) {
+          // Multimodal material - add as user message with images
+          messages.push({
+            role: "user", 
+            content: [
+              { type: "text", text: "Context materials:" },
+              ...materialContent
+            ]
+          });
+        } else {
+          // Text-only material - add as user message with text
+          messages.push({
+            role: "user",
+            content: `Context materials:\n---\n${this.clampText(params.materialText)}\n---`
+          });
+        }
+      }
+      
+      // Add actual user messages
+      messages.push(...params.messages);
+
+      return await this.makeRequest({ messages });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       return `I encountered an error while processing your chat: ${message}`;

@@ -1,8 +1,10 @@
 # ILMATRIX (Hono + Groq + Meta Llama)
 
-An AI study companion for university students. Core features:
+An AI study companion for university students with **multimodal AI capabilities**. Core features:
 
-- Upload course materials (PDF/TXT/Images## Storage & Retention
+- Upload course materials (PDF/DOCX/PPTX/TXT/Images) with **Vision API support**
+- **Image Analysis**: Query visual content using Groq Vision API (Llama 4 Scout)
+- **Smart Text Extraction**: OCR for images, preserve visual content for analysis## Storage & Retention
 
 ### What's Stored
 
@@ -35,9 +37,9 @@ An AI study companion for university students. Core features:
 Tech stack:
 
 - **Hono.js** (Node adapter) for API and static hosting
-- **Groq SDK** with Meta Llama models
+- **Groq SDK** with Meta Llama models (including Vision API for images)
 - **TypeScript** (ESM, NodeNext) with clean architecture
-- **Extraction**: pdfjs-dist (PDF), tesseract.js (OCR for images), JSZip (DOCX/PPTX)
+- **Extraction**: pdfjs-dist (PDF), Groq Vision API (OCR for images), JSZip (DOCX/PPTX)
 - **Tailwind CSS** (CDN)
 - **Netlify-ready** (functions + static publish)
 
@@ -114,9 +116,9 @@ Test files:
 Tech stack:
 
 - Hono.js (Node adapter) for API and static hosting
-- Groq SDK with Meta Llama models
+- Groq SDK with Meta Llama models (including Vision API for images)
 - TypeScript (ESM, NodeNext) with clean architecture
-- Extraction: pdfjs-dist (PDF), tesseract.js (OCR for images), JSZip (DOCX/PPTX)
+- Extraction: pdfjs-dist (PDF), Groq Vision API (OCR for images), JSZip (DOCX/PPTX)
 - Tailwind CSS (CDN)
 - Netlify-ready (functions + static publish)
 
@@ -337,7 +339,7 @@ curl -H "Content-Type: application/json" \
 ## Extraction
 
 - pdfjs-dist for PDFs (fonts/CMaps wired)
-- tesseract.js OCR for images (eng+ind → eng fallback)
+- Groq Vision API for images (multimodal LLM with context understanding)
 - JSZip for DOCX/PPTX (extracts text from XML)
 - Plain text files read directly
 

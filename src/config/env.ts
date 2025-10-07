@@ -21,8 +21,6 @@ export interface AppConfig {
 
   // File Processing
   pdfMaxPages: number;
-  ocrConcurrency: number;
-  ocrTimeoutMs: number;
 
   // Upload Configuration
   uploadMaxSizeBytes: number;
@@ -82,8 +80,6 @@ export const config: AppConfig = {
 
   // File Processing
   pdfMaxPages: getEnvNumber("PDF_MAX_PAGES", 200),
-  ocrConcurrency: Math.max(1, getEnvNumber("OCR_CONCURRENCY", 1)),
-  ocrTimeoutMs: getEnvNumber("OCR_TIMEOUT_MS", 30000),
 
   // Upload Configuration
   uploadMaxSizeBytes: 10 * 1024 * 1024, // 10MB
