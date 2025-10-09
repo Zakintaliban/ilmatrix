@@ -4,10 +4,10 @@ import { createLimiter, withTimeout } from "../utils/concurrency.js";
 
 /**
  * Groq Vision API implementation for image text extraction
- * Uses Llama 4 Scout/Maverick multimodal models for OCR and image understanding
+ * Uses Llama 4 Maverick multimodal models for OCR and image understanding
  */
 
-const VISION_MODEL = "meta-llama/llama-4-scout-17b-16e-instruct";
+const VISION_MODEL = "meta-llama/llama-4-maverick-17b-128e-instruct";
 const VISION_CONCURRENCY = Math.max(1, config.groqConcurrency);
 const visionLimiter = createLimiter(VISION_CONCURRENCY);
 

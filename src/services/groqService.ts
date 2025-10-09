@@ -213,7 +213,7 @@ Core rules:
 
       // Use vision model if images are present
       const model = hasImages 
-        ? "meta-llama/llama-4-scout-17b-16e-instruct" 
+        ? "meta-llama/llama-4-maverick-17b-128e-instruct" 
         : config.groqModel;
 
       return withTimeout(
