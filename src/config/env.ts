@@ -26,6 +26,15 @@ export interface AppConfig {
   uploadMaxSizeBytes: number;
   uploadsDir: string;
 
+  // Database Configuration
+  databaseUrl?: string;
+  databasePublicUrl?: string;
+  pgHost?: string;
+  pgPort?: string;
+  pgDatabase?: string;
+  pgUser?: string;
+  pgPassword?: string;
+
   // Environment Detection
   isNetlify: boolean;
   isDevelopment: boolean;
@@ -84,6 +93,15 @@ export const config: AppConfig = {
   // Upload Configuration
   uploadMaxSizeBytes: 10 * 1024 * 1024, // 10MB
   uploadsDir: process.env.NETLIFY ? "/tmp/uploads" : process.cwd() + "/uploads",
+
+  // Database Configuration
+  databaseUrl: process.env.DATABASE_URL,
+  databasePublicUrl: process.env.DATABASE_PUBLIC_URL,
+  pgHost: process.env.PGHOST,
+  pgPort: process.env.PGPORT,
+  pgDatabase: process.env.PGDATABASE,
+  pgUser: process.env.PGUSER,
+  pgPassword: process.env.PGPASSWORD,
 
   // Environment Detection
   isNetlify: !!process.env.NETLIFY,

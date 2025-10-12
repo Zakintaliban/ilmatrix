@@ -5,6 +5,8 @@ import { serveStatic } from "@hono/node-server/serve-static";
 import { createServer } from "node:net";
 import api, { stopBackgroundTasks } from "./routes.js";
 import config from "./config/env.js";
+import { initializeDatabase, testConnection, closeDatabase } from "./services/databaseService.js";
+import { validateDatabaseConfig } from "./config/database.js";
 
 /**
  * ILMATRIX server bootstrap with improved error handling and configuration
@@ -103,7 +105,7 @@ class IlmatrixServer {
    * Setup graceful shutdown handlers
    */
   private setupGracefulShutdown(): void {
-    const shutdown = (signal: string) => {
+    const shutdown = async (signal: string) => {
       console.log(
         `\n[ILMATRIX] Received ${signal}, shutting down gracefully...`
       );
@@ -113,6 +115,13 @@ class IlmatrixServer {
         console.log("[ILMATRIX] Background tasks stopped");
       } catch (error) {
         console.error("[ILMATRIX] Error stopping background tasks:", error);
+      }
+
+      try {
+        await closeDatabase();
+        console.log("[ILMATRIX] Database connection closed");
+      } catch (error) {
+        console.error("[ILMATRIX] Error closing database:", error);
       }
 
       if (this.server?.close) {
@@ -164,6 +173,21 @@ class IlmatrixServer {
         console.warn(
           "[ILMATRIX] Warning: GROQ_API_KEY not set in production environment"
         );
+      }
+
+      // Initialize database if configured
+      if (validateDatabaseConfig()) {
+        console.log("[ILMATRIX] Initializing database connection...");
+        initializeDatabase();
+        
+        const dbConnected = await testConnection();
+        if (dbConnected) {
+          console.log("[ILMATRIX] Database connection established");
+        } else {
+          console.warn("[ILMATRIX] Database connection test failed - continuing without database");
+        }
+      } else {
+        console.log("[ILMATRIX] No database configuration found - running without database");
       }
 
       // Find available port

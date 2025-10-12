@@ -4,6 +4,15 @@ import { uploadController } from "./controllers/uploadController.js";
 import { materialController } from "./controllers/materialController.js";
 import { aiController } from "./controllers/aiController.js";
 import { backgroundTaskService } from "./services/backgroundTaskService.js";
+import { 
+  registerUser, 
+  login, 
+  logout, 
+  getProfile, 
+  updateProfile, 
+  authMiddleware, 
+  optionalAuthMiddleware 
+} from "./controllers/authController.js";
 
 const api = new Hono();
 
@@ -19,8 +28,17 @@ api.get("/health", (c) =>
   })
 );
 
-// Upload endpoints
-api.post("/upload", (c) => uploadController.handleUpload(c));
+// Authentication endpoints (no auth required)
+api.post("/auth/register", registerUser);
+api.post("/auth/login", login);
+api.post("/auth/logout", logout);
+
+// Protected authentication endpoints
+api.get("/auth/profile", authMiddleware, getProfile);
+api.put("/auth/profile", authMiddleware, updateProfile);
+
+// Upload endpoints (optional auth)
+api.post("/upload", optionalAuthMiddleware, (c) => uploadController.handleUpload(c));
 
 // Material management endpoints
 api.get("/material/:id", (c) => materialController.getMaterial(c));

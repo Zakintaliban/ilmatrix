@@ -15,7 +15,10 @@
     "test:services": "tsx --test tests/services/**/*.test.ts",
     "test:smoke": "tsx --test --test-timeout=15000 tests/smoke.test.ts",
     "test:legacy": "tsx --test tests/smoke.test.ts --loader=tsx/esm backup/legacy/routes.ts",
-    "cleanup": "tsx -e \"import { backgroundTaskService } from './src/services/backgroundTaskService.js'; await backgroundTaskService.runCleanupNow(); process.exit(0);\""
+    "cleanup": "tsx -e \"import { backgroundTaskService } from './src/services/backgroundTaskService.js'; await backgroundTaskService.runCleanupNow(); process.exit(0);\"",
+    "migrate": "tsx src/scripts/migrate.ts",
+    "db:setup": "npm run migrate run",
+    "db:status": "npm run migrate status"
   },
   "keywords": [],
   "author": "",
@@ -23,14 +26,18 @@
   "description": "",
   "dependencies": {
     "@hono/node-server": "^1.19.1",
+    "bcryptjs": "^3.0.2",
     "dotenv": "^17.2.1",
     "groq-sdk": "^0.30.0",
     "hono": "^4.9.5",
     "jszip": "^3.10.1",
-    "pdfjs-dist": "^5.4.149"
+    "pdfjs-dist": "^5.4.149",
+    "pg": "^8.16.3"
   },
   "devDependencies": {
+    "@types/bcryptjs": "^2.4.6",
     "@types/node": "^24.3.0",
+    "@types/pg": "^8.15.5",
     "nodemon": "^3.1.10",
     "tsx": "^4.20.5",
     "typescript": "^5.9.2"
