@@ -24,7 +24,7 @@ export async function sendVerificationEmail(data: EmailVerificationData): Promis
     return false;
   }
 
-  const verificationUrl = `${config.baseUrl}/verify-email?token=${data.token}`;
+  const verificationUrl = `${config.baseUrl}/api/auth/verify-email?token=${data.token}`;
   
   const emailData = {
     from: `ILMATRIX <${config.emailFromAddress}>`,
