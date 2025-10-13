@@ -94,6 +94,14 @@ export async function login(c: Context) {
     // Set session cookie
     c.header('Set-Cookie', `session=${sessionToken}; HttpOnly; Secure; SameSite=Strict; Max-Age=${7 * 24 * 60 * 60}; Path=/`);
     
+    // Reset guest usage after successful login
+    try {
+      const { resetGuestUsage } = await import('../middleware/guestLimit.js');
+      resetGuestUsage(c);
+    } catch (error) {
+      console.warn('Failed to reset guest usage:', error);
+    }
+    
     return c.json({
       message: 'Login successful',
       user: {

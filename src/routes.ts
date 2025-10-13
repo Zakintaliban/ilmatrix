@@ -1,5 +1,6 @@
 import { Hono } from "hono";
 import { rateLimitMiddleware } from "./middleware/rateLimit.js";
+import { guestLimitMiddleware, strictAuthMiddleware } from "./middleware/guestLimit.js";
 import { uploadController } from "./controllers/uploadController.js";
 import { materialController } from "./controllers/materialController.js";
 import { aiController } from "./controllers/aiController.js";
@@ -51,25 +52,25 @@ api.post("/material/:id/remove", (c) =>
 );
 api.delete("/material/:id", (c) => materialController.deleteMaterial(c));
 
-// AI feature endpoints
-api.post("/explain", (c) => aiController.handleAIRequest(c, "explain"));
-api.post("/quiz", (c) => aiController.handleAIRequest(c, "quiz"));
-api.post("/forum", (c) => aiController.handleAIRequest(c, "forum"));
-api.post("/exam", (c) => aiController.handleAIRequest(c, "exam"));
-api.post("/chat", (c) => aiController.handleChat(c));
+// AI feature endpoints (with guest usage limits)
+api.post("/explain", guestLimitMiddleware, (c) => aiController.handleAIRequest(c, "explain"));
+api.post("/quiz", guestLimitMiddleware, (c) => aiController.handleAIRequest(c, "quiz"));
+api.post("/forum", guestLimitMiddleware, (c) => aiController.handleAIRequest(c, "forum"));
+api.post("/exam", guestLimitMiddleware, (c) => aiController.handleAIRequest(c, "exam"));
+api.post("/chat", guestLimitMiddleware, (c) => aiController.handleChat(c));
 
-// MCQ trainer endpoints
-api.post("/quiz/trainer/mcq/start", (c) => aiController.generateMCQ(c));
-api.post("/quiz/trainer/mcq/score", (c) => aiController.scoreMCQ(c));
+// MCQ trainer endpoints (with guest usage limits)
+api.post("/quiz/trainer/mcq/start", guestLimitMiddleware, (c) => aiController.generateMCQ(c));
+api.post("/quiz/trainer/mcq/score", (c) => aiController.scoreMCQ(c)); // No limit for scoring
 
-// Flashcards endpoint
-api.post("/flashcards", (c) => aiController.generateFlashcards(c));
+// Flashcards endpoint (with guest usage limits)
+api.post("/flashcards", guestLimitMiddleware, (c) => aiController.generateFlashcards(c));
 
-// Dialogue endpoints (placeholder)
-api.post("/dialogue/start", (c) => aiController.startDialogue(c));
-api.post("/dialogue/step", (c) => aiController.stepDialogue(c));
-api.post("/dialogue/hint", (c) => aiController.hintDialogue(c));
-api.post("/dialogue/feedback", (c) => aiController.feedbackDialogue(c));
+// Dialogue endpoints (with guest usage limits)
+api.post("/dialogue/start", guestLimitMiddleware, (c) => aiController.startDialogue(c));
+api.post("/dialogue/step", guestLimitMiddleware, (c) => aiController.stepDialogue(c));
+api.post("/dialogue/hint", guestLimitMiddleware, (c) => aiController.hintDialogue(c));
+api.post("/dialogue/feedback", guestLimitMiddleware, (c) => aiController.feedbackDialogue(c));
 
 // Admin/debug endpoints
 api.post("/admin/cleanup", async (c) => {

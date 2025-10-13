@@ -1,0 +1,203 @@
+import crypto from 'crypto';
+import { Context } from 'hono';
+
+interface GuestSession {
+  fingerprint: string;
+  usageCount: number;
+  firstAccess: Date;
+  lastAccess: Date;
+  ipAddress: string;
+  userAgent: string;
+}
+
+class GuestSessionManager {
+  private sessions = new Map<string, GuestSession>();
+  private readonly MAX_USAGE = 5;
+  private readonly SESSION_EXPIRY_HOURS = 24;
+
+  /**
+   * Generate unique fingerprint for guest identification
+   */
+  generateFingerprint(c: Context): string {
+    const ipAddress = this.getClientIP(c);
+    const userAgent = c.req.header('user-agent') || 'unknown';
+    
+    // Create hash from IP + User-Agent for privacy
+    const data = `${ipAddress}:${userAgent}`;
+    return crypto.createHash('sha256').update(data).digest('hex').substring(0, 16);
+  }
+
+  /**
+   * Get client IP address with proxy support
+   */
+  private getClientIP(c: Context): string {
+    // Check for forwarded headers (Railway, Cloudflare, etc.)
+    const forwarded = c.req.header('x-forwarded-for');
+    if (forwarded) {
+      return forwarded.split(',')[0].trim();
+    }
+    
+    const realIP = c.req.header('x-real-ip');
+    if (realIP) {
+      return realIP;
+    }
+    
+    // Fallback to connection remote address
+    return c.req.header('x-forwarded-for') || 'unknown';
+  }
+
+  /**
+   * Get current usage count for a guest
+   */
+  getUsageCount(fingerprint: string): number {
+    const session = this.sessions.get(fingerprint);
+    
+    if (!session) {
+      return 0;
+    }
+    
+    // Check if session is expired
+    if (this.isSessionExpired(session)) {
+      this.sessions.delete(fingerprint);
+      return 0;
+    }
+    
+    return session.usageCount;
+  }
+
+  /**
+   * Increment usage count for a guest
+   */
+  incrementUsage(c: Context): { fingerprint: string; newCount: number; remaining: number } {
+    const fingerprint = this.generateFingerprint(c);
+    const ipAddress = this.getClientIP(c);
+    const userAgent = c.req.header('user-agent') || 'unknown';
+    
+    let session = this.sessions.get(fingerprint);
+    
+    if (!session || this.isSessionExpired(session)) {
+      // Create new session
+      session = {
+        fingerprint,
+        usageCount: 0,
+        firstAccess: new Date(),
+        lastAccess: new Date(),
+        ipAddress,
+        userAgent
+      };
+    }
+    
+    // Increment usage
+    session.usageCount++;
+    session.lastAccess = new Date();
+    
+    // Update session
+    this.sessions.set(fingerprint, session);
+    
+    return {
+      fingerprint,
+      newCount: session.usageCount,
+      remaining: Math.max(0, this.MAX_USAGE - session.usageCount)
+    };
+  }
+
+  /**
+   * Check if guest has reached usage limit
+   */
+  isLimitReached(fingerprint: string): boolean {
+    const usageCount = this.getUsageCount(fingerprint);
+    return usageCount >= this.MAX_USAGE;
+  }
+
+  /**
+   * Get usage stats for a guest
+   */
+  getUsageStats(c: Context): { current: number; max: number; remaining: number; fingerprint: string } {
+    const fingerprint = this.generateFingerprint(c);
+    const current = this.getUsageCount(fingerprint);
+    
+    return {
+      current,
+      max: this.MAX_USAGE,
+      remaining: Math.max(0, this.MAX_USAGE - current),
+      fingerprint
+    };
+  }
+
+  /**
+   * Reset usage for a guest (called after successful login)
+   */
+  resetUsage(fingerprint: string): void {
+    this.sessions.delete(fingerprint);
+  }
+
+  /**
+   * Check if session is expired
+   */
+  private isSessionExpired(session: GuestSession): boolean {
+    const now = new Date();
+    const expiryTime = new Date(session.lastAccess);
+    expiryTime.setHours(expiryTime.getHours() + this.SESSION_EXPIRY_HOURS);
+    
+    return now > expiryTime;
+  }
+
+  /**
+   * Cleanup expired sessions
+   */
+  cleanupExpiredSessions(): { cleaned: number; total: number } {
+    const beforeCount = this.sessions.size;
+    let cleanedCount = 0;
+    
+    for (const [fingerprint, session] of this.sessions.entries()) {
+      if (this.isSessionExpired(session)) {
+        this.sessions.delete(fingerprint);
+        cleanedCount++;
+      }
+    }
+    
+    console.log(`Guest sessions cleanup: removed ${cleanedCount} expired sessions, ${this.sessions.size} remaining`);
+    
+    return {
+      cleaned: cleanedCount,
+      total: this.sessions.size
+    };
+  }
+
+  /**
+   * Get all session statistics (for monitoring)
+   */
+  getStats(): {
+    totalSessions: number;
+    activeSessions: number;
+    expiredSessions: number;
+    usageDistribution: Record<number, number>;
+  } {
+    let activeSessions = 0;
+    let expiredSessions = 0;
+    const usageDistribution: Record<number, number> = {};
+    
+    for (const session of this.sessions.values()) {
+      if (this.isSessionExpired(session)) {
+        expiredSessions++;
+      } else {
+        activeSessions++;
+        const usage = session.usageCount;
+        usageDistribution[usage] = (usageDistribution[usage] || 0) + 1;
+      }
+    }
+    
+    return {
+      totalSessions: this.sessions.size,
+      activeSessions,
+      expiredSessions,
+      usageDistribution
+    };
+  }
+}
+
+// Export singleton instance
+export const guestSessionService = new GuestSessionManager();
+
+// Export types for use in other modules
+export type { GuestSession };
