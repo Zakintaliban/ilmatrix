@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Email Verified - ILMATRIX</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🧠</text></svg>">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        :root {
+            --primary: #0f0e85;
+            --primary-light: #1e1ebf;
+            --secondary: #e44c99;
+            --success: #10b981;
+        }
+        
+        .gradient-bg {
+            background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+        }
+        
+        .success-icon {
+            animation: scaleIn 0.6s ease-out;
+        }
+        
+        @keyframes scaleIn {
+            0% { transform: scale(0); }
+            50% { transform: scale(1.1); }
+            100% { transform: scale(1); }
+        }
+        
+        .fade-in {
+            animation: fadeIn 0.8s ease-out;
+        }
+        
+        @keyframes fadeIn {
+            0% { opacity: 0; transform: translateY(20px); }
+            100% { opacity: 1; transform: translateY(0); }
+        }
+        
+        .countdown {
+            animation: pulse 1s infinite;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+        }
+    </style>
+</head>
+<body class="min-h-screen gradient-bg flex items-center justify-center p-4">
+    <div class="max-w-md w-full">
+        <!-- Success Card -->
+        <div class="bg-white rounded-2xl shadow-2xl p-8 text-center fade-in">
+            <!-- Success Icon -->
+            <div class="success-icon mb-6">
+                <div class="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto">
+                    <svg class="w-10 h-10 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                    </svg>
+                </div>
+            </div>
+            
+            <!-- Title -->
+            <h1 class="text-3xl font-bold text-gray-900 mb-4">
+                🎉 Email Verified!
+            </h1>
+            
+            <!-- Subtitle -->
+            <p class="text-gray-600 mb-6 leading-relaxed">
+                Welcome to <span class="font-semibold gradient-bg bg-clip-text text-transparent">ILMATRIX</span>! 
+                Your account has been successfully verified and is ready to use.
+            </p>
+            
+            <!-- User Info -->
+            <div class="bg-gray-50 rounded-lg p-4 mb-6 text-left">
+                <div class="flex items-center mb-2">
+                    <div class="w-2 h-2 bg-green-500 rounded-full mr-3"></div>
+                    <span class="text-sm text-gray-600">Account Status: <span class="text-green-600 font-medium">Verified ✓</span></span>
+                </div>
+                <div class="flex items-center">
+                    <div class="w-2 h-2 bg-blue-500 rounded-full mr-3"></div>
+                    <span class="text-sm text-gray-600">Ready to start studying!</span>
+                </div>
+            </div>
+            
+            <!-- Redirect Message -->
+            <div class="text-sm text-gray-500 mb-6">
+                <p>Redirecting to login page in <span id="countdown" class="countdown font-bold text-blue-600">5</span> seconds...</p>
+            </div>
+            
+            <!-- Action Buttons -->
+            <div class="space-y-3">
+                <button onclick="redirectToLogin()" 
+                        class="w-full gradient-bg text-white font-medium py-3 px-6 rounded-lg hover:opacity-90 transition-all duration-200 transform hover:scale-105">
+                    Go to Login Now
+                </button>
+                <a href="/app.html" 
+                   class="block w-full text-gray-600 font-medium py-2 px-6 border border-gray-300 rounded-lg hover:bg-gray-50 transition-all duration-200">
+                    Explore ILMATRIX
+                </a>
+            </div>
+        </div>
+        
+        <!-- Footer -->
+        <div class="text-center mt-6">
+            <p class="text-white/80 text-sm">
+                © 2025 ILMATRIX - Your AI Study Companion
+            </p>
+        </div>
+    </div>
+
+    <script>
+        let countdown = 5;
+        const countdownElement = document.getElementById('countdown');
+        
+        function updateCountdown() {
+            countdownElement.textContent = countdown;
+            countdown--;
+            
+            if (countdown < 0) {
+                redirectToLogin();
+            }
+        }
+        
+        function redirectToLogin() {
+            window.location.href = '/login.html';
+        }
+        
+        // Start countdown
+        const countdownInterval = setInterval(updateCountdown, 1000);
+        
+        // Clear interval when page is closed
+        window.addEventListener('beforeunload', () => {
+            clearInterval(countdownInterval);
+        });
+    </script>
+</body>
+</html>
