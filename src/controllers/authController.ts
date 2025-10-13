@@ -6,6 +6,8 @@ import {
   logoutUser, 
   updateUser, 
   getUserById,
+  verifyEmail,
+  resendVerificationEmail,
   CreateUserData,
   LoginCredentials 
 } from '../services/authService.js';
@@ -16,27 +18,39 @@ import {
 export async function registerUser(c: Context) {
   try {
     const body = await c.req.json();
-    const { email, password, name } = body as CreateUserData;
+    const { email, username, password, name, birth_date, country } = body as CreateUserData;
     
     // Basic validation
-    if (!email || !password || !name) {
-      return c.json({ error: 'Email, password, and name are required' }, 400);
+    if (!email || !username || !password || !name || !birth_date || !country) {
+      return c.json({ error: 'All fields are required: email, username, password, name, birth_date, country' }, 400);
     }
     
     if (password.length < 8) {
       return c.json({ error: 'Password must be at least 8 characters long' }, 400);
     }
     
+    // Validate username format (alphanumeric + underscore, 3-20 chars)
+    if (!/^[a-zA-Z0-9_]{3,20}$/.test(username)) {
+      return c.json({ error: 'Username must be 3-20 characters and contain only letters, numbers, and underscores' }, 400);
+    }
+    
+    // Validate birth date format
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(birth_date)) {
+      return c.json({ error: 'Birth date must be in YYYY-MM-DD format' }, 400);
+    }
+    
     // Create user
-    const user = await createUser({ email, password, name });
+    const user = await createUser({ email, username, password, name, birth_date, country });
     
     return c.json({ 
-      message: 'User created successfully',
+      message: 'User created successfully. Please check your email for verification.',
       user: {
         id: user.id,
         email: user.email,
+        username: user.username,
         name: user.name,
-        created_at: user.created_at
+        created_at: user.created_at,
+        email_verified: user.email_verified
       }
     }, 201);
     
@@ -252,6 +266,75 @@ export async function optionalAuthMiddleware(c: Context, next: () => Promise<voi
     await next();
   }
 }
+
+/**
+ * Verify email with token
+ */
+export async function verifyEmailController(c: Context) {
+  try {
+    const token = c.req.query('token');
+    
+    if (!token) {
+      return c.json({ error: 'Verification token is required' }, 400);
+    }
+    
+    const user = await verifyEmail(token);
+    
+    if (!user) {
+      return c.json({ error: 'Invalid or expired verification token' }, 400);
+    }
+    
+    return c.json({
+      message: 'Email verified successfully! Welcome to ILMATRIX.',
+      user: {
+        id: user.id,
+        email: user.email,
+        username: user.username,
+        name: user.name,
+        email_verified: user.email_verified
+      }
+    });
+    
+  } catch (error) {
+    console.error('Email verification error:', error);
+    return c.json({ error: 'Email verification failed' }, 500);
+  }
+}
+
+/**
+ * Resend verification email
+ */
+export async function resendVerificationController(c: Context) {
+  try {
+    const body = await c.req.json();
+    const { email } = body;
+    
+    if (!email) {
+      return c.json({ error: 'Email is required' }, 400);
+    }
+    
+    const sent = await resendVerificationEmail(email);
+    
+    if (sent) {
+      return c.json({ message: 'Verification email sent successfully' });
+    } else {
+      return c.json({ message: 'Email service not configured, but user account is valid' });
+    }
+    
+  } catch (error) {
+    console.error('Resend verification error:', error);
+    
+    if (error instanceof Error) {
+      if (error.message.includes('not found') || error.message.includes('already verified')) {
+        return c.json({ error: error.message }, 400);
+      }
+    }
+    
+    return c.json({ error: 'Failed to resend verification email' }, 500);
+  }
+}
+
+
 
 /**
  * Extract session token from request (cookie or header)

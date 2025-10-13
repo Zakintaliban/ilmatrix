@@ -10,6 +10,8 @@ import {
   logout, 
   getProfile, 
   updateProfile, 
+  verifyEmailController,
+  resendVerificationController,
   authMiddleware, 
   optionalAuthMiddleware 
 } from "./controllers/authController.js";
@@ -32,6 +34,8 @@ api.get("/health", (c) =>
 api.post("/auth/register", registerUser);
 api.post("/auth/login", login);
 api.post("/auth/logout", logout);
+api.get("/auth/verify-email", verifyEmailController);
+api.post("/auth/resend-verification", resendVerificationController);
 
 // Protected authentication endpoints
 api.get("/auth/profile", authMiddleware, getProfile);

@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" type="image/svg+xml" href="./logo.svg" />
+    <title>ILMATRIX - Email Verification</title>
+    
+    <!-- Tailwind CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              primary: "#0f0e85",
+              secondary: "#e44c99",
+              tertiary: "#1b612f",
+            },
+          },
+        },
+      };
+    </script>
+    
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+        }
+    </style>
+</head>
+<body class="bg-gradient-to-b from-slate-50 to-slate-100 dark:from-black dark:to-black text-slate-900 dark:text-slate-100 min-h-screen antialiased">
+    <div class="min-h-screen flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
+        <div class="max-w-md w-full space-y-8">
+            <!-- Header -->
+            <div class="text-center">
+                <a href="/" class="text-4xl font-bold text-primary dark:text-white tracking-tight">ILMATRIX</a>
+                <h2 class="mt-6 text-3xl font-extrabold text-gray-900 dark:text-white">
+                    Email Verification
+                </h2>
+            </div>
+
+            <!-- Content -->
+            <div class="bg-white dark:bg-gray-800 shadow-lg rounded-lg p-8">
+                <!-- Loading State -->
+                <div id="loading-state" class="text-center">
+                    <div class="inline-block w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin mb-4"></div>
+                    <p class="text-gray-600 dark:text-gray-400">Verifying your email...</p>
+                </div>
+
+                <!-- Success State -->
+                <div id="success-state" class="hidden text-center">
+                    <div class="w-16 h-16 bg-green-100 dark:bg-green-900/20 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <svg class="w-8 h-8 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                        </svg>
+                    </div>
+                    <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-2">Email Verified!</h3>
+                    <p class="text-gray-600 dark:text-gray-400 mb-6">Your account has been successfully verified. Welcome to ILMATRIX!</p>
+                    <a href="/app.html" 
+                       class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-lg text-white bg-primary hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary transition-colors">
+                        Continue to App
+                    </a>
+                </div>
+
+                <!-- Error State -->
+                <div id="error-state" class="hidden text-center">
+                    <div class="w-16 h-16 bg-red-100 dark:bg-red-900/20 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <svg class="w-8 h-8 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                        </svg>
+                    </div>
+                    <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-2">Verification Failed</h3>
+                    <p id="error-message" class="text-gray-600 dark:text-gray-400 mb-6">The verification link is invalid or has expired.</p>
+                    
+                    <div class="space-y-3">
+                        <div>
+                            <label for="resend-email" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                Enter your email to resend verification:
+                            </label>
+                            <input type="email" id="resend-email" 
+                                   class="block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary">
+                        </div>
+                        <button id="resend-btn" 
+                                class="w-full flex justify-center py-2 px-4 border border-transparent rounded-lg text-sm font-medium text-white bg-secondary hover:bg-secondary/90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-secondary disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
+                            <span class="loading hidden inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></span>
+                            Resend Verification Email
+                        </button>
+                        <a href="/login.html" 
+                           class="inline-flex items-center text-sm text-primary hover:text-primary/80 transition-colors">
+                            Back to Login
+                        </a>
+                    </div>
+                </div>
+
+                <!-- Resend Success -->
+                <div id="resend-success" class="hidden bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4 mt-4">
+                    <p class="text-sm text-green-700 dark:text-green-400">
+                        Verification email sent! Please check your inbox and click the verification link.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Dark mode support
+        (function () {
+            const root = document.documentElement;
+            const getCookie = (name) => {
+                const parts = document.cookie.split("; ").filter(Boolean);
+                const hit = parts.find((p) => p.startsWith(name + "="));
+                return hit ? decodeURIComponent(hit.split("=").slice(1).join("=")) : null;
+            };
+            const getSaved = () => {
+                let v = null;
+                try { v = localStorage.getItem("theme"); } catch {}
+                if (!v) v = getCookie("theme");
+                return v;
+            };
+            const saved = getSaved();
+            const prefersDark = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
+            const initial = saved ? saved : prefersDark ? "dark" : "light";
+            root.classList.toggle("dark", initial === "dark");
+        })();
+
+        class EmailVerificationManager {
+            constructor() {
+                this.loadingState = document.getElementById('loading-state');
+                this.successState = document.getElementById('success-state');
+                this.errorState = document.getElementById('error-state');
+                this.resendSuccess = document.getElementById('resend-success');
+                this.errorMessage = document.getElementById('error-message');
+                this.resendBtn = document.getElementById('resend-btn');
+                this.resendEmail = document.getElementById('resend-email');
+                
+                this.init();
+            }
+
+            async init() {
+                // Get token from URL
+                const urlParams = new URLSearchParams(window.location.search);
+                const token = urlParams.get('token');
+                
+                if (!token) {
+                    this.showError('No verification token provided');
+                    return;
+                }
+                
+                await this.verifyEmail(token);
+                this.attachEventListeners();
+            }
+
+            attachEventListeners() {
+                if (this.resendBtn) {
+                    this.resendBtn.addEventListener('click', () => this.resendVerification());
+                }
+                
+                if (this.resendEmail) {
+                    this.resendEmail.addEventListener('keydown', (e) => {
+                        if (e.key === 'Enter') {
+                            this.resendVerification();
+                        }
+                    });
+                }
+            }
+
+            async verifyEmail(token) {
+                try {
+                    const response = await fetch(`/api/auth/verify-email?token=${encodeURIComponent(token)}`);
+                    const data = await response.json();
+                    
+                    if (response.ok) {
+                        this.showSuccess();
+                    } else {
+                        this.showError(data.error || 'Verification failed');
+                    }
+                } catch (error) {
+                    console.error('Verification error:', error);
+                    this.showError('Network error. Please try again.');
+                }
+            }
+
+            async resendVerification() {
+                const email = this.resendEmail.value.trim();
+                
+                if (!email) {
+                    alert('Please enter your email address');
+                    return;
+                }
+                
+                this.setResendLoading(true);
+                this.resendSuccess.classList.add('hidden');
+                
+                try {
+                    const response = await fetch('/api/auth/resend-verification', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({ email }),
+                    });
+                    
+                    const data = await response.json();
+                    
+                    if (response.ok) {
+                        this.resendSuccess.classList.remove('hidden');
+                        this.resendEmail.value = '';
+                    } else {
+                        alert(data.error || 'Failed to resend verification email');
+                    }
+                } catch (error) {
+                    console.error('Resend error:', error);
+                    alert('Network error. Please try again.');
+                } finally {
+                    this.setResendLoading(false);
+                }
+            }
+
+            showSuccess() {
+                this.loadingState.classList.add('hidden');
+                this.successState.classList.remove('hidden');
+                this.errorState.classList.add('hidden');
+            }
+
+            showError(message) {
+                this.loadingState.classList.add('hidden');
+                this.successState.classList.add('hidden');
+                this.errorState.classList.remove('hidden');
+                this.errorMessage.textContent = message;
+            }
+
+            setResendLoading(isLoading) {
+                const loadingSpinner = this.resendBtn.querySelector('.loading');
+                
+                if (isLoading) {
+                    this.resendBtn.disabled = true;
+                    loadingSpinner.classList.remove('hidden');
+                } else {
+                    this.resendBtn.disabled = false;
+                    loadingSpinner.classList.add('hidden');
+                }
+            }
+        }
+
+        // Initialize when page loads
+        document.addEventListener('DOMContentLoaded', () => {
+            new EmailVerificationManager();
+        });
+    </script>
+</body>
+</html>

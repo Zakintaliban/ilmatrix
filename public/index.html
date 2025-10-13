@@ -542,6 +542,24 @@
           });
         }
       })();
+
+      // Authentication redirect logic
+      (async function() {
+        try {
+          const response = await fetch('/api/auth/profile', {
+            credentials: 'include'
+          });
+          
+          if (response.ok) {
+            // User is logged in, redirect to app
+            window.location.href = '/app.html';
+          }
+          // If not logged in, stay on current page (index.html will show login option)
+        } catch (error) {
+          // If auth check fails, user can still access the site
+          console.log('Auth check failed, showing public site');
+        }
+      })();
     </script>
   </body>
 </html>

@@ -35,6 +35,11 @@ export interface AppConfig {
   pgUser?: string;
   pgPassword?: string;
 
+  // Email Configuration
+  resendApiKey?: string;
+  emailFromAddress?: string;
+  baseUrl: string;
+
   // Environment Detection
   isNetlify: boolean;
   isDevelopment: boolean;
@@ -102,6 +107,11 @@ export const config: AppConfig = {
   pgDatabase: process.env.PGDATABASE,
   pgUser: process.env.PGUSER,
   pgPassword: process.env.PGPASSWORD,
+
+  // Email Configuration
+  resendApiKey: process.env.RESEND_API_KEY,
+  emailFromAddress: process.env.EMAIL_FROM_ADDRESS || "noreply@ilmatrix.com",
+  baseUrl: process.env.BASE_URL || "http://localhost:8787",
 
   // Environment Detection
   isNetlify: !!process.env.NETLIFY,

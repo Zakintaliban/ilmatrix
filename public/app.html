@@ -638,6 +638,27 @@
               >
             </nav>
             <div class="flex items-center gap-2">
+              <!-- User Info (shown when logged in) -->
+              <div id="userInfo" class="hidden items-center gap-2">
+                <span id="userName" class="text-xs sm:text-sm text-white/90"></span>
+                <button
+                  id="btnLogout"
+                  class="text-xs sm:text-sm bg-red-600 hover:bg-red-700 transition text-white px-3 py-2 rounded-md"
+                  title="Logout"
+                >
+                  Logout
+                </button>
+              </div>
+              
+              <!-- Login button (shown when not logged in) -->
+              <a
+                id="btnLogin"
+                href="/login.html"
+                class="text-xs sm:text-sm bg-green-600 hover:bg-green-700 transition text-white px-3 py-2 rounded-md"
+              >
+                Login
+              </a>
+              
               <button
                 id="btnHealth"
                 class="text-xs sm:text-sm bg-secondary hover:bg-pink-500 transition text-white px-3 py-2 rounded-md"
@@ -3877,6 +3898,96 @@
           }
         });
       }
+
+      // Authentication Management
+      class AuthManager {
+        constructor() {
+          this.userInfo = document.getElementById('userInfo');
+          this.userName = document.getElementById('userName');
+          this.btnLogin = document.getElementById('btnLogin');
+          this.btnLogout = document.getElementById('btnLogout');
+          
+          this.init();
+        }
+
+        async init() {
+          await this.checkAuthStatus();
+          this.attachEventListeners();
+        }
+
+        attachEventListeners() {
+          if (this.btnLogout) {
+            this.btnLogout.addEventListener('click', () => this.logout());
+          }
+        }
+
+        async checkAuthStatus() {
+          try {
+            const response = await fetch('/api/auth/profile', {
+              credentials: 'include' // Include cookies
+            });
+            
+            if (response.ok) {
+              const data = await response.json();
+              this.showUserInfo(data.user);
+            } else {
+              this.showLoginButton();
+            }
+          } catch (error) {
+            console.error('Auth check failed:', error);
+            this.showLoginButton();
+          }
+        }
+
+        showUserInfo(user) {
+          if (this.userName) {
+            this.userName.textContent = user.name || user.email;
+          }
+          if (this.userInfo) {
+            this.userInfo.classList.remove('hidden');
+            this.userInfo.classList.add('flex');
+          }
+          if (this.btnLogin) {
+            this.btnLogin.classList.add('hidden');
+          }
+        }
+
+        showLoginButton() {
+          if (this.userInfo) {
+            this.userInfo.classList.add('hidden');
+            this.userInfo.classList.remove('flex');
+          }
+          if (this.btnLogin) {
+            this.btnLogin.classList.remove('hidden');
+          }
+        }
+
+        async logout() {
+          try {
+            const response = await fetch('/api/auth/logout', {
+              method: 'POST',
+              credentials: 'include'
+            });
+            
+            if (response.ok) {
+              // Redirect to login page after successful logout
+              window.location.href = '/login.html';
+            } else {
+              console.error('Logout failed');
+              // Still redirect to login page even if logout API fails
+              window.location.href = '/login.html';
+            }
+          } catch (error) {
+            console.error('Logout error:', error);
+            // Redirect to login page even on error
+            window.location.href = '/login.html';
+          }
+        }
+      }
+
+      // Initialize auth manager when page loads
+      new AuthManager();
+      
     </script>
   </body>
 </html>
