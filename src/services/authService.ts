@@ -10,11 +10,17 @@ export interface User {
   name: string;
   birth_date?: Date;
   country?: string;
+  phone?: string;
+  bio?: string;
   email_verified: boolean;
   created_at: Date;
   updated_at: Date;
   is_active: boolean;
   last_login?: Date;
+}
+
+export interface UserWithPassword extends User {
+  password: string;
 }
 
 export interface UserSession {
@@ -91,7 +97,7 @@ export async function createUser(userData: CreateUserData): Promise<User> {
   const result = await query<User>(
     `INSERT INTO users (email, username, password_hash, name, birth_date, country, email_verification_token, email_verification_expires)
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-     RETURNING id, email, username, name, birth_date, country, email_verified, created_at, updated_at, is_active, last_login`,
+     RETURNING id, email, username, name, birth_date, country, phone, bio, email_verified, created_at, updated_at, is_active, last_login`,
     [email.toLowerCase(), username.toLowerCase(), passwordHash, name, birth_date, country, emailVerificationToken, emailVerificationExpires]
   );
   
@@ -148,7 +154,7 @@ export async function loginUser(
       `UPDATE users 
        SET last_login = NOW()
        WHERE id = $1
-       RETURNING id, email, username, name, birth_date, country, email_verified, created_at, updated_at, is_active, last_login`,
+       RETURNING id, email, username, name, birth_date, country, phone, bio, email_verified, created_at, updated_at, is_active, last_login`,
       [userWithPassword.id]
     );
     
@@ -178,7 +184,7 @@ export async function loginUser(
  */
 export async function getUserBySessionToken(sessionToken: string): Promise<User | null> {
   const result = await query<User & { session_expires_at: Date }>(
-    `SELECT u.id, u.email, u.username, u.name, u.birth_date, u.country, u.email_verified, u.created_at, u.updated_at, u.is_active, u.last_login,
+    `SELECT u.id, u.email, u.username, u.name, u.birth_date, u.country, u.phone, u.bio, u.email_verified, u.created_at, u.updated_at, u.is_active, u.last_login,
             s.expires_at as session_expires_at
      FROM users u
      JOIN user_sessions s ON u.id = s.user_id
@@ -234,7 +240,7 @@ export async function cleanupExpiredSessions(): Promise<number> {
  */
 export async function getUserById(userId: string): Promise<User | null> {
   const result = await query<User>(
-    'SELECT id, email, username, name, birth_date, country, email_verified, created_at, updated_at, is_active, last_login FROM users WHERE id = $1 AND is_active = true',
+    'SELECT id, email, username, name, birth_date, country, phone, bio, email_verified, created_at, updated_at, is_active, last_login FROM users WHERE id = $1 AND is_active = true',
     [userId]
   );
   
@@ -242,9 +248,26 @@ export async function getUserById(userId: string): Promise<User | null> {
 }
 
 /**
+ * Get user by ID with password hash (for password verification)
+ */
+export async function getUserByIdWithPassword(userId: string): Promise<UserWithPassword | null> {
+  const result = await query<UserWithPassword & { password_hash: string }>(
+    'SELECT id, email, username, name, birth_date, country, phone, bio, email_verified, created_at, updated_at, is_active, last_login, password_hash FROM users WHERE id = $1 AND is_active = true',
+    [userId]
+  );
+  
+  if (result.rows.length === 0) {
+    return null;
+  }
+  
+  const { password_hash, ...user } = result.rows[0];
+  return { ...user, password: password_hash };
+}
+
+/**
  * Update user information
  */
-export async function updateUser(userId: string, updates: Partial<Pick<User, 'name' | 'email'>>): Promise<User> {
+export async function updateUser(userId: string, updates: Partial<Pick<User, 'name' | 'email' | 'phone' | 'bio'> & { password?: string }>): Promise<User> {
   const fields: string[] = [];
   const values: any[] = [];
   let paramIndex = 1;
@@ -259,6 +282,21 @@ export async function updateUser(userId: string, updates: Partial<Pick<User, 'na
     values.push(updates.email.toLowerCase());
   }
   
+  if (updates.phone !== undefined) {
+    fields.push(`phone = $${paramIndex++}`);
+    values.push(updates.phone);
+  }
+  
+  if (updates.bio !== undefined) {
+    fields.push(`bio = $${paramIndex++}`);
+    values.push(updates.bio);
+  }
+  
+  if (updates.password !== undefined) {
+    fields.push(`password_hash = $${paramIndex++}`);
+    values.push(updates.password);
+  }
+  
   if (fields.length === 0) {
     throw new Error('No fields to update');
   }
@@ -267,9 +305,9 @@ export async function updateUser(userId: string, updates: Partial<Pick<User, 'na
   
   const result = await query<User>(
     `UPDATE users 
-     SET ${fields.join(', ')}
+     SET ${fields.join(', ')}, updated_at = NOW()
      WHERE id = $${paramIndex} AND is_active = true
-     RETURNING id, email, username, name, birth_date, country, email_verified, created_at, updated_at, is_active, last_login`,
+     RETURNING id, email, username, name, birth_date, country, phone, bio, email_verified, created_at, updated_at, is_active, last_login`,
     values
   );
   
@@ -309,7 +347,7 @@ export async function verifyEmail(token: string): Promise<User | null> {
            email_verification_expires = NULL,
            updated_at = NOW()
        WHERE id = $1
-       RETURNING id, email, username, name, birth_date, country, email_verified, created_at, updated_at, is_active, last_login`,
+       RETURNING id, email, username, name, birth_date, country, phone, bio, email_verified, created_at, updated_at, is_active, last_login`,
       [user.id]
     );
     
