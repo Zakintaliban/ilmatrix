@@ -627,6 +627,11 @@
           <div class="flex items-center gap-2">
             <nav class="hidden sm:flex items-center gap-2">
               <a
+                href="/dashboard.html"
+                class="text-xs sm:text-sm px-3 py-2 rounded-md hover:bg-indigo-900 userOnlyLink hidden"
+                >Dashboard</a
+              >
+              <a
                 href="/app.html"
                 class="text-xs sm:text-sm px-3 py-2 rounded-md hover:bg-indigo-900"
                 >App</a
@@ -4010,6 +4015,10 @@
           if (this.btnLogin) {
             this.btnLogin.classList.add('hidden');
           }
+          // Show user-only navigation links
+          document.querySelectorAll('.userOnlyLink').forEach(link => {
+            link.classList.remove('hidden');
+          });
         }
 
         showLoginButton() {
@@ -4020,6 +4029,10 @@
           if (this.btnLogin) {
             this.btnLogin.classList.remove('hidden');
           }
+          // Hide user-only navigation links
+          document.querySelectorAll('.userOnlyLink').forEach(link => {
+            link.classList.add('hidden');
+          });
         }
 
         async logout() {

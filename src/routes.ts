@@ -16,6 +16,7 @@ import {
   authMiddleware, 
   optionalAuthMiddleware 
 } from "./controllers/authController.js";
+import * as dashboardController from "./controllers/dashboardController.js";
 
 const api = new Hono();
 
@@ -41,6 +42,28 @@ api.post("/auth/resend-verification", resendVerificationController);
 // Protected authentication endpoints
 api.get("/auth/profile", authMiddleware, getProfile);
 api.put("/auth/profile", authMiddleware, updateProfile);
+
+// Dashboard endpoints (authenticated users only)
+api.get("/dashboard/overview", authMiddleware, dashboardController.getDashboardOverview);
+
+// Chat history endpoints
+api.get("/dashboard/chat/sessions", authMiddleware, dashboardController.getChatSessions);
+api.post("/dashboard/chat/sessions", authMiddleware, dashboardController.createChatSession);
+api.get("/dashboard/chat/sessions/:sessionId/messages", authMiddleware, dashboardController.getChatMessages);
+api.put("/dashboard/chat/sessions/:sessionId", authMiddleware, dashboardController.updateChatSession);
+api.delete("/dashboard/chat/sessions/:sessionId", authMiddleware, dashboardController.deleteChatSession);
+api.post("/dashboard/chat/sessions/:sessionId/generate-title", authMiddleware, dashboardController.generateSessionTitle);
+
+// Saved materials endpoints
+api.get("/dashboard/materials", authMiddleware, dashboardController.getUserMaterials);
+api.post("/dashboard/materials", authMiddleware, dashboardController.saveMaterial);
+api.put("/dashboard/materials/:materialId", authMiddleware, dashboardController.updateSavedMaterial);
+api.delete("/dashboard/materials/:materialId", authMiddleware, dashboardController.deleteSavedMaterial);
+api.post("/dashboard/materials/:materialId/access", authMiddleware, dashboardController.recordMaterialAccess);
+
+// Tags and filtering endpoints
+api.get("/dashboard/tags", authMiddleware, dashboardController.getUserTags);
+api.get("/dashboard/tags/:tag/materials", authMiddleware, dashboardController.getMaterialsByTag);
 
 // Upload endpoints (optional auth)
 api.post("/upload", optionalAuthMiddleware, (c) => uploadController.handleUpload(c));
