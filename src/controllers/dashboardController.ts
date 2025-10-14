@@ -2,12 +2,18 @@ import { Context } from 'hono';
 import * as chatHistoryService from '../services/chatHistoryService.js';
 import * as userMaterialService from '../services/userMaterialService.js';
 
+// Helper function to get user ID from context
+function getUserId(c: Context): string | null {
+  const user = c.get('user');
+  return user ? user.id : null;
+}
+
 /**
  * Get dashboard overview data for authenticated user
  */
 export async function getDashboardOverview(c: Context) {
   try {
-    const userId = c.get('userId');
+    const userId = getUserId(c);
     if (!userId) {
       return c.json({ error: 'Authentication required' }, 401);
     }
@@ -45,7 +51,7 @@ export async function getDashboardOverview(c: Context) {
  */
 export async function getChatSessions(c: Context) {
   try {
-    const userId = c.get('userId');
+    const userId = getUserId(c);
     if (!userId) {
       return c.json({ error: 'Authentication required' }, 401);
     }
@@ -72,7 +78,7 @@ export async function getChatSessions(c: Context) {
  */
 export async function createChatSession(c: Context) {
   try {
-    const userId = c.get('userId');
+    const userId = getUserId(c);
     if (!userId) {
       return c.json({ error: 'Authentication required' }, 401);
     }
@@ -99,7 +105,7 @@ export async function createChatSession(c: Context) {
  */
 export async function getChatMessages(c: Context) {
   try {
-    const userId = c.get('userId');
+    const userId = getUserId(c);
     if (!userId) {
       return c.json({ error: 'Authentication required' }, 401);
     }
@@ -128,7 +134,7 @@ export async function getChatMessages(c: Context) {
  */
 export async function updateChatSession(c: Context) {
   try {
-    const userId = c.get('userId');
+    const userId = getUserId(c);
     if (!userId) {
       return c.json({ error: 'Authentication required' }, 401);
     }
@@ -153,7 +159,7 @@ export async function updateChatSession(c: Context) {
  */
 export async function deleteChatSession(c: Context) {
   try {
-    const userId = c.get('userId');
+    const userId = getUserId(c);
     if (!userId) {
       return c.json({ error: 'Authentication required' }, 401);
     }
@@ -177,7 +183,7 @@ export async function deleteChatSession(c: Context) {
  */
 export async function getUserMaterials(c: Context) {
   try {
-    const userId = c.get('userId');
+    const userId = getUserId(c);
     if (!userId) {
       return c.json({ error: 'Authentication required' }, 401);
     }
@@ -213,7 +219,7 @@ export async function getUserMaterials(c: Context) {
  */
 export async function saveMaterial(c: Context) {
   try {
-    const userId = c.get('userId');
+    const userId = getUserId(c);
     if (!userId) {
       return c.json({ error: 'Authentication required' }, 401);
     }
@@ -254,7 +260,7 @@ export async function saveMaterial(c: Context) {
  */
 export async function updateSavedMaterial(c: Context) {
   try {
-    const userId = c.get('userId');
+    const userId = getUserId(c);
     if (!userId) {
       return c.json({ error: 'Authentication required' }, 401);
     }
@@ -279,7 +285,7 @@ export async function updateSavedMaterial(c: Context) {
  */
 export async function deleteSavedMaterial(c: Context) {
   try {
-    const userId = c.get('userId');
+    const userId = getUserId(c);
     if (!userId) {
       return c.json({ error: 'Authentication required' }, 401);
     }
@@ -303,7 +309,7 @@ export async function deleteSavedMaterial(c: Context) {
  */
 export async function recordMaterialAccess(c: Context) {
   try {
-    const userId = c.get('userId');
+    const userId = getUserId(c);
     if (!userId) {
       return c.json({ error: 'Authentication required' }, 401);
     }
@@ -323,7 +329,7 @@ export async function recordMaterialAccess(c: Context) {
  */
 export async function getUserTags(c: Context) {
   try {
-    const userId = c.get('userId');
+    const userId = getUserId(c);
     if (!userId) {
       return c.json({ error: 'Authentication required' }, 401);
     }
@@ -341,7 +347,7 @@ export async function getUserTags(c: Context) {
  */
 export async function getMaterialsByTag(c: Context) {
   try {
-    const userId = c.get('userId');
+    const userId = getUserId(c);
     if (!userId) {
       return c.json({ error: 'Authentication required' }, 401);
     }
@@ -361,7 +367,7 @@ export async function getMaterialsByTag(c: Context) {
  */
 export async function generateSessionTitle(c: Context) {
   try {
-    const userId = c.get('userId');
+    const userId = getUserId(c);
     if (!userId) {
       return c.json({ error: 'Authentication required' }, 401);
     }

@@ -159,10 +159,14 @@ export async function loginUser(
     const expiresAt = new Date();
     expiresAt.setDate(expiresAt.getDate() + 7); // Session expires in 7 days
     
+    // Handle IP address - only store if it's a valid IP, otherwise null
+    const isValidIP = (ip: string) => /^(\d{1,3}\.){3}\d{1,3}$/.test(ip) || /^[0-9a-fA-F:]+$/.test(ip);
+    const validIpAddress = ipAddress && ipAddress !== 'unknown' && isValidIP(ipAddress) ? ipAddress : null;
+    
     await client.query(
       `INSERT INTO user_sessions (user_id, session_token, expires_at, user_agent, ip_address)
        VALUES ($1, $2, $3, $4, $5)`,
-      [user.id, sessionToken, expiresAt, userAgent || null, ipAddress || null]
+      [user.id, sessionToken, expiresAt, userAgent || null, validIpAddress]
     );
     
     return { user, sessionToken };

@@ -346,26 +346,26 @@
             });
         }
 
-        // Authentication check
+        // Authentication check using HttpOnly cookies
         async function checkAuth() {
             try {
-                const token = localStorage.getItem('authToken');
-                if (!token) {
-                    window.location.href = '/login.html';
-                    return false;
-                }
-
+                console.log('Dashboard auth check - using HttpOnly cookies');
+                
                 const response = await fetch('/api/auth/profile', {
-                    headers: { 'Authorization': `Bearer ${token}` }
+                    credentials: 'include' // Include HttpOnly cookies
                 });
 
+                console.log('Auth profile response:', response.status);
+
                 if (!response.ok) {
-                    localStorage.removeItem('authToken');
+                    console.log('Auth failed, redirecting to login');
                     window.location.href = '/login.html';
                     return false;
                 }
 
-                state.user = await response.json();
+                const data = await response.json();
+                state.user = data.user;
+                console.log('Auth successful, user:', state.user.email);
                 document.getElementById('user-email').textContent = state.user.email;
                 return true;
             } catch (error) {
@@ -375,13 +375,12 @@
             }
         }
 
-        // API helper
+        // API helper using HttpOnly cookies
         async function apiCall(endpoint, options = {}) {
-            const token = localStorage.getItem('authToken');
             const response = await fetch(`/api${endpoint}`, {
                 ...options,
+                credentials: 'include', // Include HttpOnly cookies
                 headers: {
-                    'Authorization': `Bearer ${token}`,
                     'Content-Type': 'application/json',
                     ...options.headers
                 }

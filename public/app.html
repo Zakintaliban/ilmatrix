@@ -652,15 +652,54 @@
               </div>
               
               <!-- User Info (shown when logged in) -->
-              <div id="userInfo" class="hidden items-center gap-2">
-                <span id="userName" class="text-xs sm:text-sm text-white/90"></span>
-                <button
-                  id="btnLogout"
-                  class="text-xs sm:text-sm bg-red-600 hover:bg-red-700 transition text-white px-3 py-2 rounded-md"
-                  title="Logout"
-                >
-                  Logout
-                </button>
+              <div id="userInfo" class="hidden items-center gap-2 relative">
+                <!-- Username as Dashboard Link -->
+                <a 
+                  id="userName" 
+                  href="/dashboard.html"
+                  class="text-xs sm:text-sm text-white/90 hover:text-white transition font-medium underline decoration-transparent hover:decoration-white"
+                  title="Go to Dashboard"
+                ></a>
+                
+                <!-- User Menu Dropdown -->
+                <div class="relative">
+                  <button
+                    id="userMenuBtn"
+                    class="text-white/70 hover:text-white transition p-1"
+                    title="User Menu"
+                  >
+                    <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                      <path d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z"/>
+                    </svg>
+                  </button>
+                  
+                  <!-- Dropdown Menu -->
+                  <div 
+                    id="userDropdown" 
+                    class="hidden absolute right-0 top-full mt-2 w-48 bg-white/95 backdrop-blur-sm rounded-lg shadow-lg border border-white/20 z-50"
+                  >
+                    <div class="p-2">
+                      <a 
+                        href="/dashboard.html" 
+                        class="flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-blue-50 rounded-md transition"
+                      >
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+                        </svg>
+                        Dashboard
+                      </a>
+                      <button
+                        id="btnLogout"
+                        class="flex items-center gap-2 w-full px-3 py-2 text-sm text-red-700 hover:bg-red-50 rounded-md transition"
+                      >
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/>
+                        </svg>
+                        Logout
+                      </button>
+                    </div>
+                  </div>
+                </div>
               </div>
               
               <!-- Login button (shown when not logged in) -->
@@ -3971,6 +4010,8 @@
           this.userName = document.getElementById('userName');
           this.btnLogin = document.getElementById('btnLogin');
           this.btnLogout = document.getElementById('btnLogout');
+          this.userMenuBtn = document.getElementById('userMenuBtn');
+          this.userDropdown = document.getElementById('userDropdown');
           
           this.init();
         }
@@ -3984,6 +4025,29 @@
           if (this.btnLogout) {
             this.btnLogout.addEventListener('click', () => this.logout());
           }
+          
+          // Handle dropdown menu
+          if (this.userMenuBtn && this.userDropdown) {
+            this.userMenuBtn.addEventListener('click', (e) => {
+              e.stopPropagation();
+              this.toggleDropdown();
+            });
+            
+            // Close dropdown when clicking outside
+            document.addEventListener('click', (e) => {
+              if (!this.userInfo.contains(e.target)) {
+                this.closeDropdown();
+              }
+            });
+          }
+        }
+        
+        toggleDropdown() {
+          this.userDropdown.classList.toggle('hidden');
+        }
+        
+        closeDropdown() {
+          this.userDropdown.classList.add('hidden');
         }
 
         async checkAuthStatus() {
