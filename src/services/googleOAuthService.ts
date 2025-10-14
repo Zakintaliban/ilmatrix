@@ -110,7 +110,7 @@ async function createOAuthUser(googleUser: GoogleUserInfo) {
   // Generate unique username from Google ID
   const username = `google_${googleUser.id}`;
   
-  // Create user in database
+  // Create user in database (password_hash is now nullable for OAuth users)
   const result = await query(
     `INSERT INTO users (email, username, name, birth_date, country, email_verified, is_active)
      VALUES ($1, $2, $3, $4, $5, $6, $7)

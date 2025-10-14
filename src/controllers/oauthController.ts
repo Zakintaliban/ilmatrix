@@ -55,10 +55,14 @@ export async function handleGoogleCallback(c: Context) {
       Array.isArray(ipAddress) ? ipAddress[0] : ipAddress
     );
 
-    // Set secure session cookie
-    c.header('Set-Cookie', 
-      `session=${sessionToken}; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=${7 * 24 * 60 * 60}`
-    );
+    // Set secure session cookie for production
+    const cookieValue = `session=${sessionToken}; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=${7 * 24 * 60 * 60}`;
+    
+    console.log(`[OAuth] Setting cookie: ${cookieValue}`);
+    console.log(`[OAuth] User created/logged in:`, { id: user.id, email: user.email, name: user.name });
+    console.log(`[OAuth] Session token:`, sessionToken);
+    
+    c.header('Set-Cookie', cookieValue);
 
     // Redirect to dashboard with success message
     const redirectUrl = isNewUser 
