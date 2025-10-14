@@ -1,6 +1,8 @@
 import { Hono } from "hono";
 import { rateLimitMiddleware } from "./middleware/rateLimit.js";
 import { guestLimitMiddleware, strictAuthMiddleware } from "./middleware/guestLimit.js";
+import { aiRateLimitMiddleware } from "./middleware/aiRateLimit.js";
+import { abuseDetectionMiddleware } from "./middleware/abuseDetection.js";
 import { uploadController } from "./controllers/uploadController.js";
 import { materialController } from "./controllers/materialController.js";
 import { aiController } from "./controllers/aiController.js";
@@ -88,15 +90,15 @@ api.post("/material/:id/remove", (c) =>
 );
 api.delete("/material/:id", (c) => materialController.deleteMaterial(c));
 
-// AI feature endpoints (with guest usage limits)
-api.post("/explain", guestLimitMiddleware, (c) => aiController.handleAIRequest(c, "explain"));
-api.post("/quiz", guestLimitMiddleware, (c) => aiController.handleAIRequest(c, "quiz"));
-api.post("/forum", guestLimitMiddleware, (c) => aiController.handleAIRequest(c, "forum"));
-api.post("/exam", guestLimitMiddleware, (c) => aiController.handleAIRequest(c, "exam"));
-api.post("/chat", guestLimitMiddleware, (c) => aiController.handleChat(c));
+// AI feature endpoints (with enhanced protection)
+api.post("/explain", guestLimitMiddleware, aiRateLimitMiddleware, abuseDetectionMiddleware, (c) => aiController.handleAIRequest(c, "explain"));
+api.post("/quiz", guestLimitMiddleware, aiRateLimitMiddleware, abuseDetectionMiddleware, (c) => aiController.handleAIRequest(c, "quiz"));
+api.post("/forum", guestLimitMiddleware, aiRateLimitMiddleware, abuseDetectionMiddleware, (c) => aiController.handleAIRequest(c, "forum"));
+api.post("/exam", guestLimitMiddleware, aiRateLimitMiddleware, abuseDetectionMiddleware, (c) => aiController.handleAIRequest(c, "exam"));
+api.post("/chat", guestLimitMiddleware, aiRateLimitMiddleware, abuseDetectionMiddleware, (c) => aiController.handleChat(c));
 
-// MCQ trainer endpoints (with guest usage limits)
-api.post("/quiz/trainer/mcq/start", guestLimitMiddleware, (c) => aiController.generateMCQ(c));
+// MCQ trainer endpoints (with enhanced protection)
+api.post("/quiz/trainer/mcq/start", guestLimitMiddleware, aiRateLimitMiddleware, abuseDetectionMiddleware, (c) => aiController.generateMCQ(c));
 api.post("/quiz/trainer/mcq/score", (c) => aiController.scoreMCQ(c)); // No limit for scoring
 
 // Flashcards endpoint (with guest usage limits)

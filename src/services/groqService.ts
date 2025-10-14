@@ -2,6 +2,63 @@ import Groq from "groq-sdk";
 import { createLimiter, withTimeout } from "../utils/concurrency.js";
 import config from "../config/env.js";
 
+/**
+ * Circuit breaker to protect against API overuse
+ */
+class GroqCircuitBreaker {
+  private failures = 0;
+  private lastFailureTime = 0;
+  private state: 'closed' | 'open' | 'half-open' = 'closed';
+  
+  private readonly failureThreshold = 5;
+  private readonly recoveryTimeout = 60000; // 1 minute
+  private readonly retryTimeout = 10000; // 10 seconds
+  
+  async execute<T>(operation: () => Promise<T>): Promise<T> {
+    if (this.state === 'open') {
+      if (Date.now() - this.lastFailureTime > this.recoveryTimeout) {
+        this.state = 'half-open';
+      } else {
+        throw new Error('Circuit breaker is open. Groq API temporarily unavailable due to rate limiting.');
+      }
+    }
+    
+    try {
+      const result = await operation();
+      this.onSuccess();
+      return result;
+    } catch (error) {
+      this.onFailure();
+      throw error;
+    }
+  }
+  
+  private onSuccess(): void {
+    this.failures = 0;
+    this.state = 'closed';
+  }
+  
+  private onFailure(): void {
+    this.failures++;
+    this.lastFailureTime = Date.now();
+    
+    if (this.failures >= this.failureThreshold) {
+      this.state = 'open';
+      console.log(`[CIRCUIT BREAKER] Opened due to ${this.failures} consecutive failures`);
+    }
+  }
+  
+  getStatus(): { state: string; failures: number; nextRetry?: number } {
+    return {
+      state: this.state,
+      failures: this.failures,
+      nextRetry: this.state === 'open' ? this.lastFailureTime + this.recoveryTimeout : undefined
+    };
+  }
+}
+
+const circuitBreaker = new GroqCircuitBreaker();
+
 export interface ChatMessage {
   role: "system" | "user" | "assistant";
   content: string;
@@ -218,11 +275,23 @@ Core rules:
 
       return withTimeout(
         () =>
-          this.client.chat.completions.create({
-            model,
-            messages: params.messages,
-            temperature: params.temperature || 0.3,
-            max_tokens: params.max_tokens || 1500,
+          circuitBreaker.execute(async () => {
+            const completion = await this.client.chat.completions.create({
+              model,
+              messages: params.messages,
+              temperature: params.temperature || 0.3,
+              max_tokens: params.max_tokens || 1500,
+            });
+            
+            // Track token usage for rate limiting
+            const tokensUsed = completion.usage?.total_tokens || 0;
+            if (tokensUsed > 0) {
+              console.log(`[GROQ] Tokens used: ${tokensUsed}`);
+              // Store tokens used in response for rate limiting
+              (completion as any)._tokensUsed = tokensUsed;
+            }
+            
+            return completion;
           }),
         config.groqTimeoutMs,
         "Groq API request timed out"
