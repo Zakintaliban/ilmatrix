@@ -105,7 +105,9 @@ export const config: AppConfig = {
   uploadsDir: process.env.NETLIFY ? "/tmp/uploads" : process.cwd() + "/uploads",
 
   // Database Configuration
-  databaseUrl: process.env.DATABASE_URL,
+  // Railway provides DATABASE_URL via service variable in private network (production)
+  // For local development, use DATABASE_LOCAL_URL or fallback to public URL
+  databaseUrl: process.env.DATABASE_URL || process.env.DATABASE_LOCAL_URL,
   databasePublicUrl: process.env.DATABASE_PUBLIC_URL,
   pgHost: process.env.PGHOST,
   pgPort: process.env.PGPORT,
