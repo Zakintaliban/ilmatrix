@@ -40,6 +40,11 @@ export interface AppConfig {
   emailFromAddress?: string;
   baseUrl: string;
 
+  // Google OAuth Configuration
+  googleClientId?: string;
+  googleClientSecret?: string;
+  googleRedirectUri: string;
+
   // Environment Detection
   isNetlify: boolean;
   isDevelopment: boolean;
@@ -112,6 +117,11 @@ export const config: AppConfig = {
   resendApiKey: process.env.RESEND_API_KEY,
   emailFromAddress: process.env.EMAIL_FROM_ADDRESS || "noreply@ilmatrix.com",
   baseUrl: process.env.BASE_URL || "http://localhost:8787",
+
+  // Google OAuth Configuration
+  googleClientId: process.env.GOOGLE_CLIENT_ID,
+  googleClientSecret: process.env.GOOGLE_CLIENT_SECRET,
+  googleRedirectUri: process.env.GOOGLE_REDIRECT_URI || `${process.env.BASE_URL || "http://localhost:8787"}/api/auth/google/callback`,
 
   // Environment Detection
   isNetlify: !!process.env.NETLIFY,

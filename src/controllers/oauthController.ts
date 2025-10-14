@@ -1,28 +1,22 @@
 import { Context } from 'hono';
+import { generateGoogleAuthUrl, processGoogleAuth, isGoogleOAuthConfigured } from '../services/googleOAuthService.js';
 
 /**
  * Initiate Google OAuth login
  */
 export async function initiateGoogleAuth(c: Context) {
   try {
-    // This would normally redirect to Google OAuth
-    // For now, return a message that it's not implemented
-    return c.json({ 
-      error: 'Google OAuth is not configured yet. Please use email and password authentication.',
-      redirect: false 
-    }, 501);
-    
-    // Example implementation:
-    /*
-    const googleAuthUrl = `https://accounts.google.com/oauth/authorize?` +
-      `client_id=${process.env.GOOGLE_CLIENT_ID}&` +
-      `redirect_uri=${process.env.GOOGLE_REDIRECT_URI}&` +
-      `response_type=code&` +
-      `scope=openid email profile&` +
-      `state=${generateState()}`;
-    
-    return c.redirect(googleAuthUrl);
-    */
+    // Check if Google OAuth is configured
+    if (!isGoogleOAuthConfigured()) {
+      return c.json({ 
+        error: 'Google OAuth is not configured. Please set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET environment variables.',
+        redirect: false 
+      }, 501);
+    }
+
+    // Generate Google OAuth URL and redirect
+    const authUrl = generateGoogleAuthUrl();
+    return c.redirect(authUrl);
   } catch (error) {
     console.error('Google OAuth initiation error:', error);
     return c.json({ error: 'Failed to initiate Google authentication' }, 500);
@@ -35,49 +29,48 @@ export async function initiateGoogleAuth(c: Context) {
 export async function handleGoogleCallback(c: Context) {
   try {
     const code = c.req.query('code');
-    const state = c.req.query('state');
+    const error = c.req.query('error');
     
-    if (!code) {
-      return c.json({ error: 'Authorization code not provided' }, 400);
+    // Handle OAuth errors (user cancelled, etc.)
+    if (error) {
+      console.log('OAuth error:', error);
+      return c.redirect('/login.html?error=oauth_cancelled');
     }
     
-    // This would normally exchange code for tokens and create/login user
-    return c.json({ 
-      error: 'Google OAuth callback is not implemented yet.',
-      code: code ? 'received' : 'missing'
-    }, 501);
+    if (!code) {
+      return c.redirect('/login.html?error=oauth_failed');
+    }
+
+    // Get user agent and IP address for session tracking
+    const userAgent = c.req.header('User-Agent');
+    const ipAddress = c.req.header('x-forwarded-for') || 
+                     c.req.header('x-real-ip') || 
+                     c.env?.ip || 
+                     'unknown';
+
+    // Process Google OAuth (exchange code for tokens, get user info, create/login user)
+    const { user, sessionToken, isNewUser } = await processGoogleAuth(
+      code, 
+      userAgent, 
+      Array.isArray(ipAddress) ? ipAddress[0] : ipAddress
+    );
+
+    // Set secure session cookie
+    c.header('Set-Cookie', 
+      `session=${sessionToken}; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=${7 * 24 * 60 * 60}`
+    );
+
+    // Redirect to dashboard with success message
+    const redirectUrl = isNewUser 
+      ? '/dashboard.html?welcome=true&oauth=google'
+      : '/dashboard.html?login=success&oauth=google';
     
-    // Example implementation:
-    /*
-    // Exchange code for tokens
-    const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        client_id: process.env.GOOGLE_CLIENT_ID,
-        client_secret: process.env.GOOGLE_CLIENT_SECRET,
-        code,
-        grant_type: 'authorization_code',
-        redirect_uri: process.env.GOOGLE_REDIRECT_URI
-      })
-    });
-    
-    const tokens = await tokenResponse.json();
-    
-    // Get user info from Google
-    const userResponse = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
-      headers: { Authorization: `Bearer ${tokens.access_token}` }
-    });
-    
-    const googleUser = await userResponse.json();
-    
-    // Create or login user in your database
-    // Set session cookie
-    // Redirect to app
-    */
-    
+    return c.redirect(redirectUrl);
   } catch (error) {
     console.error('Google OAuth callback error:', error);
-    return c.json({ error: 'Google authentication failed' }, 500);
+    
+    // Redirect with specific error message
+    const errorMessage = error instanceof Error ? error.message : 'oauth_failed';
+    return c.redirect(`/login.html?error=${encodeURIComponent(errorMessage)}`);
   }
 }
