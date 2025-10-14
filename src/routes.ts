@@ -11,11 +11,17 @@ import {
   logout, 
   getProfile, 
   updateProfile, 
+  changePassword,
+  deleteAccount,
   verifyEmailController,
   resendVerificationController,
   authMiddleware, 
   optionalAuthMiddleware 
 } from "./controllers/authController.js";
+import { 
+  initiateGoogleAuth, 
+  handleGoogleCallback 
+} from "./controllers/oauthController.js";
 import * as dashboardController from "./controllers/dashboardController.js";
 
 const api = new Hono();
@@ -39,9 +45,15 @@ api.post("/auth/logout", logout);
 api.get("/auth/verify-email", verifyEmailController);
 api.post("/auth/resend-verification", resendVerificationController);
 
+// OAuth endpoints
+api.get("/auth/google", initiateGoogleAuth);
+api.get("/auth/google/callback", handleGoogleCallback);
+
 // Protected authentication endpoints
 api.get("/auth/profile", authMiddleware, getProfile);
 api.put("/auth/profile", authMiddleware, updateProfile);
+api.post("/auth/change-password", authMiddleware, changePassword);
+api.delete("/auth/delete-account", authMiddleware, deleteAccount);
 
 // Dashboard endpoints (authenticated users only)
 api.get("/dashboard/overview", authMiddleware, dashboardController.getDashboardOverview);
@@ -50,6 +62,7 @@ api.get("/dashboard/overview", authMiddleware, dashboardController.getDashboardO
 api.get("/dashboard/chat/sessions", authMiddleware, dashboardController.getChatSessions);
 api.post("/dashboard/chat/sessions", authMiddleware, dashboardController.createChatSession);
 api.get("/dashboard/chat/sessions/:sessionId/messages", authMiddleware, dashboardController.getChatMessages);
+api.post("/dashboard/chat/sessions/:sessionId/messages", authMiddleware, dashboardController.addChatMessage);
 api.put("/dashboard/chat/sessions/:sessionId", authMiddleware, dashboardController.updateChatSession);
 api.delete("/dashboard/chat/sessions/:sessionId", authMiddleware, dashboardController.deleteChatSession);
 api.post("/dashboard/chat/sessions/:sessionId/generate-title", authMiddleware, dashboardController.generateSessionTitle);

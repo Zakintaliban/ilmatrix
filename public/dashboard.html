@@ -14,18 +14,27 @@
                         'sans': ['SF Pro Display', 'system-ui', 'sans-serif'],
                     },
                     colors: {
-                        primary: {
-                            50: '#eff6ff',
-                            500: '#3b82f6',
-                            600: '#2563eb',
-                            700: '#1d4ed8',
-                        }
+                        primary: "#0f0e85",
+                        secondary: "#e44c99",
+                        tertiary: "#1b612f",
                     }
                 }
             }
         }
     </script>
     <style>
+        html {
+            scroll-behavior: smooth;
+        }
+        .dark .text-primary {
+            color: #93c5fd !important;
+        }
+        .dark .text-secondary {
+            color: #f9a8d4 !important;
+        }
+        .dark .text-tertiary {
+            color: #86efac !important;
+        }
         .gradient-bg {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
         }
@@ -48,61 +57,81 @@
         }
     </style>
 </head>
-<body class="h-full bg-gray-50 dark:bg-gray-900 transition-colors duration-200">
-    <!-- Navigation -->
-    <nav class="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700">
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div class="flex justify-between h-16">
-                <div class="flex items-center">
-                    <div class="flex-shrink-0 flex items-center">
-                        <div class="w-8 h-8 bg-gradient-to-r from-blue-500 to-purple-600 rounded-lg flex items-center justify-center">
-                            <span class="text-white font-bold text-sm">IL</span>
-                        </div>
-                        <span class="ml-2 text-xl font-semibold text-gray-900 dark:text-white">ILMATRIX</span>
-                    </div>
-                    <div class="hidden sm:ml-6 sm:flex sm:space-x-8">
-                        <a href="/dashboard.html" class="border-primary-500 text-gray-900 dark:text-white inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">
-                            Dashboard
-                        </a>
-                        <a href="/app.html" class="border-transparent text-gray-500 dark:text-gray-400 hover:border-gray-300 hover:text-gray-700 dark:hover:text-gray-300 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">
-                            AI Tools
-                        </a>
-                    </div>
-                </div>
-                
-                <div class="flex items-center space-x-4">
-                    <button id="theme-toggle" class="p-2 rounded-lg text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700">
-                        <svg class="w-5 h-5 hidden dark:block" fill="currentColor" viewBox="0 0 20 20">
-                            <path fill-rule="evenodd" d="M10 2a1 1 0 011 1v1a1 1 0 11-2 0V3a1 1 0 011-1zm4 8a4 4 0 11-8 0 4 4 0 018 0zm-.464 4.95l.707.707a1 1 0 001.414-1.414l-.707-.707a1 1 0 00-1.414 1.414zm2.12-10.607a1 1 0 010 1.414l-.706.707a1 1 0 11-1.414-1.414l.707-.707a1 1 0 011.414 0zM17 11a1 1 0 100-2h-1a1 1 0 100 2h1zm-7 4a1 1 0 011 1v1a1 1 0 11-2 0v-1a1 1 0 011-1zM5.05 6.464A1 1 0 106.465 5.05l-.708-.707a1 1 0 00-1.414 1.414l.707.707zm1.414 8.486l-.707.707a1 1 0 01-1.414-1.414l.707-.707a1 1 0 011.414 1.414zM4 11a1 1 0 100-2H3a1 1 0 000 2h1z" clip-rule="evenodd"></path>
-                        </svg>
-                        <svg class="w-5 h-5 block dark:hidden" fill="currentColor" viewBox="0 0 20 20">
-                            <path d="M17.293 13.293A8 8 0 016.707 2.707a8.001 8.001 0 1010.586 10.586z"></path>
-                        </svg>
-                    </button>
-                    
-                    <div class="relative" id="user-menu">
-                        <button id="user-menu-button" class="flex items-center text-sm rounded-full focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
-                            <div class="w-8 h-8 bg-gray-300 dark:bg-gray-600 rounded-full flex items-center justify-center">
-                                <svg class="w-5 h-5 text-gray-600 dark:text-gray-300" fill="currentColor" viewBox="0 0 20 20">
+<body class="bg-gray-50 dark:bg-black text-gray-900 dark:text-white min-h-screen flex flex-col">
+    <!-- Header -->
+    <header class="bg-primary text-white dark:bg-black border-b border-white/20">
+        <div class="container mx-auto max-w-6xl px-4 py-4 flex items-center justify-between">
+            <div class="flex items-center gap-3">
+                <a href="/" class="text-xl sm:text-2xl font-bold tracking-tight">ILMATRIX</a>
+            </div>
+            <div class="flex items-center gap-2">
+                <nav class="hidden sm:flex items-center gap-2">
+                    <a href="/app.html" class="text-xs sm:text-sm px-3 py-2 rounded-md hover:bg-indigo-900">App</a>
+                    <a href="/about.html" class="text-xs sm:text-sm px-3 py-2 rounded-md hover:bg-indigo-900">About</a>
+                </nav>
+                <div class="flex items-center gap-2">
+                    <!-- User Info (shown when logged in) -->
+                    <div id="userInfo" class="hidden items-center gap-2">
+                        <!-- User Dropdown -->
+                        <div class="relative">
+                            <button 
+                                id="userDropdownBtn"
+                                class="flex items-center gap-2 text-xs sm:text-sm text-white/90 hover:text-white transition-colors px-2 py-1 rounded-md hover:bg-white/10"
+                                aria-expanded="false"
+                            >
+                                <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
                                     <path fill-rule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clip-rule="evenodd"></path>
                                 </svg>
-                            </div>
-                        </button>
-                        
-                        <div id="user-dropdown" class="hidden absolute right-0 mt-2 w-48 bg-white dark:bg-gray-800 rounded-md shadow-lg py-1 z-10">
-                            <div class="px-4 py-2 text-sm text-gray-700 dark:text-gray-200 border-b border-gray-200 dark:border-gray-700">
-                                <div class="font-medium" id="user-email">Loading...</div>
-                            </div>
-                            <a href="#" class="block px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700">Profile Settings</a>
-                            <button id="logout-btn" class="block w-full text-left px-4 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-gray-100 dark:hover:bg-gray-700">
-                                Sign out
+                                <span id="userName"></span>
+                                <svg class="w-3 h-3 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="m19 9-7 7-7-7"></path>
+                                </svg>
                             </button>
+                            
+                            <!-- Dropdown Menu -->
+                            <div id="userDropdownMenu" class="hidden absolute right-0 mt-2 w-48 bg-gray-50 dark:bg-black rounded-md shadow-lg ring-1 ring-gray-200 dark:ring-white/10 z-50">
+                                <div class="py-1">
+                                    <a href="/dashboard.html" class="flex items-center gap-2 px-4 py-2 text-sm text-gray-900 dark:text-white hover:bg-gray-100 dark:hover:bg-gray-800 bg-gray-100 dark:bg-gray-800">
+                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 0 01-2-2v-2z"></path>
+                                        </svg>
+                                        Dashboard
+                                    </a>
+                                    <a href="/profile.html" class="flex items-center gap-2 px-4 py-2 text-sm text-gray-900 dark:text-white hover:bg-gray-100 dark:hover:bg-gray-800">
+                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path>
+                                        </svg>
+                                        Profile Settings
+                                    </a>
+                                    <div class="border-t border-gray-200 dark:border-white/10"></div>
+                                    <button
+                                        id="btnLogout"
+                                        class="flex items-center gap-2 w-full text-left px-4 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-gray-100 dark:hover:bg-gray-800"
+                                    >
+                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path>
+                                        </svg>
+                                        Logout
+                                    </button>
+                                </div>
+                            </div>
                         </div>
                     </div>
+                    
+                    <!-- Login button -->
+                    <a id="btnLogin" href="/login.html" class="text-xs sm:text-sm bg-green-600 hover:bg-green-700 transition text-white px-3 py-2 rounded-md">
+                        Login
+                    </a>
+                    
+                    <button id="btnTheme" class="inline-flex items-center gap-1.5 text-xs sm:text-sm px-3 py-2 rounded-xl border border-white/30 ring-1 ring-black/5 bg-white/80 hover:bg-white/90 text-slate-900 shadow-sm transition-all duration-200 ease-out dark:bg-slate-800/80 dark:hover:bg-slate-800 dark:text-slate-100" title="Toggle theme">
+                        <span class="icon-sun text-yellow-500 dark:hidden">☀️</span>
+                        <span class="icon-moon hidden dark:inline text-slate-100">🌙</span>
+                        Theme
+                    </button>
                 </div>
             </div>
         </div>
-    </nav>
+    </header>
 
     <!-- Main Content -->
     <main class="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
@@ -206,7 +235,7 @@
                     <div class="p-6">
                         <div class="flex items-center justify-between">
                             <h3 class="text-lg leading-6 font-medium text-gray-900 dark:text-white">Recent Chat Sessions</h3>
-                            <button id="new-chat-btn" class="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
+                            <button id="new-chat-btn" class="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-white bg-primary hover:bg-indigo-900 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary"
                                 <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
                                 </svg>
@@ -317,7 +346,7 @@
                            class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-gray-900 dark:text-white bg-white dark:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-primary-500" required>
                     <div class="flex justify-end gap-3 mt-4">
                         <button type="button" id="cancel-new-chat" class="px-4 py-2 text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200">Cancel</button>
-                        <button type="submit" class="px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500">Create</button>
+                        <button type="submit" class="px-4 py-2 bg-primary text-white rounded-md hover:bg-indigo-900 focus:outline-none focus:ring-2 focus:ring-primary">Create</button>
                     </div>
                 </form>
             </div>
@@ -334,17 +363,83 @@
             materials: []
         };
 
-        // Theme management
-        function initTheme() {
-            const theme = localStorage.getItem('theme') || 'light';
-            document.documentElement.classList.toggle('dark', theme === 'dark');
+        // Theme management (consistent with index.html)
+        (function () {
+            const root = document.documentElement;
+            const getCookie = (name) => {
+                const parts = document.cookie.split("; ").filter(Boolean);
+                const hit = parts.find((p) => p.startsWith(name + "="));
+                return hit ? decodeURIComponent(hit.split("=").slice(1).join("=")) : null;
+            };
+            const persist = (mode) => {
+                try {
+                    localStorage.setItem("theme", mode);
+                    document.cookie = "theme=" + encodeURIComponent(mode) + "; max-age=31536000; path=/; SameSite=Lax";
+                } catch {}
+            };
+            const getSaved = () => {
+                let v = null;
+                try { v = localStorage.getItem("theme"); } catch {}
+                if (!v) v = getCookie("theme");
+                return v;
+            };
             
-            document.getElementById('theme-toggle').addEventListener('click', () => {
-                const isDark = document.documentElement.classList.contains('dark');
-                document.documentElement.classList.toggle('dark', !isDark);
-                localStorage.setItem('theme', !isDark ? 'dark' : 'light');
-            });
-        }
+            const saved = getSaved();
+            const prefersDark = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
+            const initial = saved ? saved : prefersDark ? "dark" : "light";
+            root.classList.toggle("dark", initial === "dark");
+            if (!saved) persist(initial);
+
+            const btn = document.getElementById("btnTheme");
+            if (btn) {
+                btn.addEventListener("click", () => {
+                    const newMode = root.classList.contains("dark") ? "light" : "dark";
+                    root.classList.toggle("dark", newMode === "dark");
+                    persist(newMode);
+                });
+            }
+        })();
+
+        // User dropdown management
+        (function() {
+            const userDropdownBtn = document.getElementById('userDropdownBtn');
+            const userDropdownMenu = document.getElementById('userDropdownMenu');
+            
+            if (userDropdownBtn && userDropdownMenu) {
+                userDropdownBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    toggleUserDropdown();
+                });
+
+                // Close dropdown when clicking outside
+                document.addEventListener('click', (e) => {
+                    if (!userDropdownBtn.contains(e.target) && !userDropdownMenu.contains(e.target)) {
+                        closeUserDropdown();
+                    }
+                });
+            }
+
+            function toggleUserDropdown() {
+                const isHidden = userDropdownMenu.classList.contains('hidden');
+                if (isHidden) {
+                    userDropdownMenu.classList.remove('hidden');
+                    userDropdownBtn.setAttribute('aria-expanded', 'true');
+                    // Rotate chevron
+                    const chevron = userDropdownBtn.querySelector('svg:last-child');
+                    if (chevron) chevron.style.transform = 'rotate(180deg)';
+                } else {
+                    closeUserDropdown();
+                }
+            }
+
+            function closeUserDropdown() {
+                userDropdownMenu.classList.add('hidden');
+                userDropdownBtn.setAttribute('aria-expanded', 'false');
+                // Reset chevron
+                const chevron = userDropdownBtn.querySelector('svg:last-child');
+                if (chevron) chevron.style.transform = 'rotate(0deg)';
+            }
+        })();
 
         // Authentication check using HttpOnly cookies
         async function checkAuth() {
@@ -366,7 +461,22 @@
                 const data = await response.json();
                 state.user = data.user;
                 console.log('Auth successful, user:', state.user.email);
-                document.getElementById('user-email').textContent = state.user.email;
+                
+                // Show user info in header
+                const userInfo = document.getElementById('userInfo');
+                const userName = document.getElementById('userName');
+                const btnLogin = document.getElementById('btnLogin');
+                
+                if (userName) {
+                    userName.textContent = state.user.name || state.user.email;
+                }
+                if (userInfo) {
+                    userInfo.classList.remove('hidden');
+                    userInfo.classList.add('flex');
+                }
+                if (btnLogin) {
+                    btnLogin.classList.add('hidden');
+                }
                 return true;
             } catch (error) {
                 console.error('Auth check failed:', error);
@@ -546,7 +656,7 @@
 
         // Event listeners
         document.addEventListener('DOMContentLoaded', async () => {
-            initTheme();
+            // Theme already initialized by IIFE
             
             if (await checkAuth()) {
                 await loadDashboard();
@@ -565,7 +675,7 @@
             });
 
             // Logout
-            document.getElementById('logout-btn').addEventListener('click', () => {
+            document.getElementById('btnLogout').addEventListener('click', () => {
                 localStorage.removeItem('authToken');
                 window.location.href = '/login.html';
             });
@@ -609,5 +719,11 @@
             });
         });
     </script>
+
+    <footer class="border-t border-gray-200 dark:border-white/10 mt-auto">
+        <div class="container mx-auto max-w-6xl px-4 py-6 text-xs text-gray-500 dark:text-slate-400">
+            <p>Made with ❤️ by ILMATRIX</p>
+        </div>
+    </footer>
 </body>
 </html>

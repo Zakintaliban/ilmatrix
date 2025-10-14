@@ -6,6 +6,7 @@ import {
   logoutUser, 
   updateUser, 
   getUserById,
+  getUserByIdWithPassword,
   verifyEmail,
   resendVerificationEmail,
   CreateUserData,
@@ -165,6 +166,8 @@ export async function getProfile(c: Context) {
         id: user.id,
         email: user.email,
         name: user.name,
+        phone: user.phone,
+        bio: user.bio,
         created_at: user.created_at,
         last_login: user.last_login
       }
@@ -188,12 +191,14 @@ export async function updateProfile(c: Context) {
     }
     
     const body = await c.req.json();
-    const { name, email } = body;
+    const { name, phone, bio, email } = body;
     
-    // Prepare updates
-    const updates: { name?: string; email?: string } = {};
-    if (name) updates.name = name;
-    if (email) updates.email = email;
+    // Prepare updates - phone and bio are new fields
+    const updates: { name?: string; phone?: string; bio?: string; email?: string } = {};
+    if (name !== undefined) updates.name = name;
+    if (phone !== undefined) updates.phone = phone;
+    if (bio !== undefined) updates.bio = bio;
+    if (email !== undefined) updates.email = email;
     
     if (Object.keys(updates).length === 0) {
       return c.json({ error: 'No fields to update' }, 400);
@@ -207,6 +212,9 @@ export async function updateProfile(c: Context) {
         id: updatedUser.id,
         email: updatedUser.email,
         name: updatedUser.name,
+        phone: updatedUser.phone,
+        bio: updatedUser.bio,
+        created_at: updatedUser.created_at,
         updated_at: updatedUser.updated_at
       }
     });
@@ -221,6 +229,106 @@ export async function updateProfile(c: Context) {
     }
     
     return c.json({ error: 'Failed to update profile' }, 500);
+  }
+}
+
+/**
+ * Change user password
+ */
+export async function changePassword(c: Context) {
+  try {
+    const user = c.get('user');
+    
+    if (!user) {
+      return c.json({ error: 'Not authenticated' }, 401);
+    }
+    
+    const body = await c.req.json();
+    const { currentPassword, newPassword } = body;
+    
+    if (!currentPassword || !newPassword) {
+      return c.json({ error: 'Current password and new password are required' }, 400);
+    }
+    
+    if (newPassword.length < 8) {
+      return c.json({ error: 'New password must be at least 8 characters long' }, 400);
+    }
+    
+    // Import bcrypt for password verification
+    const bcrypt = (await import('bcryptjs')).default;
+    
+    // Get full user data to verify current password
+    const fullUser = await getUserByIdWithPassword(user.id);
+    if (!fullUser) {
+      return c.json({ error: 'User not found' }, 404);
+    }
+    
+    // Verify current password
+    const isValidPassword = await bcrypt.compare(currentPassword, fullUser.password);
+    if (!isValidPassword) {
+      return c.json({ error: 'Current password is incorrect' }, 401);
+    }
+    
+    // Hash new password
+    const hashedNewPassword = await bcrypt.hash(newPassword, 12);
+    
+    // Update password
+    await updateUser(user.id, { password: hashedNewPassword });
+    
+    return c.json({ message: 'Password updated successfully' });
+    
+  } catch (error) {
+    console.error('Change password error:', error);
+    return c.json({ error: 'Failed to update password' }, 500);
+  }
+}
+
+/**
+ * Delete user account
+ */
+export async function deleteAccount(c: Context) {
+  try {
+    const user = c.get('user');
+    
+    if (!user) {
+      return c.json({ error: 'Not authenticated' }, 401);
+    }
+    
+    // Import database service
+    const { query } = await import('../services/databaseService.js');
+    
+    // Begin transaction to delete user and all related data
+    await query('BEGIN');
+    
+    try {
+      // Delete user sessions first
+      await query('DELETE FROM user_sessions WHERE user_id = $1', [user.id]);
+      
+      // Delete chat sessions and messages
+      await query('DELETE FROM chat_messages WHERE session_id IN (SELECT id FROM chat_sessions WHERE user_id = $1)', [user.id]);
+      await query('DELETE FROM chat_sessions WHERE user_id = $1', [user.id]);
+      
+      // Delete user materials
+      await query('DELETE FROM user_materials WHERE user_id = $1', [user.id]);
+      
+      // Finally delete the user
+      await query('DELETE FROM users WHERE id = $1', [user.id]);
+      
+      await query('COMMIT');
+      
+      // Clear session cookie
+      c.header('Set-Cookie', 'session=; HttpOnly; Secure; SameSite=Strict; Max-Age=0; Path=/');
+      
+      return c.json({ message: 'Account deleted successfully' });
+      
+    } catch (error) {
+      await query('ROLLBACK');
+      throw error;
+    }
+    
+  } catch (error) {
+    console.error('Delete account error:', error);
+    return c.json({ error: 'Failed to delete account' }, 500);
   }
 }
 

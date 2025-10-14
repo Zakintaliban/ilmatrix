@@ -1,0 +1,577 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <link rel="icon" type="image/svg+xml" href="./logo.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Profile Settings - ILMATRIX</title>
+
+    <!-- Tailwind CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              primary: "#0f0e85",
+              secondary: "#e44c99",
+              tertiary: "#1b612f",
+            },
+          },
+        },
+      };
+    </script>
+    
+    <style>
+      html {
+        scroll-behavior: smooth;
+      }
+      .dark .text-primary {
+        color: #93c5fd !important;
+      }
+      .dark .text-secondary {
+        color: #f9a8d4 !important;
+      }
+      .dark .text-tertiary {
+        color: #86efac !important;
+      }
+    </style>
+  </head>
+  <body class="bg-gray-50 dark:bg-black text-gray-900 dark:text-white min-h-screen flex flex-col">
+    <!-- Header -->
+    <header class="bg-primary text-white dark:bg-black border-b border-white/20">
+      <div class="container mx-auto max-w-6xl px-4 py-4 flex items-center justify-between">
+        <div class="flex items-center gap-3">
+          <a href="/" class="text-xl sm:text-2xl font-bold tracking-tight">ILMATRIX</a>
+        </div>
+        <div class="flex items-center gap-2">
+          <nav class="hidden sm:flex items-center gap-2">
+            <a href="/app.html" class="text-xs sm:text-sm px-3 py-2 rounded-md hover:bg-indigo-900">App</a>
+            <a href="/about.html" class="text-xs sm:text-sm px-3 py-2 rounded-md hover:bg-indigo-900">About</a>
+          </nav>
+          <div class="flex items-center gap-2">
+            <!-- User Info (shown when logged in) -->
+            <div id="userInfo" class="hidden items-center gap-2">
+              <!-- User Dropdown -->
+              <div class="relative">
+                <button 
+                  id="userDropdownBtn"
+                  class="flex items-center gap-2 text-xs sm:text-sm text-white/90 hover:text-white transition-colors px-2 py-1 rounded-md hover:bg-white/10"
+                  aria-expanded="false"
+                >
+                  <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                    <path fill-rule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clip-rule="evenodd"></path>
+                  </svg>
+                  <span id="userName"></span>
+                  <svg class="w-3 h-3 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="m19 9-7 7-7-7"></path>
+                  </svg>
+                </button>
+                
+                <!-- Dropdown Menu -->
+                <div id="userDropdownMenu" class="hidden absolute right-0 mt-2 w-48 bg-gray-50 dark:bg-black rounded-md shadow-lg ring-1 ring-gray-200 dark:ring-white/10 z-50">
+                  <div class="py-1">
+                    <a href="/dashboard.html" class="flex items-center gap-2 px-4 py-2 text-sm text-gray-900 dark:text-white hover:bg-gray-100 dark:hover:bg-gray-800">
+                      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"></path>
+                      </svg>
+                      Dashboard
+                    </a>
+                    <a href="/profile.html" class="flex items-center gap-2 px-4 py-2 text-sm text-gray-900 dark:text-white hover:bg-gray-100 dark:hover:bg-gray-800 bg-gray-100 dark:bg-gray-800">
+                      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path>
+                      </svg>
+                      Profile Settings
+                    </a>
+                    <div class="border-t border-gray-200 dark:border-white/10"></div>
+                    <button
+                      id="btnLogout"
+                      class="flex items-center gap-2 w-full text-left px-4 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-gray-100 dark:hover:bg-gray-800"
+                    >
+                      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path>
+                      </svg>
+                      Logout
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+            
+            <!-- Login button -->
+            <a id="btnLogin" href="/login.html" class="text-xs sm:text-sm bg-green-600 hover:bg-green-700 transition text-white px-3 py-2 rounded-md">
+              Login
+            </a>
+            
+            <button id="btnTheme" class="inline-flex items-center gap-1.5 text-xs sm:text-sm px-3 py-2 rounded-xl border border-white/30 ring-1 ring-black/5 bg-white/80 hover:bg-white/90 text-slate-900 shadow-sm transition-all duration-200 ease-out dark:bg-slate-800/80 dark:hover:bg-slate-800 dark:text-slate-100" title="Toggle theme">
+              <span class="icon-sun text-yellow-500 dark:hidden">☀️</span>
+              <span class="icon-moon hidden dark:inline text-slate-100">🌙</span>
+              Theme
+            </button>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="flex-1 container mx-auto max-w-4xl px-4 py-8">
+      <div class="bg-white dark:bg-neutral-900 rounded-xl shadow-sm ring-1 ring-gray-200 dark:ring-white/10 p-6">
+        <h1 class="text-2xl font-bold text-primary mb-6">Profile Settings</h1>
+        
+        <!-- Profile Form -->
+        <form id="profileForm" class="space-y-6">
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <!-- Name -->
+            <div>
+              <label for="name" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                Full Name
+              </label>
+              <input
+                type="text"
+                id="name"
+                name="name"
+                class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary dark:bg-neutral-800 dark:text-white"
+                placeholder="Enter your full name"
+              />
+            </div>
+
+            <!-- Email -->
+            <div>
+              <label for="email" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                Email Address
+              </label>
+              <input
+                type="email"
+                id="email"
+                name="email"
+                class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary dark:bg-neutral-800 dark:text-white"
+                placeholder="Enter your email"
+                readonly
+              />
+              <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">Email cannot be changed</p>
+            </div>
+
+            <!-- Phone -->
+            <div>
+              <label for="phone" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                Phone Number
+              </label>
+              <input
+                type="tel"
+                id="phone"
+                name="phone"
+                class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary dark:bg-neutral-800 dark:text-white"
+                placeholder="Enter your phone number"
+              />
+            </div>
+
+            <!-- Created At -->
+            <div>
+              <label for="createdAt" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                Member Since
+              </label>
+              <input
+                type="text"
+                id="createdAt"
+                name="createdAt"
+                class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm bg-gray-50 dark:bg-neutral-700 dark:text-white"
+                readonly
+              />
+            </div>
+          </div>
+
+          <!-- Bio -->
+          <div>
+            <label for="bio" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              Bio
+            </label>
+            <textarea
+              id="bio"
+              name="bio"
+              rows="4"
+              class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary dark:bg-neutral-800 dark:text-white"
+              placeholder="Tell us about yourself..."
+            ></textarea>
+          </div>
+
+          <!-- Action Buttons -->
+          <div class="flex flex-col sm:flex-row gap-3 justify-between">
+            <div class="flex gap-3">
+              <button
+                type="submit"
+                class="px-6 py-2 bg-primary text-white rounded-md hover:bg-indigo-900 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 transition-colors"
+              >
+                Save Changes
+              </button>
+              <button
+                type="button"
+                id="btnCancel"
+                class="px-6 py-2 bg-gray-300 dark:bg-gray-600 text-gray-700 dark:text-gray-200 rounded-md hover:bg-gray-400 dark:hover:bg-gray-500 focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-offset-2 transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
+            <button
+              type="button"
+              id="btnDeleteAccount"
+              class="px-6 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 transition-colors"
+            >
+              Delete Account
+            </button>
+          </div>
+        </form>
+
+        <!-- Change Password Section -->
+        <div class="mt-8 pt-8 border-t border-gray-200 dark:border-gray-700">
+          <h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">Change Password</h2>
+          <form id="passwordForm" class="space-y-4">
+            <div>
+              <label for="currentPassword" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                Current Password
+              </label>
+              <input
+                type="password"
+                id="currentPassword"
+                name="currentPassword"
+                class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary dark:bg-neutral-800 dark:text-white"
+              />
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label for="newPassword" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  New Password
+                </label>
+                <input
+                  type="password"
+                  id="newPassword"
+                  name="newPassword"
+                  class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary dark:bg-neutral-800 dark:text-white"
+                />
+              </div>
+              <div>
+                <label for="confirmPassword" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Confirm New Password
+                </label>
+                <input
+                  type="password"
+                  id="confirmPassword"
+                  name="confirmPassword"
+                  class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary dark:bg-neutral-800 dark:text-white"
+                />
+              </div>
+            </div>
+            <button
+              type="submit"
+              class="px-6 py-2 bg-secondary text-white rounded-md hover:bg-pink-500 focus:outline-none focus:ring-2 focus:ring-secondary focus:ring-offset-2 transition-colors"
+            >
+              Update Password
+            </button>
+          </form>
+        </div>
+      </div>
+    </main>
+
+    <footer class="border-t border-gray-200 dark:border-white/10">
+      <div class="container mx-auto max-w-6xl px-4 py-6 text-xs text-gray-500 dark:text-slate-400">
+        <p>Made with ❤️ by ILMATRIX</p>
+      </div>
+    </footer>
+
+    <script>
+      // Theme toggle
+      (function () {
+        const root = document.documentElement;
+        const getCookie = (name) => {
+          const parts = document.cookie.split("; ").filter(Boolean);
+          const hit = parts.find((p) => p.startsWith(name + "="));
+          return hit ? decodeURIComponent(hit.split("=").slice(1).join("=")) : null;
+        };
+        const persist = (mode) => {
+          try {
+            localStorage.setItem("theme", mode);
+            document.cookie = "theme=" + encodeURIComponent(mode) + "; max-age=31536000; path=/; SameSite=Lax";
+          } catch {}
+        };
+        const getSaved = () => {
+          let v = null;
+          try { v = localStorage.getItem("theme"); } catch {}
+          if (!v) v = getCookie("theme");
+          return v;
+        };
+        
+        const saved = getSaved();
+        const prefersDark = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
+        const initial = saved ? saved : prefersDark ? "dark" : "light";
+        root.classList.toggle("dark", initial === "dark");
+        if (!saved) persist(initial);
+
+        const btn = document.getElementById("btnTheme");
+        if (btn) {
+          btn.addEventListener("click", () => {
+            const newMode = root.classList.contains("dark") ? "light" : "dark";
+            root.classList.toggle("dark", newMode === "dark");
+            persist(newMode);
+          });
+        }
+      })();
+
+      // User dropdown management
+      (function() {
+        const userDropdownBtn = document.getElementById('userDropdownBtn');
+        const userDropdownMenu = document.getElementById('userDropdownMenu');
+        
+        if (userDropdownBtn && userDropdownMenu) {
+          userDropdownBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            toggleUserDropdown();
+          });
+
+          // Close dropdown when clicking outside
+          document.addEventListener('click', (e) => {
+            if (!userDropdownBtn.contains(e.target) && !userDropdownMenu.contains(e.target)) {
+              closeUserDropdown();
+            }
+          });
+        }
+
+        function toggleUserDropdown() {
+          const isHidden = userDropdownMenu.classList.contains('hidden');
+          if (isHidden) {
+            userDropdownMenu.classList.remove('hidden');
+            userDropdownBtn.setAttribute('aria-expanded', 'true');
+            // Rotate chevron
+            const chevron = userDropdownBtn.querySelector('svg:last-child');
+            if (chevron) chevron.style.transform = 'rotate(180deg)';
+          } else {
+            closeUserDropdown();
+          }
+        }
+
+        function closeUserDropdown() {
+          userDropdownMenu.classList.add('hidden');
+          userDropdownBtn.setAttribute('aria-expanded', 'false');
+          // Reset chevron
+          const chevron = userDropdownBtn.querySelector('svg:last-child');
+          if (chevron) chevron.style.transform = 'rotate(0deg)';
+        }
+      })();
+
+      // Profile Management
+      class ProfileManager {
+        constructor() {
+          this.userInfo = document.getElementById('userInfo');
+          this.userName = document.getElementById('userName');
+          this.btnLogin = document.getElementById('btnLogin');
+          this.btnLogout = document.getElementById('btnLogout');
+          this.profileForm = document.getElementById('profileForm');
+          this.passwordForm = document.getElementById('passwordForm');
+          this.btnCancel = document.getElementById('btnCancel');
+          this.btnDeleteAccount = document.getElementById('btnDeleteAccount');
+          
+          this.init();
+        }
+
+        async init() {
+          await this.checkAuthAndLoadProfile();
+          this.attachEventListeners();
+        }
+
+        async checkAuthAndLoadProfile() {
+          try {
+            const response = await fetch('/api/auth/profile', {
+              credentials: 'include'
+            });
+            
+            if (response.ok) {
+              const data = await response.json();
+              this.showUserInfo(data.user);
+              this.populateForm(data.user);
+            } else {
+              // Redirect to login if not authenticated
+              window.location.href = '/login.html';
+            }
+          } catch (error) {
+            console.error('Auth check failed:', error);
+            window.location.href = '/login.html';
+          }
+        }
+
+        showUserInfo(user) {
+          if (this.userName) {
+            this.userName.textContent = user.name || user.email;
+          }
+          if (this.userInfo) {
+            this.userInfo.classList.remove('hidden');
+            this.userInfo.classList.add('flex');
+          }
+          if (this.btnLogin) {
+            this.btnLogin.classList.add('hidden');
+          }
+        }
+
+        populateForm(user) {
+          document.getElementById('name').value = user.name || '';
+          document.getElementById('email').value = user.email || '';
+          document.getElementById('phone').value = user.phone || '';
+          document.getElementById('bio').value = user.bio || '';
+          
+          if (user.createdAt) {
+            const date = new Date(user.createdAt);
+            document.getElementById('createdAt').value = date.toLocaleDateString();
+          }
+        }
+
+        attachEventListeners() {
+          if (this.btnLogout) {
+            this.btnLogout.addEventListener('click', () => this.logout());
+          }
+
+          if (this.profileForm) {
+            this.profileForm.addEventListener('submit', (e) => this.handleProfileSubmit(e));
+          }
+
+          if (this.passwordForm) {
+            this.passwordForm.addEventListener('submit', (e) => this.handlePasswordSubmit(e));
+          }
+
+          if (this.btnCancel) {
+            this.btnCancel.addEventListener('click', () => {
+              window.location.href = '/dashboard.html';
+            });
+          }
+
+          if (this.btnDeleteAccount) {
+            this.btnDeleteAccount.addEventListener('click', () => this.handleDeleteAccount());
+          }
+        }
+
+        async handleProfileSubmit(e) {
+          e.preventDefault();
+          
+          const formData = new FormData(this.profileForm);
+          const profileData = {
+            name: formData.get('name'),
+            phone: formData.get('phone'),
+            bio: formData.get('bio')
+          };
+
+          try {
+            const response = await fetch('/api/auth/profile', {
+              method: 'PUT',
+              credentials: 'include',
+              headers: {
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify(profileData)
+            });
+
+            if (response.ok) {
+              alert('Profile updated successfully!');
+              // Update the navbar name
+              const data = await response.json();
+              if (this.userName) {
+                this.userName.textContent = data.user.name || data.user.email;
+              }
+            } else {
+              const error = await response.json();
+              alert('Failed to update profile: ' + (error.error || 'Unknown error'));
+            }
+          } catch (error) {
+            console.error('Profile update failed:', error);
+            alert('Failed to update profile');
+          }
+        }
+
+        async handlePasswordSubmit(e) {
+          e.preventDefault();
+          
+          const formData = new FormData(this.passwordForm);
+          const currentPassword = formData.get('currentPassword');
+          const newPassword = formData.get('newPassword');
+          const confirmPassword = formData.get('confirmPassword');
+
+          if (newPassword !== confirmPassword) {
+            alert('New passwords do not match');
+            return;
+          }
+
+          if (newPassword.length < 6) {
+            alert('New password must be at least 6 characters long');
+            return;
+          }
+
+          try {
+            const response = await fetch('/api/auth/change-password', {
+              method: 'POST',
+              credentials: 'include',
+              headers: {
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify({
+                currentPassword,
+                newPassword
+              })
+            });
+
+            if (response.ok) {
+              alert('Password updated successfully!');
+              this.passwordForm.reset();
+            } else {
+              const error = await response.json();
+              alert('Failed to update password: ' + (error.error || 'Unknown error'));
+            }
+          } catch (error) {
+            console.error('Password update failed:', error);
+            alert('Failed to update password');
+          }
+        }
+
+        async handleDeleteAccount() {
+          const confirmation = prompt('Type "DELETE" to confirm account deletion:');
+          if (confirmation !== 'DELETE') {
+            return;
+          }
+
+          if (!confirm('Are you absolutely sure? This action cannot be undone.')) {
+            return;
+          }
+
+          try {
+            const response = await fetch('/api/auth/delete-account', {
+              method: 'DELETE',
+              credentials: 'include'
+            });
+
+            if (response.ok) {
+              alert('Account deleted successfully');
+              window.location.href = '/';
+            } else {
+              const error = await response.json();
+              alert('Failed to delete account: ' + (error.error || 'Unknown error'));
+            }
+          } catch (error) {
+            console.error('Account deletion failed:', error);
+            alert('Failed to delete account');
+          }
+        }
+
+        async logout() {
+          try {
+            await fetch('/api/auth/logout', {
+              method: 'POST',
+              credentials: 'include'
+            });
+            window.location.href = '/';
+          } catch (error) {
+            console.error('Logout failed:', error);
+            window.location.href = '/';
+          }
+        }
+      }
+
+      // Initialize profile manager
+      new ProfileManager();
+    </script>
+  </body>
+</html>

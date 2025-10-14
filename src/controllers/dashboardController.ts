@@ -130,6 +130,46 @@ export async function getChatMessages(c: Context) {
 }
 
 /**
+ * Add a message to a specific chat session
+ */
+export async function addChatMessage(c: Context) {
+  try {
+    const userId = getUserId(c);
+    if (!userId) {
+      return c.json({ error: 'Authentication required' }, 401);
+    }
+
+    const sessionId = c.req.param('sessionId');
+    const { role, content, materialId, endpoint, tokensUsed } = await c.req.json();
+
+    if (!role || !content) {
+      return c.json({ error: 'Role and content are required' }, 400);
+    }
+
+    if (!['user', 'assistant'].includes(role)) {
+      return c.json({ error: 'Role must be either "user" or "assistant"' }, 400);
+    }
+
+    const message = await chatHistoryService.addMessage({
+      sessionId,
+      role: role as 'user' | 'assistant',
+      content,
+      materialId,
+      endpoint,
+      tokensUsed
+    });
+
+    return c.json({ message });
+  } catch (error) {
+    console.error('Add chat message error:', error);
+    if (error instanceof Error && error.message.includes('not found')) {
+      return c.json({ error: 'Chat session not found' }, 404);
+    }
+    return c.json({ error: 'Failed to add message' }, 500);
+  }
+}
+
+/**
  * Update chat session (title, archive status)
  */
 export async function updateChatSession(c: Context) {
