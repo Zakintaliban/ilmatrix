@@ -168,6 +168,7 @@ export async function getProfile(c: Context) {
         name: user.name,
         phone: user.phone,
         bio: user.bio,
+        auth_method: user.auth_method,
         created_at: user.created_at,
         last_login: user.last_login
       }

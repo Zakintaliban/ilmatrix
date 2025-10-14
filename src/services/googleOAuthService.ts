@@ -96,7 +96,7 @@ export async function getGoogleUserInfo(accessToken: string): Promise<GoogleUser
  */
 async function getUserByEmail(email: string) {
   const result = await query(
-    'SELECT id, email, username, name, birth_date, country, phone, bio, email_verified, created_at, updated_at, is_active, last_login FROM users WHERE email = $1 AND is_active = true',
+    'SELECT id, email, username, name, birth_date, country, phone, bio, email_verified, auth_method, created_at, updated_at, is_active, last_login FROM users WHERE email = $1 AND is_active = true',
     [email.toLowerCase()]
   );
   
@@ -112,9 +112,9 @@ async function createOAuthUser(googleUser: GoogleUserInfo) {
   
   // Create user in database (password_hash is now nullable for OAuth users)
   const result = await query(
-    `INSERT INTO users (email, username, name, birth_date, country, email_verified, is_active)
-     VALUES ($1, $2, $3, $4, $5, $6, $7)
-     RETURNING id, email, username, name, birth_date, country, phone, bio, email_verified, created_at, updated_at, is_active, last_login`,
+    `INSERT INTO users (email, username, name, birth_date, country, email_verified, auth_method, is_active)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+     RETURNING id, email, username, name, birth_date, country, phone, bio, email_verified, auth_method, created_at, updated_at, is_active, last_login`,
     [
       googleUser.email.toLowerCase(),
       username,
@@ -122,6 +122,7 @@ async function createOAuthUser(googleUser: GoogleUserInfo) {
       '2000-01-01', // Default birth date for OAuth users
       'Unknown', // Default country
       true, // Google emails are already verified
+      'google', // Authentication method
       true // Active by default
     ]
   );
