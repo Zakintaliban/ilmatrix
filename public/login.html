@@ -565,20 +565,13 @@
                     googleText.textContent = 'Connecting to Google...';
                     
                     try {
-                        // Check if Google OAuth is available
-                        const response = await fetch('/api/auth/google', {
-                            method: 'GET',
-                            credentials: 'include'
-                        });
+                        // Direct redirect to Google OAuth (no fetch needed)
+                        this.showSuccess('Redirecting to Google...');
                         
-                        if (response.ok) {
-                            // If successful, redirect would happen automatically
-                            // This code won't execute if redirect happens
-                            this.showSuccess('Redirecting to Google...');
-                        } else {
-                            const data = await response.json();
-                            this.showError(data.error || 'Google OAuth is not available. Please use email and password to sign in.');
-                        }
+                        // Small delay to show the message
+                        setTimeout(() => {
+                            window.location.href = '/api/auth/google';
+                        }, 500);
                         
                     } catch (error) {
                         console.error('Google login error:', error);
