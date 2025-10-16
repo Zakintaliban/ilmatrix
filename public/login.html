@@ -27,18 +27,6 @@
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
         }
-
-        .form-row {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 1rem;
-        }
-        
-        @media (max-width: 640px) {
-            .form-row {
-                grid-template-columns: 1fr;
-            }
-        }
     </style>
 </head>
 <body class="bg-gradient-to-b from-slate-50 to-slate-100 dark:from-black dark:to-black text-slate-900 dark:text-slate-100 min-h-screen antialiased">
@@ -47,7 +35,7 @@
             <!-- Header -->
             <div class="text-center">
                 <a href="/" class="text-4xl font-bold text-primary dark:text-white tracking-tight">ILMATRIX</a>
-                <h2 id="auth-subtitle" class="mt-6 text-3xl font-extrabold text-gray-900 dark:text-white">
+                <h2 class="mt-6 text-3xl font-extrabold text-gray-900 dark:text-white">
                     Sign in to your account
                 </h2>
                 <p class="mt-2 text-sm text-gray-600 dark:text-gray-400">
@@ -69,18 +57,20 @@
                     <div>
                         <label for="login-email" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Email</label>
                         <input type="email" id="login-email" required 
-                               class="mt-1 appearance-none rounded-lg relative block w-full px-3 py-3 border border-gray-300 dark:border-gray-600 placeholder-gray-500 dark:placeholder-gray-400 text-gray-900 dark:text-white bg-white dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary focus:z-10 sm:text-sm">
+                               class="mt-1 appearance-none rounded-lg relative block w-full px-3 py-3 border border-gray-300 dark:border-gray-600 placeholder-gray-500 dark:placeholder-gray-400 text-gray-900 dark:text-white bg-white dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary focus:z-10 sm:text-sm"
+                               placeholder="Enter your email">
                     </div>
                     <div>
                         <label for="login-password" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Password</label>
                         <input type="password" id="login-password" required 
-                               class="mt-1 appearance-none rounded-lg relative block w-full px-3 py-3 border border-gray-300 dark:border-gray-600 placeholder-gray-500 dark:placeholder-gray-400 text-gray-900 dark:text-white bg-white dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary focus:z-10 sm:text-sm">
+                               class="mt-1 appearance-none rounded-lg relative block w-full px-3 py-3 border border-gray-300 dark:border-gray-600 placeholder-gray-500 dark:placeholder-gray-400 text-gray-900 dark:text-white bg-white dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary focus:z-10 sm:text-sm"
+                               placeholder="Enter your password">
                     </div>
                 </div>
                 
                 <button type="submit" id="login-btn" 
                         class="group relative w-full flex justify-center py-3 px-4 border border-transparent text-sm font-medium rounded-lg text-white bg-primary hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200">
-                    <span class="loading hidden inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></span>
+                    <span id="login-loading" class="loading hidden inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></span>
                     Sign In
                 </button>
 
@@ -103,357 +93,43 @@
                         <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
                         <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
                     </svg>
-                    <span class="google-loading hidden inline-block w-4 h-4 border-2 border-gray-400 border-t-transparent rounded-full animate-spin mr-2"></span>
+                    <span id="google-loading" class="google-loading hidden inline-block w-4 h-4 border-2 border-gray-400 border-t-transparent rounded-full animate-spin mr-2"></span>
                     Sign in with Google
                 </button>
             </form>
 
-            <!-- Register Form -->
-            <form id="register-form" class="mt-8 space-y-6 hidden">
-                <div class="space-y-4">
-                    <div>
-                        <label for="register-name" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Full Name</label>
-                        <input type="text" id="register-name" required 
-                               class="mt-1 appearance-none rounded-lg relative block w-full px-3 py-3 border border-gray-300 dark:border-gray-600 placeholder-gray-500 dark:placeholder-gray-400 text-gray-900 dark:text-white bg-white dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary focus:z-10 sm:text-sm">
-                    </div>
-                    
-                    <div class="form-row">
-                        <div>
-                            <label for="register-username" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Username</label>
-                            <input type="text" id="register-username" required pattern="[a-zA-Z0-9_]{3,20}" 
-                                   title="3-20 characters, letters, numbers, and underscores only"
-                                   class="mt-1 appearance-none rounded-lg relative block w-full px-3 py-3 border border-gray-300 dark:border-gray-600 placeholder-gray-500 dark:placeholder-gray-400 text-gray-900 dark:text-white bg-white dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary focus:z-10 sm:text-sm">
-                        </div>
-                        <div>
-                            <label for="register-country" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Country</label>
-                            <select id="register-country" required 
-                                    class="mt-1 appearance-none rounded-lg relative block w-full px-3 py-3 border border-gray-300 dark:border-gray-600 placeholder-gray-500 dark:placeholder-gray-400 text-gray-900 dark:text-white bg-white dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary focus:z-10 sm:text-sm">
-                                <option value="">Select Country</option>
-                                <option value="AF">Afghanistan</option>
-                                <option value="AL">Albania</option>
-                                <option value="DZ">Algeria</option>
-                                <option value="AD">Andorra</option>
-                                <option value="AO">Angola</option>
-                                <option value="AG">Antigua and Barbuda</option>
-                                <option value="AR">Argentina</option>
-                                <option value="AM">Armenia</option>
-                                <option value="AU">Australia</option>
-                                <option value="AT">Austria</option>
-                                <option value="AZ">Azerbaijan</option>
-                                <option value="BS">Bahamas</option>
-                                <option value="BH">Bahrain</option>
-                                <option value="BD">Bangladesh</option>
-                                <option value="BB">Barbados</option>
-                                <option value="BY">Belarus</option>
-                                <option value="BE">Belgium</option>
-                                <option value="BZ">Belize</option>
-                                <option value="BJ">Benin</option>
-                                <option value="BT">Bhutan</option>
-                                <option value="BO">Bolivia</option>
-                                <option value="BA">Bosnia and Herzegovina</option>
-                                <option value="BW">Botswana</option>
-                                <option value="BR">Brazil</option>
-                                <option value="BN">Brunei Darussalam</option>
-                                <option value="BG">Bulgaria</option>
-                                <option value="BF">Burkina Faso</option>
-                                <option value="BI">Burundi</option>
-                                <option value="CV">Cabo Verde</option>
-                                <option value="KH">Cambodia</option>
-                                <option value="CM">Cameroon</option>
-                                <option value="CA">Canada</option>
-                                <option value="CF">Central African Republic</option>
-                                <option value="TD">Chad</option>
-                                <option value="CL">Chile</option>
-                                <option value="CN">China</option>
-                                <option value="CO">Colombia</option>
-                                <option value="KM">Comoros</option>
-                                <option value="CG">Congo</option>
-                                <option value="CR">Costa Rica</option>
-                                <option value="HR">Croatia</option>
-                                <option value="CU">Cuba</option>
-                                <option value="CY">Cyprus</option>
-                                <option value="CZ">Czechia</option>
-                                <option value="DK">Denmark</option>
-                                <option value="DJ">Djibouti</option>
-                                <option value="DM">Dominica</option>
-                                <option value="DO">Dominican Republic</option>
-                                <option value="EC">Ecuador</option>
-                                <option value="EG">Egypt</option>
-                                <option value="SV">El Salvador</option>
-                                <option value="GQ">Equatorial Guinea</option>
-                                <option value="ER">Eritrea</option>
-                                <option value="EE">Estonia</option>
-                                <option value="SZ">Eswatini</option>
-                                <option value="ET">Ethiopia</option>
-                                <option value="FJ">Fiji</option>
-                                <option value="FI">Finland</option>
-                                <option value="FR">France</option>
-                                <option value="GA">Gabon</option>
-                                <option value="GM">Gambia</option>
-                                <option value="GE">Georgia</option>
-                                <option value="DE">Germany</option>
-                                <option value="GH">Ghana</option>
-                                <option value="GR">Greece</option>
-                                <option value="GD">Grenada</option>
-                                <option value="GT">Guatemala</option>
-                                <option value="GN">Guinea</option>
-                                <option value="GW">Guinea-Bissau</option>
-                                <option value="GY">Guyana</option>
-                                <option value="HT">Haiti</option>
-                                <option value="HN">Honduras</option>
-                                <option value="HU">Hungary</option>
-                                <option value="IS">Iceland</option>
-                                <option value="IN">India</option>
-                                <option value="ID">Indonesia</option>
-                                <option value="IR">Iran</option>
-                                <option value="IQ">Iraq</option>
-                                <option value="IE">Ireland</option>
-                                <option value="IL">Israel</option>
-                                <option value="IT">Italy</option>
-                                <option value="JM">Jamaica</option>
-                                <option value="JP">Japan</option>
-                                <option value="JO">Jordan</option>
-                                <option value="KZ">Kazakhstan</option>
-                                <option value="KE">Kenya</option>
-                                <option value="KI">Kiribati</option>
-                                <option value="KW">Kuwait</option>
-                                <option value="KG">Kyrgyzstan</option>
-                                <option value="LA">Laos</option>
-                                <option value="LV">Latvia</option>
-                                <option value="LB">Lebanon</option>
-                                <option value="LS">Lesotho</option>
-                                <option value="LR">Liberia</option>
-                                <option value="LY">Libya</option>
-                                <option value="LI">Liechtenstein</option>
-                                <option value="LT">Lithuania</option>
-                                <option value="LU">Luxembourg</option>
-                                <option value="MG">Madagascar</option>
-                                <option value="MW">Malawi</option>
-                                <option value="MY">Malaysia</option>
-                                <option value="MV">Maldives</option>
-                                <option value="ML">Mali</option>
-                                <option value="MT">Malta</option>
-                                <option value="MH">Marshall Islands</option>
-                                <option value="MR">Mauritania</option>
-                                <option value="MU">Mauritius</option>
-                                <option value="MX">Mexico</option>
-                                <option value="FM">Micronesia</option>
-                                <option value="MD">Moldova</option>
-                                <option value="MC">Monaco</option>
-                                <option value="MN">Mongolia</option>
-                                <option value="ME">Montenegro</option>
-                                <option value="MA">Morocco</option>
-                                <option value="MZ">Mozambique</option>
-                                <option value="MM">Myanmar</option>
-                                <option value="NA">Namibia</option>
-                                <option value="NR">Nauru</option>
-                                <option value="NP">Nepal</option>
-                                <option value="NL">Netherlands</option>
-                                <option value="NZ">New Zealand</option>
-                                <option value="NI">Nicaragua</option>
-                                <option value="NE">Niger</option>
-                                <option value="NG">Nigeria</option>
-                                <option value="KP">North Korea</option>
-                                <option value="MK">North Macedonia</option>
-                                <option value="NO">Norway</option>
-                                <option value="OM">Oman</option>
-                                <option value="PK">Pakistan</option>
-                                <option value="PW">Palau</option>
-                                <option value="PS">Palestine</option>
-                                <option value="PA">Panama</option>
-                                <option value="PG">Papua New Guinea</option>
-                                <option value="PY">Paraguay</option>
-                                <option value="PE">Peru</option>
-                                <option value="PH">Philippines</option>
-                                <option value="PL">Poland</option>
-                                <option value="PT">Portugal</option>
-                                <option value="QA">Qatar</option>
-                                <option value="RO">Romania</option>
-                                <option value="RU">Russia</option>
-                                <option value="RW">Rwanda</option>
-                                <option value="KN">Saint Kitts and Nevis</option>
-                                <option value="LC">Saint Lucia</option>
-                                <option value="VC">Saint Vincent and the Grenadines</option>
-                                <option value="WS">Samoa</option>
-                                <option value="SM">San Marino</option>
-                                <option value="ST">Sao Tome and Principe</option>
-                                <option value="SA">Saudi Arabia</option>
-                                <option value="SN">Senegal</option>
-                                <option value="RS">Serbia</option>
-                                <option value="SC">Seychelles</option>
-                                <option value="SL">Sierra Leone</option>
-                                <option value="SG">Singapore</option>
-                                <option value="SK">Slovakia</option>
-                                <option value="SI">Slovenia</option>
-                                <option value="SB">Solomon Islands</option>
-                                <option value="SO">Somalia</option>
-                                <option value="ZA">South Africa</option>
-                                <option value="KR">South Korea</option>
-                                <option value="SS">South Sudan</option>
-                                <option value="ES">Spain</option>
-                                <option value="LK">Sri Lanka</option>
-                                <option value="SD">Sudan</option>
-                                <option value="SR">Suriname</option>
-                                <option value="SE">Sweden</option>
-                                <option value="CH">Switzerland</option>
-                                <option value="SY">Syria</option>
-                                <option value="TW">Taiwan</option>
-                                <option value="TJ">Tajikistan</option>
-                                <option value="TZ">Tanzania</option>
-                                <option value="TH">Thailand</option>
-                                <option value="TL">Timor-Leste</option>
-                                <option value="TG">Togo</option>
-                                <option value="TO">Tonga</option>
-                                <option value="TT">Trinidad and Tobago</option>
-                                <option value="TN">Tunisia</option>
-                                <option value="TR">Turkey</option>
-                                <option value="TM">Turkmenistan</option>
-                                <option value="TV">Tuvalu</option>
-                                <option value="UG">Uganda</option>
-                                <option value="UA">Ukraine</option>
-                                <option value="AE">United Arab Emirates</option>
-                                <option value="GB">United Kingdom</option>
-                                <option value="US">United States of America</option>
-                                <option value="UY">Uruguay</option>
-                                <option value="UZ">Uzbekistan</option>
-                                <option value="VU">Vanuatu</option>
-                                <option value="VA">Vatican City</option>
-                                <option value="VE">Venezuela</option>
-                                <option value="VN">Vietnam</option>
-                                <option value="YE">Yemen</option>
-                                <option value="ZM">Zambia</option>
-                                <option value="ZW">Zimbabwe</option>
-                            </select>
-                        </div>
-                    </div>
-                    
-                    <div>
-                        <label for="register-birth-date" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Birth Date</label>
-                        <input type="date" id="register-birth-date" required 
-                               class="mt-1 appearance-none rounded-lg relative block w-full px-3 py-3 border border-gray-300 dark:border-gray-600 placeholder-gray-500 dark:placeholder-gray-400 text-gray-900 dark:text-white bg-white dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary focus:z-10 sm:text-sm">
-                    </div>
-                    
-                    <div>
-                        <label for="register-email" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Email</label>
-                        <input type="email" id="register-email" required 
-                               class="mt-1 appearance-none rounded-lg relative block w-full px-3 py-3 border border-gray-300 dark:border-gray-600 placeholder-gray-500 dark:placeholder-gray-400 text-gray-900 dark:text-white bg-white dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary focus:z-10 sm:text-sm">
-                    </div>
-                    
-                    <div class="form-row">
-                        <div>
-                            <label for="register-password" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Password</label>
-                            <input type="password" id="register-password" required minlength="8" 
-                                   class="mt-1 appearance-none rounded-lg relative block w-full px-3 py-3 border border-gray-300 dark:border-gray-600 placeholder-gray-500 dark:placeholder-gray-400 text-gray-900 dark:text-white bg-white dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary focus:z-10 sm:text-sm">
-                        </div>
-                        <div>
-                            <label for="register-confirm-password" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Confirm Password</label>
-                            <input type="password" id="register-confirm-password" required 
-                                   class="mt-1 appearance-none rounded-lg relative block w-full px-3 py-3 border border-gray-300 dark:border-gray-600 placeholder-gray-500 dark:placeholder-gray-400 text-gray-900 dark:text-white bg-white dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary focus:z-10 sm:text-sm">
-                        </div>
-                    </div>
-                </div>
-                
-                <button type="submit" id="register-btn" 
-                        class="group relative w-full flex justify-center py-3 px-4 border border-transparent text-sm font-medium rounded-lg text-white bg-primary hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200">
-                    <span class="loading hidden inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></span>
-                    Create Account
-                </button>
-
-                <!-- Divider -->
-                <div class="relative">
-                    <div class="absolute inset-0 flex items-center">
-                        <div class="w-full border-t border-gray-300 dark:border-gray-600"></div>
-                    </div>
-                    <div class="relative flex justify-center text-sm">
-                        <span class="px-2 bg-slate-50 dark:bg-black text-gray-500 dark:text-gray-400">Or continue with</span>
-                    </div>
-                </div>
-
-                <!-- Google OAuth Button -->
-                <button type="button" id="google-register-btn" 
-                        class="group relative w-full flex justify-center items-center py-3 px-4 border border-gray-300 dark:border-gray-600 text-sm font-medium rounded-lg text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200">
-                    <svg class="w-5 h-5 mr-3" viewBox="0 0 24 24">
-                        <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
-                        <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
-                        <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
-                        <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
-                    </svg>
-                    <span class="google-loading hidden inline-block w-4 h-4 border-2 border-gray-400 border-t-transparent rounded-full animate-spin mr-2"></span>
-                    Sign up with Google
-                </button>
-            </form>
-
-            <!-- Switch between login/register -->
+            <!-- Switch to register -->
             <div class="text-center">
-                <p id="switch-text" class="text-sm text-gray-600 dark:text-gray-400">
+                <p class="text-sm text-gray-600 dark:text-gray-400">
                     Don't have an account?
                 </p>
-                <button type="button" id="switch-btn" 
-                        class="font-medium text-primary hover:text-primary/80 transition-colors duration-200">
+                <a href="/register.html" class="font-medium text-primary hover:text-primary/80 transition-colors duration-200">
                     Create one
-                </button>
+                </a>
             </div>
         </div>
     </div>
 
     <script>
-        class AuthManager {
+        class LoginManager {
             constructor() {
-                this.isLoginMode = true;
                 this.initializeElements();
                 this.attachEventListeners();
             }
 
             initializeElements() {
                 this.loginForm = document.getElementById('login-form');
-                this.registerForm = document.getElementById('register-form');
-                this.switchBtn = document.getElementById('switch-btn');
-                this.authSubtitle = document.getElementById('auth-subtitle');
-                this.switchText = document.getElementById('switch-text');
                 this.errorMessage = document.getElementById('error-message');
                 this.successMessage = document.getElementById('success-message');
                 this.loginBtn = document.getElementById('login-btn');
-                this.registerBtn = document.getElementById('register-btn');
+                this.loginLoading = document.getElementById('login-loading');
+                this.googleLoginBtn = document.getElementById('google-login-btn');
+                this.googleLoading = document.getElementById('google-loading');
             }
 
             attachEventListeners() {
                 this.loginForm.addEventListener('submit', (e) => this.handleLogin(e));
-                this.registerForm.addEventListener('submit', (e) => this.handleRegister(e));
-                this.switchBtn.addEventListener('click', () => this.switchMode());
-                
-                // Google OAuth buttons
-                const googleLoginBtn = document.getElementById('google-login-btn');
-                const googleRegisterBtn = document.getElementById('google-register-btn');
-                if (googleLoginBtn) {
-                    googleLoginBtn.addEventListener('click', () => this.handleGoogleLogin());
-                }
-                if (googleRegisterBtn) {
-                    googleRegisterBtn.addEventListener('click', () => this.handleGoogleLogin());
-                }
-                
-                // Password confirmation validation
-                const confirmPassword = document.getElementById('register-confirm-password');
-                confirmPassword.addEventListener('input', () => this.validatePasswordMatch());
-            }
-
-            switchMode() {
-                this.isLoginMode = !this.isLoginMode;
-                this.clearMessages();
-                this.clearForms();
-
-                if (this.isLoginMode) {
-                    this.loginForm.classList.remove('hidden');
-                    this.registerForm.classList.add('hidden');
-                    this.authSubtitle.textContent = 'Sign in to your account';
-                    this.switchText.textContent = "Don't have an account?";
-                    this.switchBtn.textContent = 'Create one';
-                } else {
-                    this.loginForm.classList.add('hidden');
-                    this.registerForm.classList.remove('hidden');
-                    this.authSubtitle.textContent = 'Create your account';
-                    this.switchText.textContent = "Already have an account?";
-                    this.switchBtn.textContent = 'Sign in';
-                }
+                this.googleLoginBtn.addEventListener('click', () => this.handleGoogleLogin());
             }
 
             clearMessages() {
@@ -461,47 +137,37 @@
                 this.successMessage.classList.add('hidden');
             }
 
-            clearForms() {
-                this.loginForm.reset();
-                this.registerForm.reset();
-                document.querySelectorAll('.error').forEach(el => el.classList.remove('error'));
-            }
-
             showError(message) {
                 this.clearMessages();
                 this.errorMessage.querySelector('div').textContent = message;
                 this.errorMessage.classList.remove('hidden');
+                this.errorMessage.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
             }
 
             showSuccess(message) {
                 this.clearMessages();
                 this.successMessage.querySelector('div').textContent = message;
                 this.successMessage.classList.remove('hidden');
+                this.successMessage.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
             }
 
-            setLoading(isLoading, isLogin = true) {
-                const btn = isLogin ? this.loginBtn : this.registerBtn;
-                const loading = btn.querySelector('.loading');
-                
+            setLoading(isLoading) {
                 if (isLoading) {
-                    btn.disabled = true;
-                    loading.classList.remove('hidden');
+                    this.loginBtn.disabled = true;
+                    this.loginLoading.classList.remove('hidden');
                 } else {
-                    btn.disabled = false;
-                    loading.classList.add('hidden');
+                    this.loginBtn.disabled = false;
+                    this.loginLoading.classList.add('hidden');
                 }
             }
 
-            validatePasswordMatch() {
-                const password = document.getElementById('register-password').value;
-                const confirmPassword = document.getElementById('register-confirm-password');
-                
-                if (confirmPassword.value && password !== confirmPassword.value) {
-                    confirmPassword.classList.add('error');
-                    return false;
+            setGoogleLoading(isLoading) {
+                if (isLoading) {
+                    this.googleLoginBtn.disabled = true;
+                    this.googleLoading.classList.remove('hidden');
                 } else {
-                    confirmPassword.classList.remove('error');
-                    return true;
+                    this.googleLoginBtn.disabled = false;
+                    this.googleLoading.classList.add('hidden');
                 }
             }
 
@@ -509,7 +175,7 @@
                 e.preventDefault();
                 this.clearMessages();
 
-                const email = document.getElementById('login-email').value;
+                const email = document.getElementById('login-email').value.trim();
                 const password = document.getElementById('login-password').value;
 
                 if (!email || !password) {
@@ -517,7 +183,7 @@
                     return;
                 }
 
-                this.setLoading(true, true);
+                this.setLoading(true);
 
                 try {
                     const response = await fetch('/api/auth/login', {
@@ -541,135 +207,35 @@
                     }
                 } catch (error) {
                     console.error('Login error:', error);
-                    this.showError('Network error. Please try again.');
+                    this.showError('Network error. Please check your connection and try again.');
                 } finally {
-                    this.setLoading(false, true);
+                    this.setLoading(false);
                 }
             }
 
             async handleGoogleLogin() {
                 this.clearMessages();
+                this.setGoogleLoading(true);
                 
-                // Show loading state for both login and register buttons
-                const googleLoginBtn = document.getElementById('google-login-btn');
-                const googleRegisterBtn = document.getElementById('google-register-btn');
-                const activeBtn = this.isLoginMode ? googleLoginBtn : googleRegisterBtn;
-                
-                if (activeBtn) {
-                    const googleLoading = activeBtn.querySelector('.google-loading');
-                    const googleText = activeBtn.querySelector('span:last-child');
-                    const originalText = googleText.textContent;
-                    
-                    activeBtn.disabled = true;
-                    googleLoading.classList.remove('hidden');
-                    googleText.textContent = 'Connecting to Google...';
-                    
-                    try {
-                        // Direct redirect to Google OAuth (no fetch needed)
-                        this.showSuccess('Redirecting to Google...');
-                        
-                        // Small delay to show the message
-                        setTimeout(() => {
-                            window.location.href = '/api/auth/google';
-                        }, 500);
-                        
-                    } catch (error) {
-                        console.error('Google login error:', error);
-                        this.showError('Google authentication failed. Please use email and password to sign in.');
-                    } finally {
-                        // Reset button state
-                        setTimeout(() => {
-                            if (activeBtn) {
-                                activeBtn.disabled = false;
-                                const googleLoading = activeBtn.querySelector('.google-loading');
-                                const googleText = activeBtn.querySelector('span:last-child');
-                                googleLoading.classList.add('hidden');
-                                googleText.textContent = originalText;
-                            }
-                        }, 2000);
-                    }
-                }
-            }
-
-            async handleRegister(e) {
-                e.preventDefault();
-                this.clearMessages();
-
-                const name = document.getElementById('register-name').value;
-                const username = document.getElementById('register-username').value;
-                const email = document.getElementById('register-email').value;
-                const password = document.getElementById('register-password').value;
-                const confirmPassword = document.getElementById('register-confirm-password').value;
-                const birth_date = document.getElementById('register-birth-date').value;
-                const country = document.getElementById('register-country').value;
-
-                if (!name || !username || !email || !password || !confirmPassword || !birth_date || !country) {
-                    this.showError('Please fill in all fields');
-                    return;
-                }
-
-                if (!/^[a-zA-Z0-9_]{3,20}$/.test(username)) {
-                    this.showError('Username must be 3-20 characters and contain only letters, numbers, and underscores');
-                    return;
-                }
-
-                if (password.length < 8) {
-                    this.showError('Password must be at least 8 characters long');
-                    return;
-                }
-
-                if (password !== confirmPassword) {
-                    this.showError('Passwords do not match');
-                    return;
-                }
-
-                // Validate age (must be at least 13 years old)
-                const birthDate = new Date(birth_date);
-                const today = new Date();
-                const age = today.getFullYear() - birthDate.getFullYear();
-                const monthDiff = today.getMonth() - birthDate.getMonth();
-                if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
-                    age--;
-                }
-                
-                if (age < 13) {
-                    this.showError('You must be at least 13 years old to register');
-                    return;
-                }
-
-                this.setLoading(true, false);
-
                 try {
-                    const response = await fetch('/api/auth/register', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                        },
-                        body: JSON.stringify({ name, username, email, password, birth_date, country }),
-                    });
-
-                    const data = await response.json();
-
-                    if (response.ok) {
-                        this.showSuccess('Account created successfully! Please check your email for verification. You can now sign in.');
-                        // Switch to login mode after successful registration
-                        setTimeout(() => {
-                            this.switchMode();
-                            document.getElementById('login-email').value = email;
-                        }, 3000);
-                    } else {
-                        this.showError(data.error || 'Registration failed');
-                    }
+                    this.showSuccess('Redirecting to Google...');
+                    
+                    setTimeout(() => {
+                        window.location.href = '/api/auth/google';
+                    }, 500);
+                    
                 } catch (error) {
-                    console.error('Registration error:', error);
-                    this.showError('Network error. Please try again.');
+                    console.error('Google login error:', error);
+                    this.showError('Google authentication failed. Please use email and password to sign in.');
                 } finally {
-                    this.setLoading(false, false);
+                    setTimeout(() => {
+                        this.setGoogleLoading(false);
+                    }, 2000);
                 }
             }
         }
 
-        // Dark mode support (same as index.html)
+        // Dark mode support
         (function () {
             const root = document.documentElement;
             const getCookie = (name) => {
@@ -689,9 +255,16 @@
             root.classList.toggle("dark", initial === "dark");
         })();
 
-        // Initialize the authentication manager when page loads
+        // Initialize the login manager when page loads
         document.addEventListener('DOMContentLoaded', () => {
-            new AuthManager();
+            new LoginManager();
+            
+            // Auto-fill email if passed from URL params
+            const urlParams = new URLSearchParams(window.location.search);
+            const email = urlParams.get('email');
+            if (email) {
+                document.getElementById('login-email').value = email;
+            }
         });
     </script>
 </body>
