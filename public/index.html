@@ -137,6 +137,119 @@
         padding-bottom: calc(1rem + var(--safe-bottom));
       }
 
+      /* Features section gradient border effect */
+      #features .container {
+        position: relative;
+      }
+      /* Light theme */
+      #features .container::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 3px;
+        background: linear-gradient(to right,
+          transparent 0%,
+          rgba(15, 14, 133, 0.3) 20%,
+          rgba(15, 14, 133, 0.6) 40%,
+          rgba(15, 14, 133, 0.9) 50%,
+          rgba(15, 14, 133, 0.6) 60%,
+          rgba(15, 14, 133, 0.3) 80%,
+          transparent 100%
+        );
+      }
+      /* Dark theme */
+      .dark #features .container::before {
+        background: linear-gradient(to right,
+          transparent 0%,
+          rgba(147, 197, 253, 0.3) 20%,
+          rgba(147, 197, 253, 0.6) 40%,
+          rgba(147, 197, 253, 0.9) 50%,
+          rgba(147, 197, 253, 0.6) 60%,
+          rgba(147, 197, 253, 0.3) 80%,
+          transparent 100%
+        );
+      }
+      /* Blue theme */
+      .theme-blue #features .container::before {
+        background: linear-gradient(to right,
+          transparent 0%,
+          rgba(15, 14, 133, 0.3) 20%,
+          rgba(15, 14, 133, 0.6) 40%,
+          rgba(15, 14, 133, 0.9) 50%,
+          rgba(15, 14, 133, 0.6) 60%,
+          rgba(15, 14, 133, 0.3) 80%,
+          transparent 100%
+        );
+      }
+      /* Pink theme */
+      .theme-pink #features .container::before {
+        background: linear-gradient(to right,
+          transparent 0%,
+          rgba(228, 76, 153, 0.3) 20%,
+          rgba(228, 76, 153, 0.6) 40%,
+          rgba(228, 76, 153, 0.9) 50%,
+          rgba(228, 76, 153, 0.6) 60%,
+          rgba(228, 76, 153, 0.3) 80%,
+          transparent 100%
+        );
+      }
+      /* Green theme */
+      .theme-green #features .container::before {
+        background: linear-gradient(to right,
+          transparent 0%,
+          rgba(27, 97, 47, 0.3) 20%,
+          rgba(27, 97, 47, 0.6) 40%,
+          rgba(27, 97, 47, 0.9) 50%,
+          rgba(27, 97, 47, 0.6) 60%,
+          rgba(27, 97, 47, 0.3) 80%,
+          transparent 100%
+        );
+      }
+
+      /* How it works section - theme-specific borders and text colors */
+      /* Light theme - tertiary green */
+      #how .how-step {
+        border-color: #1b612f;
+        box-shadow: 0 0 0 2px rgba(27, 97, 47, 0.3);
+      }
+      #how .how-step .text-tertiary {
+        color: #1b612f !important;
+      }
+      /* Dark theme - emerald */
+      .dark #how .how-step {
+        border-color: #86efac;
+        box-shadow: 0 0 0 2px rgba(134, 239, 172, 0.3);
+      }
+      .dark #how .how-step .text-tertiary {
+        color: #86efac !important;
+      }
+      /* Blue theme */
+      .theme-blue #how .how-step {
+        border-color: #0f0e85;
+        box-shadow: 0 0 0 2px rgba(15, 14, 133, 0.3);
+      }
+      .theme-blue #how .how-step .text-tertiary {
+        color: #0f0e85 !important;
+      }
+      /* Pink theme */
+      .theme-pink #how .how-step {
+        border-color: #e44c99;
+        box-shadow: 0 0 0 2px rgba(228, 76, 153, 0.3);
+      }
+      .theme-pink #how .how-step .text-tertiary {
+        color: #e44c99 !important;
+      }
+      /* Green theme */
+      .theme-green #how .how-step {
+        border-color: #1b612f;
+        box-shadow: 0 0 0 2px rgba(27, 97, 47, 0.3);
+      }
+      .theme-green #how .how-step .text-tertiary {
+        color: #1b612f !important;
+      }
+
       /* ========== 5-THEME SYSTEM ==========  */
 
       /* Theme 3: Resistance Blue (Blue Monochromatic) 🐬 */
@@ -444,7 +557,7 @@
         </div>
       </section>
 
-      <section id="features" class="bg-gray-50 dark:bg-neutral-950">
+      <section id="features" class="bg-gray-100 dark:bg-neutral-950">
         <div class="container mx-auto max-w-6xl px-4 py-12">
           <h3 class="text-2xl font-bold text-primary">Key features</h3>
           <p class="text-gray-600 dark:text-slate-300 mt-1 text-sm">
@@ -526,7 +639,7 @@
           <h3 class="text-2xl font-bold text-primary">How it works</h3>
           <div class="mt-6 grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div
-              class="rounded-lg ring-1 ring-gray-200 dark:ring-white/10 p-4 bg-gray-50 dark:bg-neutral-900"
+              class="how-step rounded-lg border-2 p-4 bg-gray-50 dark:bg-neutral-900 shadow-md"
             >
               <div class="text-tertiary font-semibold mb-2">1. Upload</div>
               <div class="text-sm text-gray-600 dark:text-slate-300 mt-1">
@@ -540,7 +653,7 @@
               </ul>
             </div>
             <div
-              class="rounded-lg ring-1 ring-gray-200 dark:ring-white/10 p-4 bg-gray-50 dark:bg-neutral-900"
+              class="how-step rounded-lg border-2 p-4 bg-gray-50 dark:bg-neutral-900 shadow-md"
             >
               <div class="text-tertiary font-semibold mb-2">2. Choose Tool</div>
               <div class="text-sm text-gray-600 dark:text-slate-300 mt-1">
@@ -556,7 +669,7 @@
               </ul>
             </div>
             <div
-              class="rounded-lg ring-1 ring-gray-200 dark:ring-white/10 p-4 bg-gray-50 dark:bg-neutral-900"
+              class="how-step rounded-lg border-2 p-4 bg-gray-50 dark:bg-neutral-900 shadow-md"
             >
               <div class="text-tertiary font-semibold mb-2">3. Learn & Iterate</div>
               <div class="text-sm text-gray-600 dark:text-slate-300 mt-1">
