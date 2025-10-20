@@ -1761,40 +1761,140 @@
         }
       }
 
+      // Reset all session-related state
+      function resetSessionState() {
+        // Clear chat messages
+        chat = [];
+
+        // Clear material ID (CRITICAL FIX: prevents material bleeding between sessions)
+        materialId = null;
+        localStorage.removeItem("ilmatrix_materialId");
+
+        // Clear MCQ questions
+        mcqQuestions = [];
+
+        // Reset active tool to chat
+        activeTool = "chat";
+
+        // Reset dialogue state (if exists)
+        if (typeof resetDialogueUI === 'function') {
+          try {
+            resetDialogueUI();
+          } catch (e) {
+            console.warn('Failed to reset dialogue UI:', e);
+          }
+        }
+
+        // Clear UI elements
+        const currentMaterialLabel = $("currentMaterialLabel");
+        if (currentMaterialLabel) {
+          currentMaterialLabel.textContent = "none";
+        }
+
+        const attachmentsBar = $("attachmentsBar");
+        if (attachmentsBar) {
+          attachmentsBar.classList.add("hidden");
+        }
+
+        const attachments = $("attachments");
+        if (attachments) {
+          attachments.innerHTML = '<em class="text-gray-500 dark:text-slate-400">No files yet. Drop or click to upload.</em>';
+        }
+
+        // Clear all result areas
+        const resultAreas = ['explainResult', 'quizMCQ', 'quizResult', 'forumResult', 'examResult'];
+        resultAreas.forEach(id => {
+          const el = $(id);
+          if (el) el.innerHTML = '';
+        });
+
+        // Clear flashcards container
+        const flashcardsContainer = $("flashcardsContainer");
+        if (flashcardsContainer) {
+          flashcardsContainer.innerHTML = '';
+        }
+
+        // Update UI
+        updateActiveToolBadge();
+        setComposerPlaceholder();
+        renderChat();
+      }
+
       // Load chat session from server
       async function loadChatSession(sessionIdParam) {
         try {
+          // CRITICAL FIX: Reset all state before loading new session
+          // This prevents material/chat bleeding between sessions
+          resetSessionState();
+
           sessionId = sessionIdParam;
-          
+
           // Get session messages from server
           const response = await fetch(`/api/dashboard/chat/sessions/${sessionId}/messages`, {
             credentials: 'include'
           });
-          
+
           if (!response.ok) {
             throw new Error('Failed to load session');
           }
-          
+
           const data = await response.json();
-          
+
+          // CRITICAL FIX: Extract materialId BEFORE converting to chat format
+          // Get the most recent materialId from server messages
+          const messagesWithMaterial = data.messages.filter(msg => msg.materialId);
+          let lastMaterialId = null;
+          if (messagesWithMaterial.length > 0) {
+            lastMaterialId = messagesWithMaterial[messagesWithMaterial.length - 1].materialId;
+          }
+
           // Convert server messages to chat format
+          // IMPORTANT: Only include role and content (required by API)
+          // Do NOT include extra fields like materialId, timestamp, etc.
           chat = data.messages.map(msg => ({
             role: msg.role,
-            content: msg.content,
-            timestamp: msg.createdAt
+            content: msg.content
           }));
-          
+
+          // CRITICAL FIX: Load the materialId associated with this session
+          if (lastMaterialId) {
+
+            // Verify this material still exists before loading
+            const materialExists = await verifyMaterialExists(lastMaterialId);
+            if (materialExists) {
+              // Load the material associated with this session
+              materialId = lastMaterialId;
+              localStorage.setItem("ilmatrix_materialId", materialId);
+
+              // Fetch and display material info
+              try {
+                const matRes = await fetch(`/api/material/${materialId}`);
+                if (matRes.ok) {
+                  const matData = await matRes.json();
+                  updateMaterialUI(matData);
+                }
+              } catch (e) {
+                console.warn('Failed to load material info:', e);
+              }
+            }
+          }
+
           // Update URL without reloading page
           const url = new URL(window.location);
           url.searchParams.set('sessionId', sessionId);
           window.history.replaceState(null, '', url);
-          
+
           renderChat();
+
+          // Close sidebar after loading session (better UX)
+          if (chatSidebar) {
+            chatSidebar.close();
+          }
+
           return true;
         } catch (error) {
           console.error('Failed to load chat session:', error);
-          chat = [];
-          renderChat();
+          resetSessionState();
           return false;
         }
       }
@@ -1896,6 +1996,15 @@
           /[&<>]/g,
           (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c])
         );
+
+      // Clean chat messages for API (remove extra fields that API doesn't accept)
+      function cleanMessagesForAPI(messages) {
+        return messages.map(msg => ({
+          role: msg.role,
+          content: msg.content
+          // Only include role and content, remove timestamp, materialId, etc.
+        }));
+      }
 
       // Render Markdown safely using marked + DOMPurify (fallback to escaping)
       function renderMarkdown(s) {
@@ -2262,6 +2371,20 @@
 
       function setCurrentMaterialLabel() {
         currentMaterialLabel.textContent = materialId ? materialId : "none";
+      }
+
+      // Update material UI with loaded material data
+      function updateMaterialUI(materialData) {
+        if (!materialData) return;
+
+        // Update material label
+        setCurrentMaterialLabel();
+
+        // Update attachments list
+        const files = Array.isArray(materialData.files) ? materialData.files : [];
+        const total = Number(materialData.totalSize || 0);
+        renderAttachmentsList(files, total);
+        updateAttachmentsBar(files, total);
       }
 
       function bytesToHuman(n) {
@@ -3150,7 +3273,7 @@
           // Default general chat
           const payload = {
             materialId: materialId || undefined,
-            messages: chat,
+            messages: cleanMessagesForAPI(chat),  // CRITICAL FIX: Clean messages before sending
           };
           const res = await fetch("/api/chat", {
             method: "POST",
@@ -4406,13 +4529,13 @@
           this.sessionsList.innerHTML = sessions.map(session => `
             <div class="session-item group p-3 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 border border-transparent ${session.id === sessionId ? 'bg-blue-50 dark:bg-blue-900 border-blue-200 dark:border-blue-700' : ''}">
               <div class="flex items-start justify-between">
-                <div class="flex-1 cursor-pointer" onclick="loadChatSession('${session.id}')">
+                <div class="flex-1 cursor-pointer" onclick="chatSidebar.switchToSession('${session.id}')">
                   <div class="font-medium text-sm text-gray-900 dark:text-white truncate">${this.escapeHtml(session.title)}</div>
                   <div class="text-xs text-gray-500 dark:text-gray-400 mt-1">${session.messageCount} messages</div>
                   <div class="text-xs text-gray-400 dark:text-gray-500">${this.formatDate(session.updatedAt)}</div>
                 </div>
                 <div class="flex items-center gap-1 ml-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <button 
+                  <button
                     onclick="event.stopPropagation(); chatSidebar.editSession('${session.id}', '${this.escapeHtml(session.title)}')"
                     class="p-1 rounded text-gray-400 hover:text-blue-600 hover:bg-blue-100 dark:hover:bg-blue-900"
                     title="Edit title"
@@ -4421,7 +4544,7 @@
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
                     </svg>
                   </button>
-                  <button 
+                  <button
                     onclick="event.stopPropagation(); chatSidebar.deleteSession('${session.id}', '${this.escapeHtml(session.title)}')"
                     class="p-1 rounded text-gray-400 hover:text-red-600 hover:bg-red-100 dark:hover:bg-red-900"
                     title="Delete session"
@@ -4436,10 +4559,24 @@
           `).join('');
         }
         
+        async switchToSession(sessionIdParam) {
+          // Prevent switching to the same session
+          if (sessionIdParam === sessionId) {
+            this.close();
+            return;
+          }
+
+          // Load the selected session (state will be reset automatically in loadChatSession)
+          await loadChatSession(sessionIdParam);
+
+          // Refresh the sidebar to highlight the active session
+          this.loadChatSessions();
+        }
+
         async createNewChat() {
           const title = prompt('Enter chat title:');
           if (!title) return;
-          
+
           try {
             const response = await fetch('/api/dashboard/chat/sessions', {
               method: 'POST',
@@ -4449,13 +4586,14 @@
               },
               body: JSON.stringify({ title })
             });
-            
+
             if (!response.ok) throw new Error('Failed to create session');
-            
+
             const data = await response.json();
-            
-            // Load the new session
-            window.location.href = `?sessionId=${data.session.id}`;
+
+            // CRITICAL FIX: Use switchToSession instead of page reload
+            // This ensures state is properly reset
+            await this.switchToSession(data.session.id);
           } catch (error) {
             console.error('Failed to create new chat:', error);
             alert('Failed to create new chat session');
