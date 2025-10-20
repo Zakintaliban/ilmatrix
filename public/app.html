@@ -379,6 +379,22 @@
         --safe-left: env(safe-area-inset-left, 0px);
         --safe-right: env(safe-area-inset-right, 0px);
       }
+
+      /* Sidebar transitions */
+      #chatSidebar {
+        transition: transform 0.3s ease-out;
+        transform: translateX(-100%);
+      }
+      #chatSidebar.sidebar-open {
+        transform: translateX(0);
+      }
+      #sidebarOverlay {
+        transition: opacity 0.3s ease-out;
+        opacity: 0;
+      }
+      #sidebarOverlay.overlay-open {
+        opacity: 1;
+      }
       :root {
         --mobile-frame-max: 440px;
       }
@@ -746,7 +762,7 @@
       </header>
 
       <!-- Chat History Sidebar -->
-      <div id="chatSidebar" class="hidden fixed left-0 top-0 h-full w-80 bg-gray-50 dark:bg-black border-r border-gray-200 dark:border-white/10 z-50 flex flex-col">
+      <div id="chatSidebar" class="hidden fixed left-0 top-0 h-full w-full sm:w-80 max-w-sm bg-gray-50 dark:bg-black border-r border-gray-200 dark:border-white/10 z-50 flex flex-col shadow-2xl">
         <!-- Sidebar Header -->
         <div class="flex items-center justify-between p-4 border-b border-gray-200 dark:border-white/10">
           <h2 class="text-lg font-semibold text-gray-900 dark:text-white">Chat History</h2>
@@ -1763,6 +1779,9 @@
 
       // Reset all session-related state
       function resetSessionState() {
+        console.log('[Session Reset] Starting state reset...');
+        console.log('[Session Reset] Before - materialId:', materialId, 'chat length:', chat.length);
+
         // Clear chat messages
         chat = [];
 
@@ -1818,10 +1837,14 @@
         updateActiveToolBadge();
         setComposerPlaceholder();
         renderChat();
+
+        console.log('[Session Reset] After - materialId:', materialId, 'chat length:', chat.length);
+        console.log('[Session Reset] State reset complete');
       }
 
       // Load chat session from server
       async function loadChatSession(sessionIdParam) {
+        console.log('[Load Session] Loading session:', sessionIdParam);
         try {
           // CRITICAL FIX: Reset all state before loading new session
           // This prevents material/chat bleeding between sessions
@@ -1858,13 +1881,17 @@
 
           // CRITICAL FIX: Load the materialId associated with this session
           if (lastMaterialId) {
+            console.log('[Load Session] Found materialId in messages:', lastMaterialId);
 
             // Verify this material still exists before loading
             const materialExists = await verifyMaterialExists(lastMaterialId);
+            console.log('[Load Session] Material exists:', materialExists);
+
             if (materialExists) {
               // Load the material associated with this session
               materialId = lastMaterialId;
               localStorage.setItem("ilmatrix_materialId", materialId);
+              console.log('[Load Session] Loaded materialId:', materialId);
 
               // Fetch and display material info
               try {
@@ -1872,11 +1899,14 @@
                 if (matRes.ok) {
                   const matData = await matRes.json();
                   updateMaterialUI(matData);
+                  console.log('[Load Session] Material UI updated');
                 }
               } catch (e) {
                 console.warn('Failed to load material info:', e);
               }
             }
+          } else {
+            console.log('[Load Session] No materialId found in messages');
           }
 
           // Update URL without reloading page
@@ -1891,9 +1921,12 @@
             chatSidebar.close();
           }
 
+          console.log('[Load Session] Session loaded successfully');
+          console.log('[Load Session] Final state - sessionId:', sessionId, 'materialId:', materialId, 'messages:', chat.length);
+
           return true;
         } catch (error) {
-          console.error('Failed to load chat session:', error);
+          console.error('[Load Session] Failed to load chat session:', error);
           resetSessionState();
           return false;
         }
@@ -4492,16 +4525,42 @@
         }
         
         open() {
+          // Remove hidden first to allow transition
           this.sidebar.classList.remove('hidden');
           this.overlay.classList.remove('hidden');
+
+          // Force reflow to ensure transition works
+          this.sidebar.offsetHeight;
+          this.overlay.offsetHeight;
+
+          // Add open classes for transition
+          this.sidebar.classList.add('sidebar-open');
+          this.overlay.classList.add('overlay-open');
+
           this.isOpen = true;
           this.loadChatSessions(); // Refresh sessions when opening
+
+          // Prevent body scroll on mobile when sidebar is open
+          document.body.style.overflow = 'hidden';
         }
-        
+
         close() {
-          this.sidebar.classList.add('hidden');
-          this.overlay.classList.add('hidden');
+          // Remove open classes for transition
+          this.sidebar.classList.remove('sidebar-open');
+          this.overlay.classList.remove('overlay-open');
+
+          // Wait for transition to complete before hiding
+          setTimeout(() => {
+            if (!this.isOpen) {
+              this.sidebar.classList.add('hidden');
+              this.overlay.classList.add('hidden');
+            }
+          }, 300); // Match transition duration
+
           this.isOpen = false;
+
+          // Re-enable body scroll
+          document.body.style.overflow = '';
         }
         
         async loadChatSessions() {
@@ -4560,17 +4619,53 @@
         }
         
         async switchToSession(sessionIdParam) {
+          console.log('[Mobile Debug] switchToSession called with:', sessionIdParam);
+          console.log('[Mobile Debug] Current sessionId:', sessionId);
+
           // Prevent switching to the same session
           if (sessionIdParam === sessionId) {
+            console.log('[Mobile Debug] Same session, closing sidebar');
             this.close();
             return;
           }
 
-          // Load the selected session (state will be reset automatically in loadChatSession)
-          await loadChatSession(sessionIdParam);
+          try {
+            // Show loading state
+            const sessionsList = this.sessionsList;
+            if (sessionsList) {
+              sessionsList.style.opacity = '0.5';
+              sessionsList.style.pointerEvents = 'none';
+            }
 
-          // Refresh the sidebar to highlight the active session
-          this.loadChatSessions();
+            console.log('[Mobile Debug] Loading session:', sessionIdParam);
+
+            // Load the selected session (state will be reset automatically in loadChatSession)
+            const success = await loadChatSession(sessionIdParam);
+
+            console.log('[Mobile Debug] Session loaded:', success);
+
+            // Restore interactivity
+            if (sessionsList) {
+              sessionsList.style.opacity = '1';
+              sessionsList.style.pointerEvents = 'auto';
+            }
+
+            if (success) {
+              // Refresh the sidebar to highlight the active session
+              await this.loadChatSessions();
+              console.log('[Mobile Debug] Sidebar refreshed');
+            }
+          } catch (error) {
+            console.error('[Mobile Debug] Error switching session:', error);
+            alert('Failed to switch session: ' + error.message);
+
+            // Restore interactivity on error
+            const sessionsList = this.sessionsList;
+            if (sessionsList) {
+              sessionsList.style.opacity = '1';
+              sessionsList.style.pointerEvents = 'auto';
+            }
+          }
         }
 
         async createNewChat() {
