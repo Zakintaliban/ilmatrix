@@ -26,6 +26,15 @@
               primary: "#0f0e85",
               secondary: "#e44c99",
               tertiary: "#1b612f",
+              super: "#6366f1",
+              foreground: "#0f172a",
+              quiet: "#64748b",
+              quieter: "#94a3b8",
+              raised: "#ffffff",
+              offset: "#1e293b",
+              subtle: "#f1f5f9",
+              subtler: "#e2e8f0",
+              subtlest: "#f8fafc",
             },
           },
         },
@@ -178,6 +187,106 @@
       html:not(.dark):not(.theme-blue):not(.theme-pink):not(.theme-green) body {
         background-color: #f9fafb !important; /* Force white/light background for light theme */
       }
+
+      /* CSS Variables for theme-aware components */
+      :root {
+        --sec-chat-bg: #ffffff;
+        --button-primary: #6366f1;
+        --input-box-bg: #ffffff;
+        --input-box-border: #e2e8f0;
+        --tool-btn-text: #374151;
+        --tool-btn-bg-hover: #f3f4f6;
+        --tool-btn-text-hover: #111827;
+        --tool-btn-bg-focus: #e5e7eb;
+        --tool-btn-text-focus: #111827;
+        --tool-btn-bg-active: #d1d5db;
+        --tool-btn-text-active: #111827;
+        --tool-btn-ring-offset: #ffffff;
+      }
+
+      .dark {
+        --sec-chat-bg: #1a1a1a;
+        --button-primary: #818cf8;
+        --input-box-bg: #1a1a1a;
+        --input-box-border: #334155;
+        --tool-btn-text: #cbd5e1;
+        --tool-btn-bg-hover: rgba(255, 255, 255, 0.1);
+        --tool-btn-text-hover: #f1f5f9;
+        --tool-btn-bg-focus: rgba(255, 255, 255, 0.15);
+        --tool-btn-text-focus: #ffffff;
+        --tool-btn-bg-active: rgba(255, 255, 255, 0.2);
+        --tool-btn-text-active: #ffffff;
+        --tool-btn-ring-offset: #1a1a1a;
+      }
+
+      .theme-blue {
+        --sec-chat-bg: #eff6ff;
+        --button-primary: #3b82f6;
+        --input-box-bg: #dbeafe;
+        --input-box-border: #93c5fd;
+        --tool-btn-text: #1e3a8a;
+        --tool-btn-bg-hover: #bfdbfe;
+        --tool-btn-text-hover: #1e40af;
+        --tool-btn-bg-focus: #93c5fd;
+        --tool-btn-text-focus: #1e40af;
+        --tool-btn-bg-active: #60a5fa;
+        --tool-btn-text-active: #1e3a8a;
+        --tool-btn-ring-offset: #eff6ff;
+      }
+
+      .theme-pink {
+        --sec-chat-bg: #fdf2f8;
+        --button-primary: #ec4899;
+        --input-box-bg: #fce7f3;
+        --input-box-border: #f9a8d4;
+        --tool-btn-text: #831843;
+        --tool-btn-bg-hover: #fbcfe8;
+        --tool-btn-text-hover: #9f1239;
+        --tool-btn-bg-focus: #f9a8d4;
+        --tool-btn-text-focus: #9f1239;
+        --tool-btn-bg-active: #f472b6;
+        --tool-btn-text-active: #831843;
+        --tool-btn-ring-offset: #fdf2f8;
+      }
+
+      .theme-green {
+        --sec-chat-bg: #f0fdf4;
+        --button-primary: #22c55e;
+        --input-box-bg: #dcfce7;
+        --input-box-border: #86efac;
+        --tool-btn-text: #14532d;
+        --tool-btn-bg-hover: #bbf7d0;
+        --tool-btn-text-hover: #15803d;
+        --tool-btn-bg-focus: #86efac;
+        --tool-btn-text-focus: #15803d;
+        --tool-btn-bg-active: #4ade80;
+        --tool-btn-text-active: #14532d;
+        --tool-btn-ring-offset: #f0fdf4;
+      }
+
+      /* Tool button states using CSS variables */
+      .tool-btn {
+        color: var(--tool-btn-text);
+        transition: background-color 0.15s ease, color 0.15s ease;
+      }
+      .tool-btn:hover {
+        background-color: var(--tool-btn-bg-hover) !important;
+        color: var(--tool-btn-text-hover) !important;
+      }
+      .tool-btn:focus-visible {
+        background-color: var(--tool-btn-bg-focus) !important;
+        color: var(--tool-btn-text-focus) !important;
+        --tw-ring-offset-color: var(--tool-btn-ring-offset);
+      }
+      .tool-btn:active {
+        background-color: var(--tool-btn-bg-active) !important;
+        color: var(--tool-btn-text-active) !important;
+      }
+      .tool-btn:focus-visible:hover {
+        background-color: var(--tool-btn-bg-active) !important;
+        color: var(--tool-btn-text-active) !important;
+      }
+
       .markdown {
         word-break: break-word;
         overflow-wrap: anywhere;
@@ -997,7 +1106,8 @@
         <!-- Chat (General) -->
         <section
           id="sec-chat"
-          class="card bg-white dark:bg-neutral-900 rounded-xl shadow-sm ring-1 ring-gray-200 dark:ring-white/10"
+          class="card rounded-xl shadow-sm ring-1 ring-gray-200 dark:ring-white/10"
+          style="background-color: var(--sec-chat-bg, #ffffff);"
         >
           <div class="p-5 sm:p-6">
             <h2 class="text-lg sm:text-xl font-semibold text-primary mb-4">
@@ -1044,20 +1154,40 @@
                 Remove all
               </button>
             </div>
-            <div class="mt-3 flex gap-2 items-end relative">
-              <!-- Quick actions (+) with in-place tools panel -->
-              <div class="relative">
-                <button
-                  id="btnActionMenu"
-                  class="inline-flex items-center justify-center w-12 h-12 rounded-xl border border-white/20 ring-1 ring-black/5 bg-white dark:bg-neutral-900 text-gray-700 dark:text-slate-100 hover:bg-gray-50 dark:hover:bg-white/10 select-none text-xl font-medium transition-all duration-200 ease-out"
-                  title="Open tools"
-                  aria-label="Open tools"
-                  aria-haspopup="menu"
-                  aria-controls="quickMenu"
-                  aria-expanded="false"
-                >
-                  +
-                </button>
+            <!-- Input area with grid layout -->
+            <div class="mt-3 rounded-2xl border shadow-sm dark:shadow-md transition-all duration-75 px-0 pt-3 pb-3"
+                 style="background-color: var(--input-box-bg, #ffffff); border-color: var(--input-box-border, #e2e8f0);">
+              <div class="grid grid-cols-3 gap-y-3 items-center px-3.5">
+                <!-- Row 1: Contenteditable input -->
+                <div class="col-start-1 col-end-4 overflow-hidden relative flex h-full w-full pb-3">
+                  <div class="w-full" style="min-height: 3em;">
+                    <div contenteditable="true" id="chatInput" role="textbox" spellcheck="true"
+                         class="overflow-auto max-h-[45vh] lg:max-h-[40vh] sm:max-h-[25vh] outline-none font-sans resize-none caret-super selection:bg-super/30 selection:text-foreground dark:selection:bg-super/10 dark:selection:text-super text-foreground dark:text-white bg-transparent placeholder-quieter placeholder:select-none size-full"
+                         style="user-select: text; white-space: pre-wrap; word-break: break-word;">
+                    </div>
+                    <div id="chatInputPlaceholder" aria-hidden="true"
+                         class="absolute inset-0 pointer-events-none select-none text-quieter">
+                      Ask anything.
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Row 2: Plus button (left) -->
+                <div class="col-start-1 row-start-2 -ml-2">
+                  <div class="relative">
+                    <button
+                      id="btnActionMenu"
+                      class="focus-visible:bg-subtle hover:bg-subtle text-quiet hover:text-foreground inline-flex shrink-0 items-center justify-center rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-super transition-colors disabled:pointer-events-none disabled:opacity-50 size-8"
+                      title="Open tools"
+                      aria-label="Open tools"
+                      aria-haspopup="menu"
+                      aria-controls="quickMenu"
+                      aria-expanded="false"
+                    >
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M12 5v14M5 12h14"/>
+                      </svg>
+                    </button>
 
                 <!-- Mobile quick menu (ChatGPT-like), shown only on small screens -->
                 <div
@@ -1152,7 +1282,7 @@
                               role="tab"
                               aria-selected="true"
                               tabindex="0"
-                              class="tool-btn w-full text-left px-3 py-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-white/10 hover:text-slate-900 dark:hover:text-slate-100 focus-visible:ring-2 focus-visible:ring-indigo-400 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-offset-black outline-none"
+                              class="tool-btn w-full text-left px-3 py-1.5 rounded-md focus-visible:ring-2 focus-visible:ring-indigo-400 focus-visible:ring-offset-2 outline-none"
                               data-tool="upload"
                             >
                               Upload
@@ -1164,7 +1294,7 @@
                               role="tab"
                               aria-selected="false"
                               tabindex="-1"
-                              class="tool-btn w-full text-left px-3 py-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-white/10 hover:text-slate-900 dark:hover:text-slate-100 focus-visible:ring-2 focus-visible:ring-indigo-400 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-offset-black outline-none"
+                              class="tool-btn w-full text-left px-3 py-1.5 rounded-md focus-visible:ring-2 focus-visible:ring-indigo-400 focus-visible:ring-offset-2 outline-none"
                               data-tool="explain"
                             >
                               Explain
@@ -1176,7 +1306,7 @@
                               role="tab"
                               aria-selected="false"
                               tabindex="-1"
-                              class="tool-btn w-full text-left px-3 py-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-white/10 hover:text-slate-900 dark:hover:text-slate-100 focus-visible:ring-2 focus-visible:ring-indigo-400 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-offset-black outline-none"
+                              class="tool-btn w-full text-left px-3 py-1.5 rounded-md focus-visible:ring-2 focus-visible:ring-indigo-400 focus-visible:ring-offset-2 outline-none"
                               data-tool="quiz"
                             >
                               Quiz
@@ -1188,7 +1318,7 @@
                               role="tab"
                               aria-selected="false"
                               tabindex="-1"
-                              class="tool-btn w-full text-left px-3 py-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-white/10 hover:text-slate-900 dark:hover:text-slate-100 focus-visible:ring-2 focus-visible:ring-indigo-400 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-offset-black outline-none"
+                              class="tool-btn w-full text-left px-3 py-1.5 rounded-md focus-visible:ring-2 focus-visible:ring-indigo-400 focus-visible:ring-offset-2 outline-none"
                               data-tool="forum"
                             >
                               Forum
@@ -1200,7 +1330,7 @@
                               role="tab"
                               aria-selected="false"
                               tabindex="-1"
-                              class="tool-btn w-full text-left px-3 py-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-white/10 hover:text-slate-900 dark:hover:text-slate-100 focus-visible:ring-2 focus-visible:ring-indigo-400 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-offset-black outline-none"
+                              class="tool-btn w-full text-left px-3 py-1.5 rounded-md focus-visible:ring-2 focus-visible:ring-indigo-400 focus-visible:ring-offset-2 outline-none"
                               data-tool="exam"
                             >
                               Exam
@@ -1212,7 +1342,7 @@
                               role="tab"
                               aria-selected="false"
                               tabindex="-1"
-                              class="tool-btn w-full text-left px-3 py-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-white/10 hover:text-slate-900 dark:hover:text-slate-100 focus-visible:ring-2 focus-visible:ring-indigo-400 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-offset-black outline-none"
+                              class="tool-btn w-full text-left px-3 py-1.5 rounded-md focus-visible:ring-2 focus-visible:ring-indigo-400 focus-visible:ring-offset-2 outline-none"
                               data-tool="flashcards"
                             >
                               Flashcards
@@ -1224,7 +1354,7 @@
                               role="tab"
                               aria-selected="false"
                               tabindex="-1"
-                              class="tool-btn w-full text-left px-3 py-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-white/10 hover:text-slate-900 dark:hover:text-slate-100 focus-visible:ring-2 focus-visible:ring-indigo-400 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-offset-black outline-none"
+                              class="tool-btn w-full text-left px-3 py-1.5 rounded-md focus-visible:ring-2 focus-visible:ring-indigo-400 focus-visible:ring-offset-2 outline-none"
                               data-tool="dialogue"
                             >
                               Dialogue
@@ -1240,24 +1370,26 @@
                     </div>
                   </div>
                 </div>
-                <div
-                  id="toolsBackdrop"
-                  class="hidden fixed inset-0 z-40 bg-slate-900/30 dark:bg-black/60"
-                ></div>
+                    <div
+                      id="toolsBackdrop"
+                      class="hidden fixed inset-0 z-40 bg-slate-900/30 dark:bg-black/60"
+                    ></div>
+                  </div>
+                </div>
+
+                <!-- Row 2: Send button (right) -->
+                <div class="col-start-3 row-start-2 justify-self-end ml-2">
+                  <button
+                    id="btnSend"
+                    class="inline-flex shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-lg font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-super disabled:pointer-events-none disabled:opacity-50 text-white shadow size-8"
+                    style="background-color: var(--button-primary);"
+                  >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M5 12l14 0M13 18l6 -6M13 6l6 6"/>
+                    </svg>
+                  </button>
+                </div>
               </div>
-              <textarea
-                id="chatInput"
-                rows="4"
-                placeholder="Write here..."
-                aria-label="Chat input"
-                class="flex-1 rounded-xl border border-white/20 ring-1 ring-black/5 bg-white px-4 py-3 text-[16px] leading-relaxed font-medium text-black placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-400 dark:bg-neutral-900 dark:text-white dark:placeholder-slate-400 transition-all duration-200 ease-out min-h-[100px]"
-              ></textarea>
-              <button
-                id="btnSend"
-                class="inline-flex items-center justify-center px-4 py-2 rounded-md bg-tertiary text-white font-medium hover:bg-green-600 transition"
-              >
-                Send
-              </button>
             </div>
           </div>
         </section>
@@ -1284,9 +1416,12 @@
               </div>
               <button
                 id="btnNewMaterial"
-                class="px-3 py-1.5 rounded-md border border-gray-300 dark:border-white/20 text-sm bg-white dark:bg-neutral-900 dark:text-white hover:bg-gray-50 dark:hover:bg-white/10"
-                title="Start a new material (does not delete existing one)"
+                class="inline-flex items-center gap-2 px-3 py-1.5 rounded-md border border-gray-300 dark:border-white/20 text-sm bg-white dark:bg-neutral-900 dark:text-white hover:bg-gray-50 dark:hover:bg-white/10"
+                title="Start a new material upload session"
               >
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"/>
+                </svg>
                 Start new material
               </button>
               <span
@@ -3360,30 +3495,34 @@
 
       // Chat (General)
       $("btnSend").onclick = sendChat;
-      // Auto-expand textarea as user types
+
+      // Contenteditable support (b.html style)
       const chatInput = $("chatInput");
-      function autoExpandTextarea(textarea) {
-        // Reset height to auto to get the correct scrollHeight
-        textarea.style.height = 'auto';
-        // Set height to scrollHeight (content height)
-        const newHeight = Math.min(textarea.scrollHeight, 200); // Max 200px
-        textarea.style.height = newHeight + 'px';
+      const chatInputPlaceholder = $("chatInputPlaceholder");
+
+      // Show/hide placeholder based on content
+      function updatePlaceholder() {
+        if (chatInput && chatInputPlaceholder) {
+          const text = chatInput.textContent || "";
+          chatInputPlaceholder.style.display = text.trim().length > 0 ? "none" : "block";
+        }
       }
 
       chatInput.addEventListener("input", () => {
-        autoExpandTextarea(chatInput);
+        updatePlaceholder();
       });
 
       chatInput.addEventListener("keydown", (e) => {
-        // Enter sends; Shift+Enter inserts newline
         if (e.key === "Enter" && !e.shiftKey) {
           e.preventDefault();
           sendChat();
         }
       });
+
+      updatePlaceholder();
       async function sendChat() {
         const input = $("chatInput");
-        const original = input.value || "";
+        const original = input.textContent || "";
         const trimmed = original.trim();
 
         // Intercept Quiz when routed via composer (supports empty input)
@@ -3395,7 +3534,8 @@
           if (trimmed.length > 0) {
             addChatMessage("user", original);
           }
-          input.value = "";
+          input.textContent = "";
+          updatePlaceholder();
           try {
             await handleQuizComposer(trimmed);
           } catch (e) {
@@ -3422,7 +3562,8 @@
             role: "user",
             content: activeTool === "explain" ? "[Explain]" : "[Exam]",
           });
-          input.value = "";
+          input.textContent = "";
+          updatePlaceholder();
           renderChat();
           try {
             const route = TOOL_ROUTES[activeTool];
@@ -3471,8 +3612,8 @@
         if (!trimmed) return;
 
         addChatMessage("user", original);
-        input.value = "";
-        input.style.height = 'auto'; // Reset textarea height after send
+        input.textContent = "";
+        updatePlaceholder();
         try {
           // Route to selected tool endpoints if any (Explain/Forum/Exam with text)
           if (activeTool && activeTool !== "chat" && TOOL_ROUTES[activeTool]) {
