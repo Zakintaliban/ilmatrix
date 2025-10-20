@@ -39,6 +39,22 @@ class IlmatrixServer {
     // Mount API routes
     this.app.route("/api", api);
 
+    // Clean URL rewrites - serve .html files for clean URLs
+    const cleanUrls = [
+      "/app",
+      "/about",
+      "/login",
+      "/register",
+      "/dashboard",
+      "/profile",
+      "/verify-email",
+      "/email-verified",
+    ];
+
+    cleanUrls.forEach((path) => {
+      this.app.get(path, serveStatic({ path: `${path}.html`, root: "./public" }));
+    });
+
     // Serve static files from public directory
     this.app.use("/*", serveStatic({ root: "./public" }));
 

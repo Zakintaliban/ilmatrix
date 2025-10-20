@@ -27,7 +27,7 @@
       };
     </script>
     <!-- SEO meta -->
-    <link rel="canonical" href="/about.html" />
+    <link rel="canonical" href="/about" />
     <meta
       name="description"
       content="About ILMATRIX — an AI-powered study companion that explains materials, generates MCQ with deterministic grading, creates flashcards, drafts forum replies, and prepares you for exams responsibly."
@@ -60,8 +60,8 @@
     />
     <meta name="twitter:image" content="/logo.svg" />
     <!-- hreflang -->
-    <link rel="alternate" href="/about.html" hreflang="en" />
-    <link rel="alternate" href="/about.html" hreflang="x-default" />
+    <link rel="alternate" href="/about" hreflang="en" />
+    <link rel="alternate" href="/about" hreflang="x-default" />
     <style>
       html {
         scroll-behavior: smooth;
@@ -103,6 +103,9 @@
         padding-right: var(--safe-right);
         padding-bottom: var(--safe-bottom);
       }
+      html:not(.dark):not(.theme-blue):not(.theme-pink):not(.theme-green) body {
+        background-color: #f9fafb !important; /* Force white/light background for light theme */
+      }
       header {
         padding-top: var(--safe-top);
       }
@@ -129,6 +132,116 @@
       .pb-safe {
         padding-bottom: calc(1rem + var(--safe-bottom));
       }
+
+      /* ========== 5-THEME SYSTEM ==========  */
+
+      /* Theme 3: Resistance Blue (Blue Monochromatic) 🐬 */
+      .theme-blue {
+        --bg-primary: #f0f0ff;
+        --bg-secondary: #e6e6ff;
+        --text-primary: #080751;
+        --text-secondary: #1a18b8;
+        --text-muted: #4d4bff;
+        --button-primary: #0f0e85;
+        --button-primary-hover: #1a18b8;
+        --button-secondary: #4d4bff;
+        --button-secondary-hover: #a3a2ff;
+        --border-color: #a3a2ff;
+        --border-subtle: #d0d0ff;
+      }
+
+      .theme-blue body {
+        background-color: var(--bg-primary) !important;
+        color: var(--text-primary);
+      }
+
+      .theme-blue .bg-white { background-color: var(--bg-secondary) !important; }
+      .theme-blue .bg-gray-50 { background-color: var(--bg-secondary) !important; }
+      .theme-blue .text-gray-900 { color: var(--text-primary) !important; }
+      .theme-blue .text-gray-700 { color: var(--text-secondary) !important; }
+      .theme-blue .text-gray-600 { color: var(--text-secondary) !important; }
+      .theme-blue .text-gray-500 { color: var(--text-muted) !important; }
+      .theme-blue .border-gray-200 { border-color: var(--border-color) !important; }
+      .theme-blue .border-gray-300 { border-color: var(--border-subtle) !important; }
+      .theme-blue .bg-primary { background-color: var(--button-primary) !important; color: white !important; }
+      .theme-blue .text-primary { color: var(--button-primary) !important; }
+      .theme-blue .bg-secondary { background-color: var(--button-secondary) !important; color: white !important; }
+      .theme-blue .bg-tertiary { background-color: var(--button-secondary) !important; color: white !important; }
+      .theme-blue .hover\:bg-indigo-900:hover { background-color: var(--button-primary-hover) !important; }
+      .theme-blue .hover\:bg-green-600:hover { background-color: var(--button-secondary-hover) !important; }
+      .theme-blue .hover\:bg-pink-500:hover { background-color: var(--button-secondary-hover) !important; }
+
+      /* Theme 4: Brave Pink (Pink Monochromatic) 🦩 */
+      .theme-pink {
+        --bg-primary: #fff5fa;
+        --bg-secondary: #ffe0f0;
+        --text-primary: #8d2d5f;
+        --text-secondary: #e44c99;
+        --text-muted: #ff69b4;
+        --button-primary: #e44c99;
+        --button-primary-hover: #ff69b4;
+        --button-secondary: #ff69b4;
+        --button-secondary-hover: #ffb3d9;
+        --border-color: #ffb3d9;
+        --border-subtle: #ffe0f0;
+      }
+
+      .theme-pink body {
+        background-color: var(--bg-primary) !important;
+        color: var(--text-primary);
+      }
+
+      .theme-pink .bg-white { background-color: var(--bg-secondary) !important; }
+      .theme-pink .bg-gray-50 { background-color: var(--bg-secondary) !important; }
+      .theme-pink .text-gray-900 { color: var(--text-primary) !important; }
+      .theme-pink .text-gray-700 { color: var(--text-secondary) !important; }
+      .theme-pink .text-gray-600 { color: var(--text-secondary) !important; }
+      .theme-pink .text-gray-500 { color: var(--text-muted) !important; }
+      .theme-pink .border-gray-200 { border-color: var(--border-color) !important; }
+      .theme-pink .border-gray-300 { border-color: var(--border-subtle) !important; }
+      .theme-pink .bg-primary { background-color: var(--button-primary) !important; color: white !important; }
+      .theme-pink .text-primary { color: var(--button-primary) !important; }
+      .theme-pink .bg-secondary { background-color: var(--button-secondary) !important; color: white !important; }
+      .theme-pink .bg-tertiary { background-color: var(--button-secondary) !important; color: white !important; }
+      .theme-pink .hover\:bg-indigo-900:hover { background-color: var(--button-primary-hover) !important; }
+      .theme-pink .hover\:bg-green-600:hover { background-color: var(--button-secondary-hover) !important; }
+      .theme-pink .hover\:bg-pink-500:hover { background-color: var(--button-secondary-hover) !important; }
+
+      /* Theme 5: Hero Green (Green Monochromatic) 🦖 */
+      .theme-green {
+        --bg-primary: #f0fff3;
+        --bg-secondary: #e0f5e5;
+        --text-primary: #0d3318;
+        --text-secondary: #1b612f;
+        --text-muted: #2d8f4a;
+        --button-primary: #1b612f;
+        --button-primary-hover: #2d8f4a;
+        --button-secondary: #5cb574;
+        --button-secondary-hover: #b8e6c1;
+        --border-color: #b8e6c1;
+        --border-subtle: #d0f0d5;
+      }
+
+      .theme-green body {
+        background-color: var(--bg-primary) !important;
+        color: var(--text-primary);
+      }
+
+      .theme-green .bg-white { background-color: var(--bg-secondary) !important; }
+      .theme-green .bg-gray-50 { background-color: var(--bg-secondary) !important; }
+      .theme-green .text-gray-900 { color: var(--text-primary) !important; }
+      .theme-green .text-gray-700 { color: var(--text-secondary) !important; }
+      .theme-green .text-gray-600 { color: var(--text-secondary) !important; }
+      .theme-green .text-gray-500 { color: var(--text-muted) !important; }
+      .theme-green .border-gray-200 { border-color: var(--border-color) !important; }
+      .theme-green .border-gray-300 { border-color: var(--border-subtle) !important; }
+      .theme-green .bg-primary { background-color: var(--button-primary) !important; color: white !important; }
+      .theme-green .text-primary { color: var(--button-primary) !important; }
+      .theme-green .bg-secondary { background-color: var(--button-secondary) !important; color: white !important; }
+      .theme-green .bg-tertiary { background-color: var(--button-secondary) !important; color: white !important; }
+      .theme-green .hover\:bg-indigo-900:hover { background-color: var(--button-primary-hover) !important; }
+      .theme-green .hover\:bg-green-600:hover { background-color: var(--button-secondary-hover) !important; }
+      .theme-green .hover\:bg-pink-500:hover { background-color: var(--button-secondary-hover) !important; }
     </style>
     <!-- Structured data -->
     <script type="application/ld+json">
@@ -175,12 +288,12 @@
         <div class="flex items-center gap-2">
           <nav class="flex items-center gap-2">
             <a
-              href="/app.html"
+              href="/app"
               class="text-xs sm:text-sm px-3 py-2 rounded-md hover:bg-indigo-900"
               >App</a
             >
             <a
-              href="/about.html"
+              href="/about"
               class="text-xs sm:text-sm px-3 py-2 rounded-md bg-indigo-800 hover:bg-indigo-900"
               >About</a
             >
@@ -200,7 +313,7 @@
             <span
               class="icon-moon hidden dark:inline text-slate-100"
               aria-hidden="true"
-              >🌙</span
+              >🌕</span
             >
             Theme
           </button>
@@ -398,7 +511,7 @@
           </div>
           <div class="mt-6">
             <a
-              href="/app.html"
+              href="/app"
               class="px-5 py-2.5 rounded-md bg-secondary text-white hover:bg-pink-500"
               >Open App</a
             >
@@ -424,7 +537,7 @@
               </p>
             </div>
             <a
-              href="/app.html"
+              href="/app"
               class="px-5 py-2.5 rounded-md bg-secondary text-white hover:bg-pink-500"
               >Open App</a
             >
@@ -438,9 +551,9 @@
         class="container mx-auto max-w-6xl px-4 py-6 text-xs text-gray-500 dark:text-slate-400"
       >
         Theme colors:
-        <span class="font-medium text-primary">Resistance Blue</span> ·
-        <span class="font-medium text-secondary">Brave Pink</span> ·
-        <span class="font-medium text-tertiary">Hero Green</span>
+        <span class="font-medium" style="color: #0f0e85;">🐬 Resistance Blue</span> ·
+        <span class="font-medium" style="color: #e44c99;">🦩 Brave Pink</span> ·
+        <span class="font-medium" style="color: #1b612f;">🦖 Hero Green</span>
       </div>
       <div
         class="container mx-auto max-w-6xl px-4 py-6 text-xs text-gray-500 dark:text-slate-400"
@@ -450,9 +563,18 @@
     </footer>
 
     <script>
-      // Theme init + toggle (persistent via localStorage + cookie; icon swaps via Tailwind dark:)
+      // 5-Theme Cycling System with localStorage persistence
       (function () {
         const root = document.documentElement;
+        const themes = ['light', 'dark', 'blue', 'pink', 'green'];
+        const themeEmojis = {
+          'light': '☀️',
+          'dark': '🌕',
+          'blue': '🐬',
+          'pink': '🦩',
+          'green': '🦖'
+        };
+
         const getCookie = (name) => {
           const parts = document.cookie.split("; ").filter(Boolean);
           const hit = parts.find((p) => p.startsWith(name + "="));
@@ -460,39 +582,98 @@
             ? decodeURIComponent(hit.split("=").slice(1).join("="))
             : null;
         };
-        const persist = (mode) => {
+
+        const persist = (theme) => {
           try {
-            localStorage.setItem("theme", mode);
+            localStorage.setItem("theme", theme);
           } catch {}
           try {
             document.cookie =
               "theme=" +
-              encodeURIComponent(mode) +
+              encodeURIComponent(theme) +
               "; max-age=31536000; path=/; SameSite=Lax";
           } catch {}
         };
+
         const getSaved = () => {
           let v = null;
           try {
             v = localStorage.getItem("theme");
           } catch {}
           if (!v) v = getCookie("theme");
-          return v;
+          return v && themes.includes(v) ? v : null;
         };
+
+        const applyTheme = (theme) => {
+          // Remove all theme classes
+          root.classList.remove('dark', 'theme-blue', 'theme-pink', 'theme-green');
+
+          // Apply new theme
+          if (theme === 'dark') {
+            root.classList.add('dark');
+          } else if (theme === 'blue') {
+            root.classList.add('theme-blue');
+          } else if (theme === 'pink') {
+            root.classList.add('theme-pink');
+          } else if (theme === 'green') {
+            root.classList.add('theme-green');
+          }
+          // 'light' = no class needed
+        };
+
+        const updateButton = (theme) => {
+          const iconSun = document.querySelector('.icon-sun');
+          const iconMoon = document.querySelector('.icon-moon');
+          const emoji = themeEmojis[theme] || '☀️';
+
+          if (theme === 'light') {
+            if (iconSun) {
+              iconSun.style.display = 'inline';
+              iconSun.textContent = '☀️'; // Reset to sun emoji
+            }
+            if (iconMoon) iconMoon.style.display = 'none';
+          } else if (theme === 'dark') {
+            if (iconSun) iconSun.style.display = 'none';
+            if (iconMoon) iconMoon.style.display = 'inline';
+          } else {
+            // For blue, pink, green - show custom emoji
+            if (iconSun) {
+              iconSun.style.display = 'inline';
+              iconSun.textContent = emoji;
+            }
+            if (iconMoon) iconMoon.style.display = 'none';
+          }
+        };
+
+        // Initialize theme - use state variable instead of reading classList
         const saved = getSaved();
         const prefersDark =
           window.matchMedia &&
           window.matchMedia("(prefers-color-scheme: dark)").matches;
-        const initial = saved ? saved : prefersDark ? "dark" : "light";
-        root.classList.toggle("dark", initial === "dark");
-        if (!saved) persist(initial);
+        const initial = saved ? saved : (prefersDark ? 'dark' : 'light');
 
+        // State variable to track current theme
+        let currentTheme = initial;
+
+        applyTheme(currentTheme);
+        updateButton(currentTheme);
+        if (!saved) persist(currentTheme);
+
+        // Theme cycle button
         const btn = document.getElementById("btnTheme");
         if (btn) {
           btn.addEventListener("click", () => {
-            const newMode = root.classList.contains("dark") ? "light" : "dark";
-            root.classList.toggle("dark", newMode === "dark");
-            persist(newMode);
+            // Cycle to next theme using state variable
+            const currentIndex = themes.indexOf(currentTheme);
+            const nextIndex = (currentIndex + 1) % themes.length;
+            const nextTheme = themes[nextIndex];
+
+            // Update state
+            currentTheme = nextTheme;
+
+            applyTheme(nextTheme);
+            updateButton(nextTheme);
+            persist(nextTheme);
           });
         }
       })();

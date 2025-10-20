@@ -36,6 +36,120 @@
       .dark .text-tertiary {
         color: #86efac !important;
       }
+
+      /* ========== 5-THEME SYSTEM ==========  */
+
+      /* Theme 3: Resistance Blue (Blue Monochromatic) 🐬 */
+      .theme-blue {
+        --bg-primary: #f0f0ff;
+        --bg-secondary: #e6e6ff;
+        --text-primary: #080751;
+        --text-secondary: #1a18b8;
+        --text-muted: #4d4bff;
+        --button-primary: #0f0e85;
+        --button-primary-hover: #1a18b8;
+        --button-secondary: #4d4bff;
+        --button-secondary-hover: #a3a2ff;
+        --border-color: #a3a2ff;
+        --border-subtle: #d0d0ff;
+      }
+
+      html:not(.dark):not(.theme-blue):not(.theme-pink):not(.theme-green) body {
+        background-color: #f9fafb !important; /* Force white/light background for light theme */
+      }
+
+      .theme-blue body {
+        background-color: var(--bg-primary) !important;
+        color: var(--text-primary);
+      }
+
+      .theme-blue .bg-white { background-color: var(--bg-secondary) !important; }
+      .theme-blue .bg-gray-50 { background-color: var(--bg-secondary) !important; }
+      .theme-blue .text-gray-900 { color: var(--text-primary) !important; }
+      .theme-blue .text-gray-700 { color: var(--text-secondary) !important; }
+      .theme-blue .text-gray-600 { color: var(--text-secondary) !important; }
+      .theme-blue .text-gray-500 { color: var(--text-muted) !important; }
+      .theme-blue .border-gray-200 { border-color: var(--border-color) !important; }
+      .theme-blue .border-gray-300 { border-color: var(--border-subtle) !important; }
+      .theme-blue .bg-primary { background-color: var(--button-primary) !important; color: white !important; }
+      .theme-blue .text-primary { color: var(--button-primary) !important; }
+      .theme-blue .bg-secondary { background-color: var(--button-secondary) !important; color: white !important; }
+      .theme-blue .bg-tertiary { background-color: var(--button-secondary) !important; color: white !important; }
+      .theme-blue .hover\:bg-indigo-900:hover { background-color: var(--button-primary-hover) !important; }
+      .theme-blue .hover\:bg-green-600:hover { background-color: var(--button-secondary-hover) !important; }
+      .theme-blue .hover\:bg-pink-500:hover { background-color: var(--button-secondary-hover) !important; }
+
+      /* Theme 4: Brave Pink (Pink Monochromatic) 🦩 */
+      .theme-pink {
+        --bg-primary: #fff5fa;
+        --bg-secondary: #ffe0f0;
+        --text-primary: #8d2d5f;
+        --text-secondary: #e44c99;
+        --text-muted: #ff69b4;
+        --button-primary: #e44c99;
+        --button-primary-hover: #ff69b4;
+        --button-secondary: #ff69b4;
+        --button-secondary-hover: #ffb3d9;
+        --border-color: #ffb3d9;
+        --border-subtle: #ffe0f0;
+      }
+
+      .theme-pink body {
+        background-color: var(--bg-primary) !important;
+        color: var(--text-primary);
+      }
+
+      .theme-pink .bg-white { background-color: var(--bg-secondary) !important; }
+      .theme-pink .bg-gray-50 { background-color: var(--bg-secondary) !important; }
+      .theme-pink .text-gray-900 { color: var(--text-primary) !important; }
+      .theme-pink .text-gray-700 { color: var(--text-secondary) !important; }
+      .theme-pink .text-gray-600 { color: var(--text-secondary) !important; }
+      .theme-pink .text-gray-500 { color: var(--text-muted) !important; }
+      .theme-pink .border-gray-200 { border-color: var(--border-color) !important; }
+      .theme-pink .border-gray-300 { border-color: var(--border-subtle) !important; }
+      .theme-pink .bg-primary { background-color: var(--button-primary) !important; color: white !important; }
+      .theme-pink .text-primary { color: var(--button-primary) !important; }
+      .theme-pink .bg-secondary { background-color: var(--button-secondary) !important; color: white !important; }
+      .theme-pink .bg-tertiary { background-color: var(--button-secondary) !important; color: white !important; }
+      .theme-pink .hover\:bg-indigo-900:hover { background-color: var(--button-primary-hover) !important; }
+      .theme-pink .hover\:bg-green-600:hover { background-color: var(--button-secondary-hover) !important; }
+      .theme-pink .hover\:bg-pink-500:hover { background-color: var(--button-secondary-hover) !important; }
+
+      /* Theme 5: Hero Green (Green Monochromatic) 🦖 */
+      .theme-green {
+        --bg-primary: #f0fff3;
+        --bg-secondary: #e0f5e5;
+        --text-primary: #0d3318;
+        --text-secondary: #1b612f;
+        --text-muted: #2d8f4a;
+        --button-primary: #1b612f;
+        --button-primary-hover: #2d8f4a;
+        --button-secondary: #5cb574;
+        --button-secondary-hover: #b8e6c1;
+        --border-color: #b8e6c1;
+        --border-subtle: #d0f0d5;
+      }
+
+      .theme-green body {
+        background-color: var(--bg-primary) !important;
+        color: var(--text-primary);
+      }
+
+      .theme-green .bg-white { background-color: var(--bg-secondary) !important; }
+      .theme-green .bg-gray-50 { background-color: var(--bg-secondary) !important; }
+      .theme-green .text-gray-900 { color: var(--text-primary) !important; }
+      .theme-green .text-gray-700 { color: var(--text-secondary) !important; }
+      .theme-green .text-gray-600 { color: var(--text-secondary) !important; }
+      .theme-green .text-gray-500 { color: var(--text-muted) !important; }
+      .theme-green .border-gray-200 { border-color: var(--border-color) !important; }
+      .theme-green .border-gray-300 { border-color: var(--border-subtle) !important; }
+      .theme-green .bg-primary { background-color: var(--button-primary) !important; color: white !important; }
+      .theme-green .text-primary { color: var(--button-primary) !important; }
+      .theme-green .bg-secondary { background-color: var(--button-secondary) !important; color: white !important; }
+      .theme-green .bg-tertiary { background-color: var(--button-secondary) !important; color: white !important; }
+      .theme-green .hover\:bg-indigo-900:hover { background-color: var(--button-primary-hover) !important; }
+      .theme-green .hover\:bg-green-600:hover { background-color: var(--button-secondary-hover) !important; }
+      .theme-green .hover\:bg-pink-500:hover { background-color: var(--button-secondary-hover) !important; }
     </style>
   </head>
   <body class="bg-gray-50 dark:bg-black text-gray-900 dark:text-white min-h-screen flex flex-col">
@@ -47,8 +161,8 @@
         </div>
         <div class="flex items-center gap-2">
           <nav class="hidden sm:flex items-center gap-2">
-            <a href="/app.html" class="text-xs sm:text-sm px-3 py-2 rounded-md hover:bg-indigo-900">App</a>
-            <a href="/about.html" class="text-xs sm:text-sm px-3 py-2 rounded-md hover:bg-indigo-900">About</a>
+            <a href="/app" class="text-xs sm:text-sm px-3 py-2 rounded-md hover:bg-indigo-900">App</a>
+            <a href="/about" class="text-xs sm:text-sm px-3 py-2 rounded-md hover:bg-indigo-900">About</a>
           </nav>
           <div class="flex items-center gap-2">
             <!-- User Info (shown when logged in) -->
@@ -72,13 +186,13 @@
                 <!-- Dropdown Menu -->
                 <div id="userDropdownMenu" class="hidden absolute right-0 mt-2 w-48 bg-gray-50 dark:bg-black rounded-md shadow-lg ring-1 ring-gray-200 dark:ring-white/10 z-50">
                   <div class="py-1">
-                    <a href="/dashboard.html" class="flex items-center gap-2 px-4 py-2 text-sm text-gray-900 dark:text-white hover:bg-gray-100 dark:hover:bg-gray-800">
+                    <a href="/dashboard" class="flex items-center gap-2 px-4 py-2 text-sm text-gray-900 dark:text-white hover:bg-gray-100 dark:hover:bg-gray-800">
                       <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"></path>
                       </svg>
                       Dashboard
                     </a>
-                    <a href="/profile.html" class="flex items-center gap-2 px-4 py-2 text-sm text-gray-900 dark:text-white hover:bg-gray-100 dark:hover:bg-gray-800 bg-gray-100 dark:bg-gray-800">
+                    <a href="/profile" class="flex items-center gap-2 px-4 py-2 text-sm text-gray-900 dark:text-white hover:bg-gray-100 dark:hover:bg-gray-800 bg-gray-100 dark:bg-gray-800">
                       <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path>
                       </svg>
@@ -100,13 +214,13 @@
             </div>
             
             <!-- Login button -->
-            <a id="btnLogin" href="/login.html" class="text-xs sm:text-sm bg-green-600 hover:bg-green-700 transition text-white px-3 py-2 rounded-md">
+            <a id="btnLogin" href="/login" class="text-xs sm:text-sm bg-green-600 hover:bg-green-700 transition text-white px-3 py-2 rounded-md">
               Login
             </a>
             
             <button id="btnTheme" class="inline-flex items-center gap-1.5 text-xs sm:text-sm px-3 py-2 rounded-xl border border-white/30 ring-1 ring-black/5 bg-white/80 hover:bg-white/90 text-slate-900 shadow-sm transition-all duration-200 ease-out dark:bg-slate-800/80 dark:hover:bg-slate-800 dark:text-slate-100" title="Toggle theme">
               <span class="icon-sun text-yellow-500 dark:hidden">☀️</span>
-              <span class="icon-moon hidden dark:inline text-slate-100">🌙</span>
+              <span class="icon-moon hidden dark:inline text-slate-100">🌕</span>
               Theme
             </button>
           </div>
@@ -274,44 +388,128 @@
 
     <footer class="border-t border-gray-200 dark:border-white/10">
       <div class="container mx-auto max-w-6xl px-4 py-6 text-xs text-gray-500 dark:text-slate-400">
+        Theme colors:
+        <span class="font-medium" style="color: #0f0e85;">🐬 Resistance Blue</span> ·
+        <span class="font-medium" style="color: #e44c99;">🦩 Brave Pink</span> ·
+        <span class="font-medium" style="color: #1b612f;">🦖 Hero Green</span>
+      </div>
+      <div class="container mx-auto max-w-6xl px-4 py-6 text-xs text-gray-500 dark:text-slate-400">
         <p>Made with ❤️ by ILMATRIX</p>
       </div>
     </footer>
 
     <script>
-      // Theme toggle
+      // 5-Theme Cycling System with localStorage persistence
       (function () {
         const root = document.documentElement;
+        const themes = ['light', 'dark', 'blue', 'pink', 'green'];
+        const themeEmojis = {
+          'light': '☀️',
+          'dark': '🌕',
+          'blue': '🐬',
+          'pink': '🦩',
+          'green': '🦖'
+        };
+
         const getCookie = (name) => {
           const parts = document.cookie.split("; ").filter(Boolean);
           const hit = parts.find((p) => p.startsWith(name + "="));
-          return hit ? decodeURIComponent(hit.split("=").slice(1).join("=")) : null;
+          return hit
+            ? decodeURIComponent(hit.split("=").slice(1).join("="))
+            : null;
         };
-        const persist = (mode) => {
+
+        const persist = (theme) => {
           try {
-            localStorage.setItem("theme", mode);
-            document.cookie = "theme=" + encodeURIComponent(mode) + "; max-age=31536000; path=/; SameSite=Lax";
+            localStorage.setItem("theme", theme);
+          } catch {}
+          try {
+            document.cookie =
+              "theme=" +
+              encodeURIComponent(theme) +
+              "; max-age=31536000; path=/; SameSite=Lax";
           } catch {}
         };
+
         const getSaved = () => {
           let v = null;
-          try { v = localStorage.getItem("theme"); } catch {}
+          try {
+            v = localStorage.getItem("theme");
+          } catch {}
           if (!v) v = getCookie("theme");
-          return v;
+          return v && themes.includes(v) ? v : null;
         };
-        
-        const saved = getSaved();
-        const prefersDark = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
-        const initial = saved ? saved : prefersDark ? "dark" : "light";
-        root.classList.toggle("dark", initial === "dark");
-        if (!saved) persist(initial);
 
+        const applyTheme = (theme) => {
+          // Remove all theme classes
+          root.classList.remove('dark', 'theme-blue', 'theme-pink', 'theme-green');
+
+          // Apply new theme
+          if (theme === 'dark') {
+            root.classList.add('dark');
+          } else if (theme === 'blue') {
+            root.classList.add('theme-blue');
+          } else if (theme === 'pink') {
+            root.classList.add('theme-pink');
+          } else if (theme === 'green') {
+            root.classList.add('theme-green');
+          }
+          // 'light' = no class needed
+        };
+
+        const updateButton = (theme) => {
+          const iconSun = document.querySelector('.icon-sun');
+          const iconMoon = document.querySelector('.icon-moon');
+          const emoji = themeEmojis[theme] || '☀️';
+
+          if (theme === 'light') {
+            if (iconSun) {
+              iconSun.style.display = 'inline';
+              iconSun.textContent = '☀️'; // Reset to sun emoji
+            }
+            if (iconMoon) iconMoon.style.display = 'none';
+          } else if (theme === 'dark') {
+            if (iconSun) iconSun.style.display = 'none';
+            if (iconMoon) iconMoon.style.display = 'inline';
+          } else {
+            // For blue, pink, green - show custom emoji
+            if (iconSun) {
+              iconSun.style.display = 'inline';
+              iconSun.textContent = emoji;
+            }
+            if (iconMoon) iconMoon.style.display = 'none';
+          }
+        };
+
+        // Initialize theme - use state variable instead of reading classList
+        const saved = getSaved();
+        const prefersDark =
+          window.matchMedia &&
+          window.matchMedia("(prefers-color-scheme: dark)").matches;
+        const initial = saved ? saved : (prefersDark ? 'dark' : 'light');
+
+        // State variable to track current theme
+        let currentTheme = initial;
+
+        applyTheme(currentTheme);
+        updateButton(currentTheme);
+        if (!saved) persist(currentTheme);
+
+        // Theme cycle button
         const btn = document.getElementById("btnTheme");
         if (btn) {
           btn.addEventListener("click", () => {
-            const newMode = root.classList.contains("dark") ? "light" : "dark";
-            root.classList.toggle("dark", newMode === "dark");
-            persist(newMode);
+            // Cycle to next theme using state variable
+            const currentIndex = themes.indexOf(currentTheme);
+            const nextIndex = (currentIndex + 1) % themes.length;
+            const nextTheme = themes[nextIndex];
+
+            // Update state
+            currentTheme = nextTheme;
+
+            applyTheme(nextTheme);
+            updateButton(nextTheme);
+            persist(nextTheme);
           });
         }
       })();
@@ -389,11 +587,11 @@
               this.populateForm(data.user);
             } else {
               // Redirect to login if not authenticated
-              window.location.href = '/login.html';
+              window.location.href = '/login';
             }
           } catch (error) {
             console.error('Auth check failed:', error);
-            window.location.href = '/login.html';
+            window.location.href = '/login';
           }
         }
 

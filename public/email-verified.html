@@ -6,6 +6,20 @@
     <title>Email Verified - ILMATRIX</title>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🧠</text></svg>">
     <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              primary: "#0f0e85",
+              secondary: "#e44c99",
+              tertiary: "#1b612f",
+            },
+          },
+        },
+      };
+    </script>
     <style>
         :root {
             --primary: #0f0e85;
@@ -45,9 +59,132 @@
             0%, 100% { transform: scale(1); }
             50% { transform: scale(1.05); }
         }
+
+        /* ========== 5-THEME SYSTEM ==========  */
+
+        /* Theme 3: Resistance Blue (Blue Monochromatic) 🐬 */
+        .theme-blue {
+          --bg-primary: #f0f0ff;
+          --bg-secondary: #e6e6ff;
+          --text-primary: #080751;
+          --text-secondary: #1a18b8;
+          --text-muted: #4d4bff;
+          --button-primary: #0f0e85;
+          --button-primary-hover: #1a18b8;
+          --button-secondary: #4d4bff;
+          --button-secondary-hover: #a3a2ff;
+          --border-color: #a3a2ff;
+          --border-subtle: #d0d0ff;
+        }
+
+        html:not(.dark):not(.theme-blue):not(.theme-pink):not(.theme-green) body {
+          background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%) !important; /* Force light gradient */
+        }
+
+        .theme-blue body {
+          background: linear-gradient(135deg, #0f0e85 0%, #4d4bff 100%) !important;
+          color: var(--text-primary);
+        }
+
+        .theme-blue .bg-white { background-color: var(--bg-secondary) !important; }
+        .theme-blue .bg-gray-50 { background-color: var(--bg-secondary) !important; }
+        .theme-blue .text-gray-900 { color: var(--text-primary) !important; }
+        .theme-blue .text-gray-700 { color: var(--text-secondary) !important; }
+        .theme-blue .text-gray-600 { color: var(--text-secondary) !important; }
+        .theme-blue .text-gray-500 { color: var(--text-muted) !important; }
+        .theme-blue .border-gray-200 { border-color: var(--border-color) !important; }
+        .theme-blue .border-gray-300 { border-color: var(--border-subtle) !important; }
+        .theme-blue .bg-primary { background-color: var(--button-primary) !important; color: white !important; }
+        .theme-blue .text-primary { color: var(--button-primary) !important; }
+        .theme-blue .bg-secondary { background-color: var(--button-secondary) !important; color: white !important; }
+        .theme-blue .bg-tertiary { background-color: var(--button-secondary) !important; color: white !important; }
+        .theme-blue .gradient-bg { background: linear-gradient(135deg, #0f0e85 0%, #4d4bff 100%) !important; }
+
+        /* Theme 4: Brave Pink (Pink Monochromatic) 🦩 */
+        .theme-pink {
+          --bg-primary: #fff5fa;
+          --bg-secondary: #ffe0f0;
+          --text-primary: #8d2d5f;
+          --text-secondary: #e44c99;
+          --text-muted: #ff69b4;
+          --button-primary: #e44c99;
+          --button-primary-hover: #ff69b4;
+          --button-secondary: #ff69b4;
+          --button-secondary-hover: #ffb3d9;
+          --border-color: #ffb3d9;
+          --border-subtle: #ffe0f0;
+        }
+
+        .theme-pink body {
+          background: linear-gradient(135deg, #e44c99 0%, #ff69b4 100%) !important;
+          color: var(--text-primary);
+        }
+
+        .theme-pink .bg-white { background-color: var(--bg-secondary) !important; }
+        .theme-pink .bg-gray-50 { background-color: var(--bg-secondary) !important; }
+        .theme-pink .text-gray-900 { color: var(--text-primary) !important; }
+        .theme-pink .text-gray-700 { color: var(--text-secondary) !important; }
+        .theme-pink .text-gray-600 { color: var(--text-secondary) !important; }
+        .theme-pink .text-gray-500 { color: var(--text-muted) !important; }
+        .theme-pink .border-gray-200 { border-color: var(--border-color) !important; }
+        .theme-pink .border-gray-300 { border-color: var(--border-subtle) !important; }
+        .theme-pink .bg-primary { background-color: var(--button-primary) !important; color: white !important; }
+        .theme-pink .text-primary { color: var(--button-primary) !important; }
+        .theme-pink .bg-secondary { background-color: var(--button-secondary) !important; color: white !important; }
+        .theme-pink .bg-tertiary { background-color: var(--button-secondary) !important; color: white !important; }
+        .theme-pink .gradient-bg { background: linear-gradient(135deg, #e44c99 0%, #ff69b4 100%) !important; }
+
+        /* Theme 5: Hero Green (Green Monochromatic) 🦖 */
+        .theme-green {
+          --bg-primary: #f0fff3;
+          --bg-secondary: #e0f5e5;
+          --text-primary: #0d3318;
+          --text-secondary: #1b612f;
+          --text-muted: #2d8f4a;
+          --button-primary: #1b612f;
+          --button-primary-hover: #2d8f4a;
+          --button-secondary: #5cb574;
+          --button-secondary-hover: #b8e6c1;
+          --border-color: #b8e6c1;
+          --border-subtle: #d0f0d5;
+        }
+
+        .theme-green body {
+          background: linear-gradient(135deg, #1b612f 0%, #5cb574 100%) !important;
+          color: var(--text-primary);
+        }
+
+        .theme-green .bg-white { background-color: var(--bg-secondary) !important; }
+        .theme-green .bg-gray-50 { background-color: var(--bg-secondary) !important; }
+        .theme-green .text-gray-900 { color: var(--text-primary) !important; }
+        .theme-green .text-gray-700 { color: var(--text-secondary) !important; }
+        .theme-green .text-gray-600 { color: var(--text-secondary) !important; }
+        .theme-green .text-gray-500 { color: var(--text-muted) !important; }
+        .theme-green .border-gray-200 { border-color: var(--border-color) !important; }
+        .theme-green .border-gray-300 { border-color: var(--border-subtle) !important; }
+        .theme-green .bg-primary { background-color: var(--button-primary) !important; color: white !important; }
+        .theme-green .text-primary { color: var(--button-primary) !important; }
+        .theme-green .bg-secondary { background-color: var(--button-secondary) !important; color: white !important; }
+        .theme-green .bg-tertiary { background-color: var(--button-secondary) !important; color: white !important; }
+        .theme-green .gradient-bg { background: linear-gradient(135deg, #1b612f 0%, #5cb574 100%) !important; }
+
+        /* Dark mode gradient */
+        .dark body {
+          background: linear-gradient(135deg, #000000 0%, #1a1a1a 100%) !important;
+        }
+        .dark .gradient-bg { background: linear-gradient(135deg, #000000 0%, #1a1a1a 100%) !important; }
     </style>
 </head>
 <body class="min-h-screen gradient-bg flex items-center justify-center p-4">
+    <!-- Theme Toggle Button (Fixed Position) -->
+    <div class="fixed top-4 right-4 z-50">
+        <button id="btnTheme" class="inline-flex items-center gap-1.5 text-xs sm:text-sm px-3 py-2 rounded-xl border border-white/30 ring-1 ring-black/5 bg-white/80 hover:bg-white/90 text-slate-900 shadow-sm transition-all duration-200 ease-out dark:bg-slate-800/80 dark:hover:bg-slate-800 dark:text-slate-100" title="Toggle theme">
+            <span class="icon-sun text-yellow-500 dark:hidden">☀️</span>
+            <span class="icon-moon hidden dark:inline text-slate-100">🌕</span>
+            Theme
+        </button>
+    </div>
+
     <div class="max-w-md w-full">
         <!-- Success Card -->
         <div class="bg-white rounded-2xl shadow-2xl p-8 text-center fade-in">
@@ -106,25 +243,141 @@
     </div>
 
     <script>
+        // 5-Theme Cycling System with localStorage persistence
+        (function () {
+          const root = document.documentElement;
+          const themes = ['light', 'dark', 'blue', 'pink', 'green'];
+          const themeEmojis = {
+            'light': '☀️',
+            'dark': '🌕',
+            'blue': '🐬',
+            'pink': '🦩',
+            'green': '🦖'
+          };
+
+          const getCookie = (name) => {
+            const parts = document.cookie.split("; ").filter(Boolean);
+            const hit = parts.find((p) => p.startsWith(name + "="));
+            return hit
+              ? decodeURIComponent(hit.split("=").slice(1).join("="))
+              : null;
+          };
+
+          const persist = (theme) => {
+            try {
+              localStorage.setItem("theme", theme);
+            } catch {}
+            try {
+              document.cookie =
+                "theme=" +
+                encodeURIComponent(theme) +
+                "; max-age=31536000; path=/; SameSite=Lax";
+            } catch {}
+          };
+
+          const getSaved = () => {
+            let v = null;
+            try {
+              v = localStorage.getItem("theme");
+            } catch {}
+            if (!v) v = getCookie("theme");
+            return v && themes.includes(v) ? v : null;
+          };
+
+          const applyTheme = (theme) => {
+            // Remove all theme classes
+            root.classList.remove('dark', 'theme-blue', 'theme-pink', 'theme-green');
+
+            // Apply new theme
+            if (theme === 'dark') {
+              root.classList.add('dark');
+            } else if (theme === 'blue') {
+              root.classList.add('theme-blue');
+            } else if (theme === 'pink') {
+              root.classList.add('theme-pink');
+            } else if (theme === 'green') {
+              root.classList.add('theme-green');
+            }
+            // 'light' = no class needed
+          };
+
+          const updateButton = (theme) => {
+            const iconSun = document.querySelector('.icon-sun');
+            const iconMoon = document.querySelector('.icon-moon');
+            const emoji = themeEmojis[theme] || '☀️';
+
+            if (theme === 'light') {
+              if (iconSun) {
+                iconSun.style.display = 'inline';
+                iconSun.textContent = '☀️'; // Reset to sun emoji
+              }
+              if (iconMoon) iconMoon.style.display = 'none';
+            } else if (theme === 'dark') {
+              if (iconSun) iconSun.style.display = 'none';
+              if (iconMoon) iconMoon.style.display = 'inline';
+            } else {
+              // For blue, pink, green - show custom emoji
+              if (iconSun) {
+                iconSun.style.display = 'inline';
+                iconSun.textContent = emoji;
+              }
+              if (iconMoon) iconMoon.style.display = 'none';
+            }
+          };
+
+          // Initialize theme - use state variable instead of reading classList
+          const saved = getSaved();
+          const prefersDark =
+            window.matchMedia &&
+            window.matchMedia("(prefers-color-scheme: dark)").matches;
+          const initial = saved ? saved : (prefersDark ? 'dark' : 'light');
+
+          // State variable to track current theme
+          let currentTheme = initial;
+
+          applyTheme(currentTheme);
+          updateButton(currentTheme);
+          if (!saved) persist(currentTheme);
+
+          // Theme cycle button
+          const btn = document.getElementById("btnTheme");
+          if (btn) {
+            btn.addEventListener("click", () => {
+              // Cycle to next theme using state variable
+              const currentIndex = themes.indexOf(currentTheme);
+              const nextIndex = (currentIndex + 1) % themes.length;
+              const nextTheme = themes[nextIndex];
+
+              // Update state
+              currentTheme = nextTheme;
+
+              applyTheme(nextTheme);
+              updateButton(nextTheme);
+              persist(nextTheme);
+            });
+          }
+        })();
+
+        // Countdown redirect functionality
         let countdown = 5;
         const countdownElement = document.getElementById('countdown');
-        
+
         function updateCountdown() {
             countdownElement.textContent = countdown;
             countdown--;
-            
+
             if (countdown < 0) {
                 redirectToLogin();
             }
         }
-        
+
         function redirectToLogin() {
-            window.location.href = '/login.html';
+            window.location.href = '/login';
         }
-        
+
         // Start countdown
         const countdownInterval = setInterval(updateCountdown, 1000);
-        
+
         // Clear interval when page is closed
         window.addEventListener('beforeunload', () => {
             clearInterval(countdownInterval);
