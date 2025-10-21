@@ -274,129 +274,80 @@
             <div class="mt-8 grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
                 <!-- Total Chat Sessions -->
                 <div class="stat-card rounded-lg p-6 card-hover">
-                    <div class="flex items-center">
-                        <div class="flex-shrink-0">
-                            <div class="w-8 h-8 bg-blue-500 rounded-md flex items-center justify-center">
-                                <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <div class="flex flex-col">
+                        <div class="flex items-center justify-between mb-4">
+                            <div class="w-12 h-12 bg-blue-500 rounded-lg flex items-center justify-center shadow-lg">
+                                <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"></path>
                                 </svg>
                             </div>
                         </div>
-                        <div class="ml-5 w-0 flex-1">
-                            <dl>
-                                <dt class="text-sm font-medium text-gray-500 dark:text-gray-400 truncate">Chat Sessions</dt>
-                                <dd class="text-lg font-medium text-gray-900 dark:text-white" id="stat-sessions">0</dd>
-                            </dl>
+                        <div>
+                            <p class="text-sm font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">Chat Sessions</p>
+                            <p class="text-3xl font-bold text-gray-900 dark:text-white mt-2" id="stat-sessions">0</p>
+                            <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">Total conversations</p>
                         </div>
                     </div>
                 </div>
 
                 <!-- Total Messages -->
                 <div class="stat-card rounded-lg p-6 card-hover">
-                    <div class="flex items-center">
-                        <div class="flex-shrink-0">
-                            <div class="w-8 h-8 bg-green-500 rounded-md flex items-center justify-center">
-                                <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <div class="flex flex-col">
+                        <div class="flex items-center justify-between mb-4">
+                            <div class="w-12 h-12 bg-green-500 rounded-lg flex items-center justify-center shadow-lg">
+                                <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 8h10M7 12h4m-7 8l4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-1l-4 4z"></path>
                                 </svg>
                             </div>
                         </div>
-                        <div class="ml-5 w-0 flex-1">
-                            <dl>
-                                <dt class="text-sm font-medium text-gray-500 dark:text-gray-400 truncate">Total Messages</dt>
-                                <dd class="text-lg font-medium text-gray-900 dark:text-white" id="stat-messages">0</dd>
-                            </dl>
+                        <div>
+                            <p class="text-sm font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">Total Messages</p>
+                            <p class="text-3xl font-bold text-gray-900 dark:text-white mt-2" id="stat-messages">0</p>
+                            <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">Messages exchanged</p>
                         </div>
                     </div>
                 </div>
 
                 <!-- Saved Materials -->
                 <div class="stat-card rounded-lg p-6 card-hover">
-                    <div class="flex items-center">
-                        <div class="flex-shrink-0">
-                            <div class="w-8 h-8 bg-purple-500 rounded-md flex items-center justify-center">
-                                <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <div class="flex flex-col">
+                        <div class="flex items-center justify-between mb-4">
+                            <div class="w-12 h-12 bg-purple-500 rounded-lg flex items-center justify-center shadow-lg">
+                                <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path>
                                 </svg>
                             </div>
                         </div>
-                        <div class="ml-5 w-0 flex-1">
-                            <dl>
-                                <dt class="text-sm font-medium text-gray-500 dark:text-gray-400 truncate">Saved Materials</dt>
-                                <dd class="text-lg font-medium text-gray-900 dark:text-white" id="stat-materials">0</dd>
-                            </dl>
+                        <div>
+                            <p class="text-sm font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">Saved Materials</p>
+                            <p class="text-3xl font-bold text-gray-900 dark:text-white mt-2" id="stat-materials">0</p>
+                            <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">Documents uploaded</p>
                         </div>
                     </div>
                 </div>
 
                 <!-- This Week Activity -->
                 <div class="stat-card rounded-lg p-6 card-hover">
-                    <div class="flex items-center">
-                        <div class="flex-shrink-0">
-                            <div class="w-8 h-8 bg-orange-500 rounded-md flex items-center justify-center">
-                                <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <div class="flex flex-col">
+                        <div class="flex items-center justify-between mb-4">
+                            <div class="w-12 h-12 bg-orange-500 rounded-lg flex items-center justify-center shadow-lg">
+                                <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"></path>
                                 </svg>
                             </div>
                         </div>
-                        <div class="ml-5 w-0 flex-1">
-                            <dl>
-                                <dt class="text-sm font-medium text-gray-500 dark:text-gray-400 truncate">This Week</dt>
-                                <dd class="text-lg font-medium text-gray-900 dark:text-white" id="stat-weekly">0</dd>
-                            </dl>
+                        <div>
+                            <p class="text-sm font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">This Week</p>
+                            <p class="text-3xl font-bold text-gray-900 dark:text-white mt-2" id="stat-weekly">0</p>
+                            <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">Activity this week</p>
                         </div>
                     </div>
                 </div>
             </div>
 
             <!-- Main Content Grid -->
-            <div class="mt-8 grid grid-cols-1 gap-8 lg:grid-cols-2">
-                <!-- Recent Chat Sessions -->
-                <div class="bg-white dark:bg-gray-800 overflow-hidden shadow rounded-lg">
-                    <div class="p-6">
-                        <div class="flex items-center justify-between">
-                            <h3 class="text-lg leading-6 font-medium text-gray-900 dark:text-white">Recent Chat Sessions</h3>
-                            <button id="new-chat-btn" class="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-white bg-primary hover:bg-indigo-900 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary"
-                                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
-                                </svg>
-                                New Chat
-                            </button>
-                        </div>
-                        <div class="mt-6">
-                            <div id="recent-sessions" class="space-y-3">
-                                <!-- Sessions will be loaded here -->
-                            </div>
-                            <div class="mt-4">
-                                <a href="#" id="view-all-sessions" class="text-sm text-primary-600 hover:text-primary-500">View all sessions →</a>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Recent Materials -->
-                <div class="bg-white dark:bg-gray-800 overflow-hidden shadow rounded-lg">
-                    <div class="p-6">
-                        <div class="flex items-center justify-between">
-                            <h3 class="text-lg leading-6 font-medium text-gray-900 dark:text-white">Recent Materials</h3>
-                            <a href="/app" class="inline-flex items-center px-3 py-2 border border-gray-300 dark:border-gray-600 text-sm leading-4 font-medium rounded-md text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
-                                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
-                                </svg>
-                                Upload New
-                            </a>
-                        </div>
-                        <div class="mt-6">
-                            <div id="recent-materials" class="space-y-3">
-                                <!-- Materials will be loaded here -->
-                            </div>
-                            <div class="mt-4">
-                                <a href="#" id="view-all-materials" class="text-sm text-primary-600 hover:text-primary-500">View all materials →</a>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
+            <!-- Removed Recent Chat Sessions and Recent Materials cards -->
+            <!-- You can add other dashboard content here -->
 
             <!-- Detailed Views (Initially Hidden) -->
             <!-- All Sessions View -->
@@ -715,9 +666,9 @@
                 document.getElementById('stat-materials').textContent = data.stats.materials.totalMaterials;
                 document.getElementById('stat-weekly').textContent = data.stats.chat.messagesThisWeek + data.stats.materials.materialsThisWeek;
 
-                // Load recent activities
-                renderRecentSessions(data.recentActivity.sessions);
-                renderRecentMaterials(data.recentActivity.materials);
+                // Don't render recent activities since we removed those cards
+                // renderRecentSessions(data.recentActivity.sessions);
+                // renderRecentMaterials(data.recentActivity.materials);
 
                 // Show dashboard
                 document.getElementById('loading-state').classList.add('hidden');
@@ -861,17 +812,25 @@
                 await loadDashboard();
             }
 
-            // User menu
-            document.getElementById('user-menu-button').addEventListener('click', () => {
-                document.getElementById('user-dropdown').classList.toggle('hidden');
-            });
+            // User menu - only add if element exists
+            const userMenuButton = document.getElementById('user-menu-button');
+            const userDropdown = document.getElementById('user-dropdown');
+            const userMenu = document.getElementById('user-menu');
+            
+            if (userMenuButton && userDropdown) {
+                userMenuButton.addEventListener('click', () => {
+                    userDropdown.classList.toggle('hidden');
+                });
+            }
 
             // Close dropdown when clicking outside
-            document.addEventListener('click', (e) => {
-                if (!document.getElementById('user-menu').contains(e.target)) {
-                    document.getElementById('user-dropdown').classList.add('hidden');
-                }
-            });
+            if (userMenu && userDropdown) {
+                document.addEventListener('click', (e) => {
+                    if (!userMenu.contains(e.target)) {
+                        userDropdown.classList.add('hidden');
+                    }
+                });
+            }
 
             // Logout
             document.getElementById('btnLogout').addEventListener('click', () => {
@@ -879,43 +838,68 @@
                 window.location.href = '/login';
             });
 
-            // New chat modal
-            document.getElementById('new-chat-btn').addEventListener('click', showNewChatModal);
-            document.getElementById('cancel-new-chat').addEventListener('click', hideNewChatModal);
+            // New chat modal - only add if button exists
+            const newChatBtn = document.getElementById('new-chat-btn');
+            if (newChatBtn) {
+                newChatBtn.addEventListener('click', showNewChatModal);
+            }
             
-            document.getElementById('new-chat-form').addEventListener('submit', (e) => {
-                e.preventDefault();
-                const title = document.getElementById('chat-title').value.trim();
-                if (title) {
-                    createNewChat(title);
-                }
-            });
+            const cancelNewChat = document.getElementById('cancel-new-chat');
+            if (cancelNewChat) {
+                cancelNewChat.addEventListener('click', hideNewChatModal);
+            }
+            
+            const newChatForm = document.getElementById('new-chat-form');
+            if (newChatForm) {
+                newChatForm.addEventListener('submit', (e) => {
+                    e.preventDefault();
+                    const title = document.getElementById('chat-title').value.trim();
+                    if (title) {
+                        createNewChat(title);
+                    }
+                });
+            }
 
-            // Navigation
-            document.getElementById('view-all-sessions').addEventListener('click', (e) => {
-                e.preventDefault();
-                showView('sessions');
-            });
+            // Navigation - only add if elements exist
+            const viewAllSessions = document.getElementById('view-all-sessions');
+            if (viewAllSessions) {
+                viewAllSessions.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    showView('sessions');
+                });
+            }
 
-            document.getElementById('view-all-materials').addEventListener('click', (e) => {
-                e.preventDefault();
-                showView('materials');
-            });
+            const viewAllMaterials = document.getElementById('view-all-materials');
+            if (viewAllMaterials) {
+                viewAllMaterials.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    showView('materials');
+                });
+            }
 
-            document.getElementById('back-to-dashboard').addEventListener('click', () => {
-                showView('dashboard');
-            });
+            const backToDashboard = document.getElementById('back-to-dashboard');
+            if (backToDashboard) {
+                backToDashboard.addEventListener('click', () => {
+                    showView('dashboard');
+                });
+            }
 
-            document.getElementById('back-to-dashboard-materials').addEventListener('click', () => {
-                showView('dashboard');
-            });
+            const backToDashboardMaterials = document.getElementById('back-to-dashboard-materials');
+            if (backToDashboardMaterials) {
+                backToDashboardMaterials.addEventListener('click', () => {
+                    showView('dashboard');
+                });
+            }
 
             // Close modal when clicking outside
-            document.getElementById('new-chat-modal').addEventListener('click', (e) => {
-                if (e.target.id === 'new-chat-modal') {
-                    hideNewChatModal();
-                }
-            });
+            const newChatModal = document.getElementById('new-chat-modal');
+            if (newChatModal) {
+                newChatModal.addEventListener('click', (e) => {
+                    if (e.target.id === 'new-chat-modal') {
+                        hideNewChatModal();
+                    }
+                });
+            }
         });
     </script>
 

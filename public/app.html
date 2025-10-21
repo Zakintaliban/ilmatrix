@@ -962,12 +962,11 @@
               >
                 Login
               </a>
-              
               <button
                 id="btnHealth"
                 class="text-xs sm:text-sm bg-secondary hover:bg-pink-500 transition text-white px-3 py-2 rounded-md"
               >
-                Check API
+                API
               </button>
               <button
                 id="btnTheme"
@@ -985,7 +984,6 @@
                   aria-hidden="true"
                   >🌕</span
                 >
-                Theme
               </button>
             </div>
           </div>
@@ -4833,6 +4831,8 @@
           this.newChatBtn = document.getElementById('newChatBtn');
           this.sessionsList = document.getElementById('chatSessionsList');
           this.isOpen = false;
+          this.updateInterval = null;
+          this.cachedSessions = [];
           
           this.init();
         }
@@ -4840,6 +4840,23 @@
         init() {
           this.attachEventListeners();
           this.loadChatSessions();
+          this.startAutoUpdate();
+        }
+        
+        startAutoUpdate() {
+          // Update timestamps every 30 seconds without reloading from server
+          this.updateInterval = setInterval(() => {
+            if (this.isOpen && this.cachedSessions.length > 0) {
+              this.renderSessions(this.cachedSessions);
+            }
+          }, 30000); // Update every 30 seconds
+        }
+        
+        stopAutoUpdate() {
+          if (this.updateInterval) {
+            clearInterval(this.updateInterval);
+            this.updateInterval = null;
+          }
         }
         
         attachEventListeners() {
@@ -4916,7 +4933,8 @@
             if (!response.ok) throw new Error('Failed to load sessions');
             
             const data = await response.json();
-            this.renderSessions(data.sessions);
+            this.cachedSessions = data.sessions; // Cache the sessions
+            this.renderSessions(this.cachedSessions);
           } catch (error) {
             console.error('Failed to load chat sessions:', error);
             this.sessionsList.innerHTML = '<p class="text-gray-500 p-4 text-sm">Failed to load sessions</p>';
@@ -5100,13 +5118,28 @@
           const date = new Date(dateString);
           const now = new Date();
           const diffMs = now - date;
-          const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+          const diffSeconds = Math.floor(diffMs / 1000);
+          const diffMinutes = Math.floor(diffSeconds / 60);
+          const diffHours = Math.floor(diffMinutes / 60);
           const diffDays = Math.floor(diffHours / 24);
+          const diffWeeks = Math.floor(diffDays / 7);
+          const diffMonths = Math.floor(diffDays / 30);
+          const diffYears = Math.floor(diffDays / 365);
 
-          if (diffHours < 1) return 'Just now';
-          if (diffHours < 24) return `${diffHours}h ago`;
-          if (diffDays < 7) return `${diffDays}d ago`;
-          return date.toLocaleDateString();
+          if (diffSeconds < 10) return 'Just now';
+          if (diffSeconds < 60) return `${diffSeconds} seconds ago`;
+          if (diffMinutes === 1) return '1 minute ago';
+          if (diffMinutes < 60) return `${diffMinutes} minutes ago`;
+          if (diffHours === 1) return '1 hour ago';
+          if (diffHours < 24) return `${diffHours} hours ago`;
+          if (diffDays === 1) return '1 day ago';
+          if (diffDays < 7) return `${diffDays} days ago`;
+          if (diffWeeks === 1) return '1 week ago';
+          if (diffWeeks < 4) return `${diffWeeks} weeks ago`;
+          if (diffMonths === 1) return '1 month ago';
+          if (diffMonths < 12) return `${diffMonths} months ago`;
+          if (diffYears === 1) return '1 year ago';
+          return `${diffYears} years ago`;
         }
       }
       
