@@ -905,6 +905,14 @@
                 </svg>
                 <span id="guestUsageText" class="text-white font-medium">0/5 uses</span>
               </div>
+
+              <!-- Guest Session Indicator (shown when in guest session) -->
+              <div id="guestSessionIndicator" class="hidden items-center gap-2 px-2 py-1 bg-blue-600/80 rounded-md text-xs">
+                <svg class="w-3 h-3 text-blue-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path>
+                </svg>
+                <span class="text-white font-medium">Guest Session</span>
+              </div>
               
               <!-- User Info (shown when logged in) -->
               <div id="userInfo" class="hidden items-center gap-2">
@@ -1940,6 +1948,10 @@
       // Active tool routing for mobile-first UX ("chat" by default)
       let activeTool = "chat";
 
+      // Guest session management
+      let currentGuestSessionId = null;
+      let guestFingerprint = null;
+
       // MaterialId persistence functions
       function saveMaterialId(newId) {
         const oldId = materialId;
@@ -2008,34 +2020,257 @@
         }
       }
       
-      // Save chat message to session on server
+      // Save chat message to session on server (supports both authenticated and guest sessions)
       async function saveChatMessageToSession(role, content, endpoint = null) {
-        if (!sessionId) return;
-        
         try {
-          // Save message to server
-          await fetch(`/api/dashboard/chat/sessions/${sessionId}/messages`, {
+          let url, options;
+
+          if (sessionId) {
+            // Authenticated user session
+            url = `/api/dashboard/chat/sessions/${sessionId}/messages`;
+            options = {
+              method: 'POST',
+              credentials: 'include',
+              headers: {
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify({
+                role: role,
+                content: content,
+                materialId: materialId,
+                endpoint: endpoint
+              })
+            };
+          } else {
+            // Guest session - need to create or use existing guest session
+            const guestSessionId = await getOrCreateGuestSession();
+            if (guestSessionId) {
+              url = `/api/guest/chat/sessions/${guestSessionId}/messages`;
+              options = {
+                method: 'POST',
+                credentials: 'include',
+                headers: {
+                  'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                  role: role,
+                  content: content,
+                  materialId: materialId,
+                  endpoint: endpoint
+                })
+              };
+            } else {
+              console.warn('No guest session available');
+              return;
+            }
+          }
+
+          const response = await fetch(url, options);
+
+          if (!response.ok) {
+            throw new Error(`Failed to save message: ${response.status}`);
+          }
+
+          // Update guest usage display if this was a guest request
+          if (!sessionId) {
+            updateGuestUsageDisplay(response.headers);
+          }
+
+        } catch (error) {
+          console.error('Failed to save message to session:', error);
+        }
+      }
+
+      // Guest session management functions
+      async function getGuestFingerprint() {
+        if (guestFingerprint) return guestFingerprint;
+
+        try {
+          const response = await fetch('/api/guest/chat/sessions', {
+            credentials: 'include'
+          });
+
+          if (response.ok) {
+            const data = await response.json();
+            // The fingerprint is generated server-side, we'll get it from the response
+            // For now, we'll generate a simple client-side fingerprint
+            guestFingerprint = generateClientFingerprint();
+            return guestFingerprint;
+          }
+        } catch (error) {
+          console.error('Failed to get guest fingerprint:', error);
+        }
+
+        // Fallback client-side fingerprint
+        guestFingerprint = generateClientFingerprint();
+        return guestFingerprint;
+      }
+
+      function generateClientFingerprint() {
+        // Simple client-side fingerprint based on browser characteristics
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        ctx.textBaseline = 'top';
+        ctx.font = '14px Arial';
+        ctx.fillText('Browser fingerprint', 2, 2);
+
+        const fingerprint = [
+          navigator.userAgent,
+          navigator.language,
+          screen.width + 'x' + screen.height,
+          new Date().getTimezoneOffset(),
+          canvas.toDataURL()
+        ].join('|');
+
+        return btoa(fingerprint).substring(0, 16);
+      }
+
+      async function getOrCreateGuestSession() {
+        if (currentGuestSessionId) return currentGuestSessionId;
+
+        try {
+          const fingerprint = await getGuestFingerprint();
+
+          // Check if user has existing guest sessions
+          const sessionsResponse = await fetch('/api/guest/chat/sessions', {
+            credentials: 'include'
+          });
+
+          if (sessionsResponse.ok) {
+            const data = await sessionsResponse.json();
+
+            if (data.sessions && data.sessions.length > 0) {
+              // Use the most recent session
+              currentGuestSessionId = data.sessions[0].id;
+              return currentGuestSessionId;
+            }
+          }
+
+          // Create new guest session
+          const createResponse = await fetch('/api/guest/chat/sessions', {
             method: 'POST',
             credentials: 'include',
             headers: {
               'Content-Type': 'application/json'
             },
             body: JSON.stringify({
-              role: role,
-              content: content,
-              materialId: materialId,
-              endpoint: endpoint
+              title: 'New Chat',
+              firstMessage: 'Started new chat session'
             })
           });
+
+          if (createResponse.ok) {
+            const data = await createResponse.json();
+            currentGuestSessionId = data.session.id;
+            return currentGuestSessionId;
+          }
+
         } catch (error) {
-          console.error('Failed to save message to session:', error);
+          console.error('Failed to get or create guest session:', error);
         }
+
+        return null;
+      }
+
+      async function loadGuestSessionMessages() {
+        if (!currentGuestSessionId) return [];
+
+        try {
+          const response = await fetch(`/api/guest/chat/sessions/${currentGuestSessionId}/messages`, {
+            credentials: 'include'
+          });
+
+          if (response.ok) {
+            const data = await response.json();
+            return data.messages || [];
+          }
+        } catch (error) {
+          console.error('Failed to load guest session messages:', error);
+        }
+
+        return [];
+      }
+
+      async function saveGuestSessionTitle(title) {
+        if (!currentGuestSessionId) return;
+
+        try {
+          await fetch(`/api/guest/chat/sessions/${currentGuestSessionId}`, {
+            method: 'PUT',
+            credentials: 'include',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ title })
+          });
+        } catch (error) {
+          console.error('Failed to save guest session title:', error);
+        }
+      }
+
+      async function generateGuestSessionTitle() {
+        if (!currentGuestSessionId) return 'New Chat';
+
+        try {
+          const response = await fetch(`/api/guest/chat/sessions/${currentGuestSessionId}/generate-title`, {
+            method: 'POST',
+            credentials: 'include'
+          });
+
+          if (response.ok) {
+            const data = await response.json();
+            return data.title || 'New Chat';
+          }
+        } catch (error) {
+          console.error('Failed to generate guest session title:', error);
+        }
+
+        return 'New Chat';
+      }
+
+      async function getPendingMigrations() {
+        try {
+          const response = await fetch('/api/guest/chat/pending-migration', {
+            credentials: 'include'
+          });
+
+          if (response.ok) {
+            const data = await response.json();
+            return data.sessions || [];
+          }
+        } catch (error) {
+          console.error('Failed to get pending migrations:', error);
+        }
+
+        return [];
+      }
+
+      async function migrateGuestChats(sessionIds) {
+        try {
+          const response = await fetch('/api/guest/chat/migrate', {
+            method: 'POST',
+            credentials: 'include',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ sessionIds })
+          });
+
+          if (response.ok) {
+            const data = await response.json();
+            return data;
+          }
+        } catch (error) {
+          console.error('Failed to migrate guest chats:', error);
+        }
+
+        return { success: false, migrated: 0, errors: ['Migration failed'] };
       }
 
       // Reset all session-related state
       function resetSessionState() {
         console.log('[Session Reset] Starting state reset...');
-        console.log('[Session Reset] Before - materialId:', materialId, 'chat length:', chat.length);
+        console.log('[Session Reset] Before - materialId:', materialId, 'sessionId:', sessionId, 'guestSessionId:', currentGuestSessionId, 'chat length:', chat.length);
 
         // Clear chat messages
         chat = [];
@@ -2043,6 +2278,10 @@
         // Clear material ID (CRITICAL FIX: prevents material bleeding between sessions)
         materialId = null;
         localStorage.removeItem("ilmatrix_materialId");
+
+        // Clear session IDs
+        sessionId = null;
+        currentGuestSessionId = null;
 
         // Clear MCQ questions
         mcqQuestions = [];
@@ -2091,13 +2330,14 @@
         // Update UI
         updateActiveToolBadge();
         setComposerPlaceholder();
+        updateGuestSessionIndicator();
         renderChat();
 
-        console.log('[Session Reset] After - materialId:', materialId, 'chat length:', chat.length);
+        console.log('[Session Reset] After - materialId:', materialId, 'sessionId:', sessionId, 'guestSessionId:', currentGuestSessionId, 'chat length:', chat.length);
         console.log('[Session Reset] State reset complete');
       }
 
-      // Load chat session from server
+      // Load chat session from server (supports both authenticated and guest sessions)
       async function loadChatSession(sessionIdParam) {
         console.log('[Load Session] Loading session:', sessionIdParam);
         try {
@@ -2105,71 +2345,111 @@
           // This prevents material/chat bleeding between sessions
           resetSessionState();
 
-          sessionId = sessionIdParam;
+          // Check if this is a guest session (no sessionId means guest)
+          const isGuestSession = !sessionIdParam || sessionIdParam.startsWith('guest-');
 
-          // Get session messages from server
-          const response = await fetch(`/api/dashboard/chat/sessions/${sessionId}/messages`, {
-            credentials: 'include'
-          });
+          if (isGuestSession) {
+            // Load guest session
+            currentGuestSessionId = sessionIdParam && sessionIdParam.startsWith('guest-') ?
+              sessionIdParam.substring(6) : await getOrCreateGuestSession();
 
-          if (!response.ok) {
-            throw new Error('Failed to load session');
-          }
+            if (!currentGuestSessionId) {
+              throw new Error('Failed to get guest session');
+            }
 
-          const data = await response.json();
+            // Get guest session messages
+            const messages = await loadGuestSessionMessages();
 
-          // CRITICAL FIX: Extract materialId BEFORE converting to chat format
-          // Get the most recent materialId from server messages
-          const messagesWithMaterial = data.messages.filter(msg => msg.materialId);
-          let lastMaterialId = null;
-          if (messagesWithMaterial.length > 0) {
-            lastMaterialId = messagesWithMaterial[messagesWithMaterial.length - 1].materialId;
-          }
+            // Convert guest messages to chat format
+            chat = messages.map(msg => ({
+              role: msg.role,
+              content: msg.content
+            }));
 
-          // Convert server messages to chat format
-          // IMPORTANT: Only include role and content (required by API)
-          // Do NOT include extra fields like materialId, timestamp, etc.
-          chat = data.messages.map(msg => ({
-            role: msg.role,
-            content: msg.content
-          }));
+            // Extract materialId from guest messages
+            const messagesWithMaterial = messages.filter(msg => msg.materialId);
+            let lastMaterialId = null;
+            if (messagesWithMaterial.length > 0) {
+              lastMaterialId = messagesWithMaterial[messagesWithMaterial.length - 1].materialId;
+            }
 
-          // CRITICAL FIX: Load the materialId associated with this session
-          if (lastMaterialId) {
-            console.log('[Load Session] Found materialId in messages:', lastMaterialId);
+            if (lastMaterialId) {
+              const materialExists = await verifyMaterialExists(lastMaterialId);
+              if (materialExists) {
+                materialId = lastMaterialId;
+                localStorage.setItem("ilmatrix_materialId", materialId);
 
-            // Verify this material still exists before loading
-            const materialExists = await verifyMaterialExists(lastMaterialId);
-            console.log('[Load Session] Material exists:', materialExists);
-
-            if (materialExists) {
-              // Load the material associated with this session
-              materialId = lastMaterialId;
-              localStorage.setItem("ilmatrix_materialId", materialId);
-              console.log('[Load Session] Loaded materialId:', materialId);
-
-              // Fetch and display material info
-              try {
-                const matRes = await fetch(`/api/material/${materialId}`);
-                if (matRes.ok) {
-                  const matData = await matRes.json();
-                  updateMaterialUI(matData);
-                  console.log('[Load Session] Material UI updated');
+                try {
+                  const matRes = await fetch(`/api/material/${materialId}`);
+                  if (matRes.ok) {
+                    const matData = await matRes.json();
+                    updateMaterialUI(matData);
+                  }
+                } catch (e) {
+                  console.warn('Failed to load material info:', e);
                 }
-              } catch (e) {
-                console.warn('Failed to load material info:', e);
               }
             }
+
+            // Update URL for guest session
+            const url = new URL(window.location);
+            url.searchParams.set('guestSessionId', currentGuestSessionId);
+            window.history.replaceState(null, '', url);
+
           } else {
-            console.log('[Load Session] No materialId found in messages');
+            // Load authenticated session
+            sessionId = sessionIdParam;
+
+            const response = await fetch(`/api/dashboard/chat/sessions/${sessionId}/messages`, {
+              credentials: 'include'
+            });
+
+            if (!response.ok) {
+              throw new Error('Failed to load session');
+            }
+
+            const data = await response.json();
+
+            // Extract materialId from authenticated messages
+            const messagesWithMaterial = data.messages.filter(msg => msg.materialId);
+            let lastMaterialId = null;
+            if (messagesWithMaterial.length > 0) {
+              lastMaterialId = messagesWithMaterial[messagesWithMaterial.length - 1].materialId;
+            }
+
+            chat = data.messages.map(msg => ({
+              role: msg.role,
+              content: msg.content
+            }));
+
+            if (lastMaterialId) {
+              const materialExists = await verifyMaterialExists(lastMaterialId);
+              if (materialExists) {
+                materialId = lastMaterialId;
+                localStorage.setItem("ilmatrix_materialId", materialId);
+
+                try {
+                  const matRes = await fetch(`/api/material/${materialId}`);
+                  if (matRes.ok) {
+                    const matData = await matRes.json();
+                    updateMaterialUI(matData);
+                  }
+                } catch (e) {
+                  console.warn('Failed to load material info:', e);
+                }
+              }
+            }
+
+            // Update URL for authenticated session
+            const url = new URL(window.location);
+            url.searchParams.set('sessionId', sessionId);
+            window.history.replaceState(null, '', url);
           }
 
-          // Update URL without reloading page
-          const url = new URL(window.location);
-          url.searchParams.set('sessionId', sessionId);
-          window.history.replaceState(null, '', url);
-
           renderChat();
+
+          // Update guest session indicator
+          updateGuestSessionIndicator();
 
           // Close sidebar after loading session (better UX)
           if (chatSidebar) {
@@ -2177,7 +2457,7 @@
           }
 
           console.log('[Load Session] Session loaded successfully');
-          console.log('[Load Session] Final state - sessionId:', sessionId, 'materialId:', materialId, 'messages:', chat.length);
+          console.log('[Load Session] Final state - sessionId:', sessionId, 'guestSessionId:', currentGuestSessionId, 'materialId:', materialId, 'messages:', chat.length);
 
           return true;
         } catch (error) {
@@ -2234,17 +2514,17 @@
       }
 
       // Helper function to add message to chat with auto-save
-      function addChatMessage(role, content, endpoint = null) {
+      async function addChatMessage(role, content, endpoint = null) {
         chat.push({ role, content });
-        
-        // Save to session if we have an active sessionId
-        if (sessionId) {
-          saveChatMessageToSession(role, content, endpoint);
-        } else {
-          // Fallback to localStorage
+
+        // Save to session (authenticated or guest)
+        await saveChatMessageToSession(role, content, endpoint);
+
+        // Also save to localStorage as backup for guest users
+        if (!sessionId) {
           saveChatHistory();
         }
-        
+
         renderChat();
       }
 
@@ -2984,11 +3264,16 @@
         // Check URL parameters first
         const urlParams = new URLSearchParams(window.location.search);
         const urlSessionId = urlParams.get('sessionId');
+        const urlGuestSessionId = urlParams.get('guestSessionId');
         const urlMaterialId = urlParams.get('materialId');
-        
+
         if (urlSessionId) {
-          // Load specific chat session
+          // Load specific authenticated chat session
           await loadChatSession(urlSessionId);
+          return; // Exit early, don't load from localStorage
+        } else if (urlGuestSessionId) {
+          // Load specific guest chat session
+          await loadChatSession('guest-' + urlGuestSessionId);
           return; // Exit early, don't load from localStorage
         } else if (urlMaterialId) {
           // Load specific material
@@ -3007,7 +3292,25 @@
             const sessionLoaded = await loadMostRecentSession();
             if (sessionLoaded) return; // Exit early if session was loaded
           } else {
-            // Initialize from localStorage for guests
+            // For guest users, try to load guest sessions first
+            try {
+              const guestSessionsResponse = await fetch('/api/guest/chat/sessions', {
+                credentials: 'include'
+              });
+
+              if (guestSessionsResponse.ok) {
+                const data = await guestSessionsResponse.json();
+                if (data.sessions && data.sessions.length > 0) {
+                  // Load the most recent guest session
+                  await loadChatSession('guest-' + data.sessions[0].id);
+                  return;
+                }
+              }
+            } catch (error) {
+              console.warn('Failed to load guest sessions:', error);
+            }
+
+            // Fallback: Initialize from localStorage for guests
             const saved = loadMaterialId();
             if (saved) {
               const exists = await verifyMaterialExists(saved);
@@ -3530,7 +3833,7 @@
             return;
           }
           if (trimmed.length > 0) {
-            addChatMessage("user", original);
+            await addChatMessage("user", original);
           }
           input.textContent = "";
           updatePlaceholder();
@@ -3609,9 +3912,24 @@
         // For other tools and general chat, keep behavior:
         if (!trimmed) return;
 
-        addChatMessage("user", original);
+        await addChatMessage("user", original);
         input.textContent = "";
         updatePlaceholder();
+
+        // Auto-generate title for guest sessions after first message
+        if (!sessionId && currentGuestSessionId && chat.length === 1) {
+          try {
+            const title = await generateGuestSessionTitle();
+            await saveGuestSessionTitle(title);
+            // Refresh sidebar to show updated title
+            if (chatSidebar) {
+              chatSidebar.loadChatSessions();
+            }
+          } catch (error) {
+            console.warn('Failed to auto-generate title:', error);
+          }
+        }
+
         try {
           // Route to selected tool endpoints if any (Explain/Forum/Exam with text)
           if (activeTool && activeTool !== "chat" && TOOL_ROUTES[activeTool]) {
@@ -3626,7 +3944,7 @@
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify(body),
             });
-            
+
             // Handle guest usage limits
             if (res.status === 401) {
               const errorData = await res.json();
@@ -3635,13 +3953,13 @@
                 return;
               }
             }
-            
+
             // Update guest usage counter from headers
             updateGuestUsageDisplay(res.headers);
-            
+
             const data = await res.json();
             const answer = data.answer || JSON.stringify(data);
-            addChatMessage("assistant", answer, activeTool);
+            await addChatMessage("assistant", answer, activeTool);
             return;
           }
 
@@ -3655,7 +3973,7 @@
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(payload),
           });
-          
+
           // Handle guest usage limits
           if (res.status === 401) {
             const errorData = await res.json();
@@ -3664,13 +3982,13 @@
               return;
             }
           }
-          
+
           // Update guest usage counter from headers
           updateGuestUsageDisplay(res.headers);
-          
+
           const data = await res.json();
           const answer = data.answer || JSON.stringify(data);
-          addChatMessage("assistant", answer, "chat");
+          await addChatMessage("assistant", answer, "chat");
         } catch (e) {
           addChatMessage("system", "Chat error: " + e.message);
         }
@@ -4755,10 +5073,31 @@
           document.querySelectorAll('.userOnlyLink').forEach(link => {
             link.classList.remove('hidden');
           });
-          
+
           // Initialize chat sidebar for authenticated users
           if (!chatSidebar) {
             chatSidebar = new ChatSidebar();
+          }
+
+          // Show save chat prompt after login (if not dismissed before)
+          setTimeout(() => {
+            this.showSaveChatPromptIfNeeded();
+          }, 1000); // Small delay to let UI settle
+        }
+
+        async showSaveChatPromptIfNeeded() {
+          // Check if user has dismissed the prompt before
+          const dismissed = localStorage.getItem('saveChatPromptDismissed');
+          if (dismissed === 'true') return;
+
+          // Check if user has any guest chats to migrate
+          try {
+            const pendingSessions = await getPendingMigrations();
+            if (pendingSessions.length > 0) {
+              showSaveChatPromptModal();
+            }
+          } catch (error) {
+            console.error('Failed to check for pending migrations:', error);
           }
         }
 
@@ -4926,14 +5265,42 @@
         
         async loadChatSessions() {
           try {
-            const response = await fetch('/api/dashboard/chat/sessions', {
-              credentials: 'include'
-            });
-            
-            if (!response.ok) throw new Error('Failed to load sessions');
-            
-            const data = await response.json();
-            this.cachedSessions = data.sessions; // Cache the sessions
+            // Load authenticated sessions
+            let authSessions = [];
+            try {
+              const response = await fetch('/api/dashboard/chat/sessions', {
+                credentials: 'include'
+              });
+
+              if (response.ok) {
+                const data = await response.json();
+                authSessions = data.sessions || [];
+              }
+            } catch (error) {
+              console.warn('Failed to load authenticated sessions:', error);
+            }
+
+            // Load guest sessions
+            let guestSessions = [];
+            try {
+              const guestResponse = await fetch('/api/guest/chat/sessions', {
+                credentials: 'include'
+              });
+
+              if (guestResponse.ok) {
+                const data = await guestResponse.json();
+                guestSessions = data.sessions || [];
+              }
+            } catch (error) {
+              console.warn('Failed to load guest sessions:', error);
+            }
+
+            // Combine and sort sessions by last activity
+            const allSessions = [...authSessions, ...guestSessions].sort((a, b) =>
+              new Date(b.updatedAt) - new Date(a.updatedAt)
+            );
+
+            this.cachedSessions = allSessions;
             this.renderSessions(this.cachedSessions);
           } catch (error) {
             console.error('Failed to load chat sessions:', error);
@@ -4946,38 +5313,49 @@
             this.sessionsList.innerHTML = '<p class="text-gray-500 p-4 text-sm">No chat sessions yet</p>';
             return;
           }
-          
-          this.sessionsList.innerHTML = sessions.map(session => `
-            <div class="session-item group p-3 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 border border-transparent ${session.id === sessionId ? 'bg-blue-50 dark:bg-blue-900 border-blue-200 dark:border-blue-700' : ''}">
-              <div class="flex items-start justify-between">
-                <div class="flex-1 cursor-pointer" onclick="chatSidebar.switchToSession('${session.id}')">
-                  <div class="font-medium text-sm text-gray-900 dark:text-white truncate">${this.escapeHtml(session.title)}</div>
-                  <div class="text-xs text-gray-500 dark:text-gray-400 mt-1">${session.messageCount} messages</div>
-                  <div class="text-xs text-gray-400 dark:text-gray-500">${this.formatDate(session.updatedAt)}</div>
-                </div>
-                <div class="flex items-center gap-1 ml-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <button
-                    onclick="event.stopPropagation(); chatSidebar.editSession('${session.id}', '${this.escapeHtml(session.title)}')"
-                    class="p-1 rounded text-gray-400 hover:text-blue-600 hover:bg-blue-100 dark:hover:bg-blue-900"
-                    title="Edit title"
-                  >
-                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
-                    </svg>
-                  </button>
-                  <button
-                    onclick="event.stopPropagation(); chatSidebar.deleteSession('${session.id}', '${this.escapeHtml(session.title)}')"
-                    class="p-1 rounded text-gray-400 hover:text-red-600 hover:bg-red-100 dark:hover:bg-red-900"
-                    title="Delete session"
-                  >
-                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
-                    </svg>
-                  </button>
+
+          this.sessionsList.innerHTML = sessions.map(session => {
+            // Check if this is a guest session (no user ID associated)
+            const isGuestSession = !session.userId;
+            const isActive = (session.id === sessionId) || (isGuestSession && session.id === currentGuestSessionId);
+
+            return `
+              <div class="session-item group p-3 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 border border-transparent ${isActive ? 'bg-blue-50 dark:bg-blue-900 border-blue-200 dark:border-blue-700' : ''}">
+                <div class="flex items-start justify-between">
+                  <div class="flex-1 cursor-pointer" onclick="chatSidebar.switchToSession('${isGuestSession ? 'guest-' : ''}${session.id}')">
+                    <div class="flex items-center gap-2">
+                      <div class="font-medium text-sm text-gray-900 dark:text-white truncate">${this.escapeHtml(session.title)}</div>
+                      ${isGuestSession ? '<span class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200">Guest</span>' : ''}
+                    </div>
+                    <div class="text-xs text-gray-500 dark:text-gray-400 mt-1">${session.messageCount} messages</div>
+                    <div class="text-xs text-gray-400 dark:text-gray-500">${this.formatDate(session.updatedAt)}</div>
+                  </div>
+                  <div class="flex items-center gap-1 ml-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                    ${!isGuestSession ? `
+                      <button
+                        onclick="event.stopPropagation(); chatSidebar.editSession('${session.id}', '${this.escapeHtml(session.title)}')"
+                        class="p-1 rounded text-gray-400 hover:text-blue-600 hover:bg-blue-100 dark:hover:bg-blue-900"
+                        title="Edit title"
+                      >
+                        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
+                        </svg>
+                      </button>
+                    ` : ''}
+                    <button
+                      onclick="event.stopPropagation(); chatSidebar.deleteSession('${session.id}', '${this.escapeHtml(session.title)}')"
+                      class="p-1 rounded text-gray-400 hover:text-red-600 hover:bg-red-100 dark:hover:bg-red-900"
+                      title="Delete session"
+                    >
+                      <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                      </svg>
+                    </button>
+                  </div>
                 </div>
               </div>
-            </div>
-          `).join('');
+            `;
+          }).join('');
         }
         
         async switchToSession(sessionIdParam) {
@@ -5083,20 +5461,32 @@
         
         async deleteSession(sessionId, title) {
           if (!confirm(`Are you sure you want to delete "${title}"?`)) return;
-          
+
           try {
-            const response = await fetch(`/api/dashboard/chat/sessions/${sessionId}`, {
+            // Check if this is a guest session (no userId in the session data)
+            const session = this.cachedSessions.find(s => s.id === sessionId);
+            const isGuestSession = !session || !session.userId;
+
+            let deleteUrl;
+            if (isGuestSession) {
+              deleteUrl = `/api/guest/chat/sessions/${sessionId}`;
+            } else {
+              deleteUrl = `/api/dashboard/chat/sessions/${sessionId}`;
+            }
+
+            const response = await fetch(deleteUrl, {
               method: 'DELETE',
               credentials: 'include'
             });
-            
+
             if (!response.ok) throw new Error('Failed to delete session');
-            
+
             // If we deleted the current session, redirect to main app
             const urlParams = new URLSearchParams(window.location.search);
             const currentSessionId = urlParams.get('sessionId');
-            
-            if (currentSessionId === sessionId) {
+            const currentGuestSessionId = urlParams.get('guestSessionId');
+
+            if (currentSessionId === sessionId || currentGuestSessionId === sessionId) {
               window.location.href = '/app';
             } else {
               // Just refresh the sessions list
@@ -5154,24 +5544,49 @@
         const max = headers.get('X-Guest-Usage-Max');
         const remaining = headers.get('X-Guest-Usage-Remaining');
         const warning = headers.get('X-Guest-Warning');
-        
+
         const counter = document.getElementById('guestUsageCounter');
         const text = document.getElementById('guestUsageText');
-        
+        const sessionIndicator = document.getElementById('guestSessionIndicator');
+
         if (authStatus === 'guest' && current && max) {
           // Show guest usage counter
           counter.classList.remove('hidden');
           counter.classList.add('flex');
           text.textContent = `${current}/${max} uses`;
-          
+
+          // Show guest session indicator if we have an active guest session
+          if (currentGuestSessionId && !sessionId) {
+            sessionIndicator.classList.remove('hidden');
+            sessionIndicator.classList.add('flex');
+          } else {
+            sessionIndicator.classList.add('hidden');
+            sessionIndicator.classList.remove('flex');
+          }
+
           // Change color when approaching limit
           if (warning === 'true' || remaining <= 1) {
             counter.className = counter.className.replace('bg-orange-600/80', 'bg-red-600/80');
           }
         } else if (authStatus === 'authenticated') {
-          // Hide counter for authenticated users
+          // Hide counter and session indicator for authenticated users
           counter.classList.add('hidden');
           counter.classList.remove('flex');
+          sessionIndicator.classList.add('hidden');
+          sessionIndicator.classList.remove('flex');
+        }
+      }
+
+      function updateGuestSessionIndicator() {
+        const sessionIndicator = document.getElementById('guestSessionIndicator');
+        const authStatus = document.getElementById('guestUsageCounter').classList.contains('flex');
+
+        if (currentGuestSessionId && !sessionId && authStatus) {
+          sessionIndicator.classList.remove('hidden');
+          sessionIndicator.classList.add('flex');
+        } else {
+          sessionIndicator.classList.add('hidden');
+          sessionIndicator.classList.remove('flex');
         }
       }
       
@@ -5253,6 +5668,178 @@
           document.body.removeChild(window.currentGuestModal);
           window.currentGuestModal = null;
         }
+      }
+
+      // Post-login save prompt modal
+      function showSaveChatPromptModal() {
+        const modal = document.createElement('div');
+        modal.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4';
+        modal.innerHTML = `
+          <div class="bg-white dark:bg-gray-800 rounded-xl max-w-md w-full p-6 text-center">
+            <div class="mb-4">
+              <div class="w-16 h-16 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center mx-auto mb-4">
+                <svg class="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 4V2a1 1 0 011-1h8a1 1 0 011 1v2m-9 0h10a2 2 0 012 2v10a2 2 0 01-2 2H6a2 2 0 01-2-2V6a2 2 0 012-2z"></path>
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                </svg>
+              </div>
+              <h2 class="text-xl font-bold text-gray-900 dark:text-white mb-2">Save Your Chat?</h2>
+              <p class="text-gray-600 dark:text-gray-300 mb-6">You have an active chat session. Would you like to save it to your account?</p>
+            </div>
+
+            <div class="space-y-3">
+              <button id="saveChatYes" class="block w-full bg-gradient-to-r from-blue-600 to-purple-600 text-white font-medium py-3 px-6 rounded-lg hover:opacity-90 transition-opacity">
+                Yes, Save Chat
+              </button>
+              <button id="saveChatNo" class="block w-full text-gray-600 dark:text-gray-400 font-medium py-3 px-6 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
+                No, Start Fresh
+              </button>
+              <button id="saveChatAskLater" class="block w-full text-gray-500 dark:text-gray-500 font-medium py-2 px-6 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
+                Ask Me Later
+              </button>
+            </div>
+
+            <div class="mt-4 text-sm text-gray-500 dark:text-gray-400 space-y-1">
+              <p>💾 <strong>Saving benefits:</strong></p>
+              <p>• Access from any device</p>
+              <p>• Never lose your conversations</p>
+              <p>• Continue where you left off</p>
+            </div>
+          </div>
+        `;
+
+        document.body.appendChild(modal);
+
+        // Handle button clicks
+        modal.querySelector('#saveChatYes').addEventListener('click', async () => {
+          await handleSaveChatAfterLogin();
+          document.body.removeChild(modal);
+        });
+
+        modal.querySelector('#saveChatNo').addEventListener('click', () => {
+          // Just start fresh, no migration
+          document.body.removeChild(modal);
+        });
+
+        modal.querySelector('#saveChatAskLater').addEventListener('click', () => {
+          // Store preference to not ask again for this session
+          localStorage.setItem('saveChatPromptDismissed', 'true');
+          document.body.removeChild(modal);
+        });
+
+        // Close modal when clicking outside
+        modal.addEventListener('click', (e) => {
+          if (e.target === modal) {
+            document.body.removeChild(modal);
+          }
+        });
+
+        // Store modal reference
+        window.currentSaveChatModal = modal;
+      }
+
+      async function handleSaveChatAfterLogin() {
+        try {
+          // Get pending migrations (guest sessions)
+          const pendingSessions = await getPendingMigrations();
+
+          if (pendingSessions.length === 0) {
+            alert('No guest chats found to save.');
+            return;
+          }
+
+          // Show migration options
+          showMigrationOptionsModal(pendingSessions);
+        } catch (error) {
+          console.error('Failed to get pending migrations:', error);
+          alert('Failed to load guest chats for migration.');
+        }
+      }
+
+      function showMigrationOptionsModal(sessions) {
+        const modal = document.createElement('div');
+        modal.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4';
+        modal.innerHTML = `
+          <div class="bg-white dark:bg-gray-800 rounded-xl max-w-2xl w-full max-h-[80vh] overflow-y-auto">
+            <div class="p-6 border-b border-gray-200 dark:border-gray-700">
+              <h2 class="text-xl font-bold text-gray-900 dark:text-white">Select Chats to Save</h2>
+              <p class="text-gray-600 dark:text-gray-300 mt-1">Choose which guest chat sessions you'd like to save to your account:</p>
+            </div>
+
+            <div class="p-6">
+              <div class="space-y-3 mb-6">
+                ${sessions.map((session, index) => `
+                  <div class="flex items-start space-x-3 p-3 border border-gray-200 dark:border-gray-600 rounded-lg">
+                    <input type="checkbox" id="migrate-${session.id}" checked class="mt-1">
+                    <div class="flex-1">
+                      <label for="migrate-${session.id}" class="font-medium text-gray-900 dark:text-white cursor-pointer">
+                        ${session.title}
+                      </label>
+                      <div class="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                        ${session.messageCount} messages • ${new Date(session.updatedAt).toLocaleDateString()}
+                      </div>
+                    </div>
+                  </div>
+                `).join('')}
+              </div>
+
+              <div class="flex space-x-3">
+                <button id="migrateSelected" class="flex-1 bg-gradient-to-r from-blue-600 to-purple-600 text-white font-medium py-3 px-6 rounded-lg hover:opacity-90 transition-opacity">
+                  Save Selected (${sessions.length})
+                </button>
+                <button id="migrateCancel" class="flex-1 text-gray-600 dark:text-gray-400 font-medium py-3 px-6 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        `;
+
+        document.body.appendChild(modal);
+
+        // Handle migrate selected
+        modal.querySelector('#migrateSelected').addEventListener('click', async () => {
+          const selectedSessionIds = sessions
+            .filter(session => modal.querySelector(`#migrate-${session.id}`).checked)
+            .map(session => session.id);
+
+          if (selectedSessionIds.length === 0) {
+            alert('Please select at least one chat to save.');
+            return;
+          }
+
+          try {
+            const result = await migrateGuestChats(selectedSessionIds);
+
+            if (result.success) {
+              alert(`Successfully saved ${result.migrated} chat(s) to your account!`);
+              document.body.removeChild(modal);
+
+              // Reload the page to show the migrated sessions
+              window.location.reload();
+            } else {
+              alert(`Migration completed with ${result.errors.length} errors. Check console for details.`);
+            }
+          } catch (error) {
+            console.error('Migration failed:', error);
+            alert('Failed to save chats. Please try again.');
+          }
+        });
+
+        // Handle cancel
+        modal.querySelector('#migrateCancel').addEventListener('click', () => {
+          document.body.removeChild(modal);
+        });
+
+        // Close modal when clicking outside
+        modal.addEventListener('click', (e) => {
+          if (e.target === modal) {
+            document.body.removeChild(modal);
+          }
+        });
+
+        // Store modal reference
+        window.currentMigrationModal = modal;
       }
       
     </script>

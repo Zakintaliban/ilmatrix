@@ -1,17 +1,19 @@
 import { Context } from 'hono';
-import { 
-  createUser, 
-  loginUser, 
-  getUserBySessionToken, 
-  logoutUser, 
-  updateUser, 
+import {
+  createUser,
+  loginUser,
+  loginUserWithGuestMigration,
+  getUserBySessionToken,
+  logoutUser,
+  updateUser,
   getUserById,
   getUserByIdWithPassword,
   verifyEmail,
   resendVerificationEmail,
   CreateUserData,
-  LoginCredentials 
+  LoginCredentials
 } from '../services/authService.js';
+import { guestSessionService } from '../services/guestSessionService.js';
 
 /**
  * Register new user
@@ -75,26 +77,30 @@ export async function login(c: Context) {
   try {
     const body = await c.req.json();
     const { email, password } = body as LoginCredentials;
-    
+
     // Basic validation
     if (!email || !password) {
       return c.json({ error: 'Email and password are required' }, 400);
     }
-    
+
     // Get user agent and IP
     const userAgent = c.req.header('user-agent');
     const ipAddress = c.req.header('x-forwarded-for') || c.req.header('x-real-ip') || 'unknown';
-    
-    // Login user
-    const { user, sessionToken } = await loginUser(
+
+    // Get guest fingerprint for migration
+    const guestFingerprint = guestSessionService.generateFingerprint(c);
+
+    // Login user with guest migration
+    const { user, sessionToken, guestMigration } = await loginUserWithGuestMigration(
       { email, password },
+      guestFingerprint,
       userAgent,
       Array.isArray(ipAddress) ? ipAddress[0] : ipAddress
     );
-    
+
     // Set session cookie
     c.header('Set-Cookie', `session=${sessionToken}; HttpOnly; Secure; SameSite=Strict; Max-Age=${7 * 24 * 60 * 60}; Path=/`);
-    
+
     // Reset guest usage after successful login
     try {
       const { resetGuestUsage } = await import('../middleware/guestLimit.js');
@@ -102,8 +108,8 @@ export async function login(c: Context) {
     } catch (error) {
       console.warn('Failed to reset guest usage:', error);
     }
-    
-    return c.json({
+
+    const response: any = {
       message: 'Login successful',
       user: {
         id: user.id,
@@ -111,17 +117,28 @@ export async function login(c: Context) {
         name: user.name,
         last_login: user.last_login
       }
-    });
-    
+    };
+
+    // Include guest migration info if applicable
+    if (guestMigration && guestMigration.migrated > 0) {
+      response.guestMigration = {
+        message: `Successfully migrated ${guestMigration.migrated} guest chat session(s) to your account.`,
+        migrated: guestMigration.migrated,
+        errors: guestMigration.errors
+      };
+    }
+
+    return c.json(response);
+
   } catch (error) {
     console.error('Login error:', error);
-    
+
     if (error instanceof Error) {
       if (error.message.includes('Invalid email or password')) {
         return c.json({ error: 'Invalid email or password' }, 401);
       }
     }
-    
+
     return c.json({ error: 'Login failed' }, 500);
   }
 }

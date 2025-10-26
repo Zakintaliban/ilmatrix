@@ -2,6 +2,8 @@ import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
 import { query, transaction } from './databaseService.js';
 import { sendVerificationEmail, sendWelcomeEmail, isEmailServiceConfigured } from './emailService.js';
+import * as guestChatService from './guestChatService.js';
+import { guestSessionService } from './guestSessionService.js';
 
 export interface User {
   id: string;
@@ -415,6 +417,87 @@ export async function resendVerificationEmail(email: string): Promise<boolean> {
       token
     });
   }
-  
+
   return false;
+}
+
+/**
+ * Check if a guest fingerprint has pending chat migrations
+ */
+export async function hasPendingGuestMigrations(guestFingerprint: string): Promise<boolean> {
+  try {
+    return await guestChatService.getPendingMigrations(guestFingerprint).then(sessions => sessions.length > 0);
+  } catch (error) {
+    console.error('Error checking pending guest migrations:', error);
+    return false;
+  }
+}
+
+/**
+ * Get pending guest migrations for a fingerprint
+ */
+export async function getPendingGuestMigrations(guestFingerprint: string): Promise<any[]> {
+  try {
+    return await guestChatService.getPendingMigrations(guestFingerprint);
+  } catch (error) {
+    console.error('Error getting pending guest migrations:', error);
+    return [];
+  }
+}
+
+/**
+ * Migrate guest chats to authenticated user after login
+ */
+export async function migrateGuestChatsAfterLogin(
+  guestFingerprint: string,
+  userId: string,
+  sessionIds?: string[]
+): Promise<{ migrated: number; errors: string[] }> {
+  try {
+    const result = await guestChatService.migrateGuestChatsToUser(guestFingerprint, userId, sessionIds);
+
+    // Clean up guest session after successful migration
+    if (result.migrated > 0) {
+      guestSessionService.cleanupAfterMigration(guestFingerprint);
+    }
+
+    return result;
+  } catch (error) {
+    console.error('Error migrating guest chats after login:', error);
+    return {
+      migrated: 0,
+      errors: [error instanceof Error ? error.message : String(error)]
+    };
+  }
+}
+
+/**
+ * Enhanced login function that handles guest chat migration
+ */
+export async function loginUserWithGuestMigration(
+  credentials: LoginCredentials,
+  guestFingerprint?: string,
+  userAgent?: string,
+  ipAddress?: string
+): Promise<{
+  user: User;
+  sessionToken: string;
+  guestMigration?: { migrated: number; errors: string[] };
+}> {
+  // Perform normal login
+  const loginResult = await loginUser(credentials, userAgent, ipAddress);
+
+  // Check for guest migrations if fingerprint provided
+  let guestMigration;
+  if (guestFingerprint) {
+    const hasPending = await hasPendingGuestMigrations(guestFingerprint);
+    if (hasPending) {
+      guestMigration = await migrateGuestChatsAfterLogin(guestFingerprint, loginResult.user.id);
+    }
+  }
+
+  return {
+    ...loginResult,
+    guestMigration
+  };
 }

@@ -7,24 +7,25 @@ import { uploadController } from "./controllers/uploadController.js";
 import { materialController } from "./controllers/materialController.js";
 import { aiController } from "./controllers/aiController.js";
 import { backgroundTaskService } from "./services/backgroundTaskService.js";
-import { 
-  registerUser, 
-  login, 
-  logout, 
-  getProfile, 
-  updateProfile, 
+import {
+  registerUser,
+  login,
+  logout,
+  getProfile,
+  updateProfile,
   changePassword,
   deleteAccount,
   verifyEmailController,
   resendVerificationController,
-  authMiddleware, 
-  optionalAuthMiddleware 
+  authMiddleware,
+  optionalAuthMiddleware
 } from "./controllers/authController.js";
-import { 
-  initiateGoogleAuth, 
-  handleGoogleCallback 
+import {
+  initiateGoogleAuth,
+  handleGoogleCallback
 } from "./controllers/oauthController.js";
 import * as dashboardController from "./controllers/dashboardController.js";
+import * as guestChatController from "./controllers/guestChatController.js";
 
 const api = new Hono();
 
@@ -79,6 +80,20 @@ api.post("/dashboard/materials/:materialId/access", authMiddleware, dashboardCon
 // Tags and filtering endpoints
 api.get("/dashboard/tags", authMiddleware, dashboardController.getUserTags);
 api.get("/dashboard/tags/:tag/materials", authMiddleware, dashboardController.getMaterialsByTag);
+
+// Guest chat endpoints (no auth required - uses fingerprint)
+api.get("/guest/chat/sessions", guestChatController.getGuestChatSessions);
+api.post("/guest/chat/sessions", guestChatController.createGuestChatSession);
+api.get("/guest/chat/sessions/:sessionId/messages", guestChatController.getGuestChatMessages);
+api.post("/guest/chat/sessions/:sessionId/messages", guestChatController.addGuestChatMessage);
+api.put("/guest/chat/sessions/:sessionId", guestChatController.updateGuestChatSession);
+api.delete("/guest/chat/sessions/:sessionId", guestChatController.deleteGuestChatSession);
+api.post("/guest/chat/sessions/:sessionId/generate-title", guestChatController.generateGuestSessionTitle);
+api.get("/guest/chat/stats", guestChatController.getGuestChatStats);
+
+// Migration endpoints (authenticated users only)
+api.get("/guest/chat/pending-migration", authMiddleware, guestChatController.getPendingMigrations);
+api.post("/guest/chat/migrate", authMiddleware, guestChatController.migrateGuestChats);
 
 // Upload endpoints (optional auth)
 api.post("/upload", optionalAuthMiddleware, (c) => uploadController.handleUpload(c));

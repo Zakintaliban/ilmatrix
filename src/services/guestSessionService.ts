@@ -1,5 +1,6 @@
 import crypto from 'crypto';
 import { Context } from 'hono';
+import * as guestChatService from './guestChatService.js';
 
 interface GuestSession {
   fingerprint: string;
@@ -8,6 +9,8 @@ interface GuestSession {
   lastAccess: Date;
   ipAddress: string;
   userAgent: string;
+  chatSessionCount: number;
+  lastChatActivity: Date;
 }
 
 class GuestSessionManager {
@@ -74,7 +77,7 @@ class GuestSessionManager {
     const userAgent = c.req.header('user-agent') || 'unknown';
     
     let session = this.sessions.get(fingerprint);
-    
+
     if (!session || this.isSessionExpired(session)) {
       // Create new session
       session = {
@@ -83,14 +86,16 @@ class GuestSessionManager {
         firstAccess: new Date(),
         lastAccess: new Date(),
         ipAddress,
-        userAgent
+        userAgent,
+        chatSessionCount: 0,
+        lastChatActivity: new Date()
       };
     }
-    
+
     // Increment usage
     session.usageCount++;
     session.lastAccess = new Date();
-    
+
     // Update session
     this.sessions.set(fingerprint, session);
     
@@ -176,7 +181,7 @@ class GuestSessionManager {
     let activeSessions = 0;
     let expiredSessions = 0;
     const usageDistribution: Record<number, number> = {};
-    
+
     for (const session of this.sessions.values()) {
       if (this.isSessionExpired(session)) {
         expiredSessions++;
@@ -186,13 +191,127 @@ class GuestSessionManager {
         usageDistribution[usage] = (usageDistribution[usage] || 0) + 1;
       }
     }
-    
+
     return {
       totalSessions: this.sessions.size,
       activeSessions,
       expiredSessions,
       usageDistribution
     };
+  }
+
+  /**
+   * Update chat activity for a guest session
+   */
+  updateChatActivity(fingerprint: string): void {
+    const session = this.sessions.get(fingerprint);
+
+    if (session && !this.isSessionExpired(session)) {
+      session.lastChatActivity = new Date();
+      this.sessions.set(fingerprint, session);
+    }
+  }
+
+  /**
+   * Increment chat session count for a guest
+   */
+  incrementChatSessionCount(fingerprint: string): void {
+    let session = this.sessions.get(fingerprint);
+
+    if (!session || this.isSessionExpired(session)) {
+      // This shouldn't happen in normal flow, but handle gracefully
+      return;
+    }
+
+    session.chatSessionCount++;
+    session.lastChatActivity = new Date();
+    this.sessions.set(fingerprint, session);
+  }
+
+  /**
+   * Get chat statistics for a guest
+   */
+  getChatStats(fingerprint: string): {
+    sessionCount: number;
+    lastActivity: Date | null;
+    hasActiveChats: boolean;
+  } {
+    const session = this.sessions.get(fingerprint);
+
+    if (!session || this.isSessionExpired(session)) {
+      return {
+        sessionCount: 0,
+        lastActivity: null,
+        hasActiveChats: false
+      };
+    }
+
+    return {
+      sessionCount: session.chatSessionCount,
+      lastActivity: session.lastChatActivity,
+      hasActiveChats: session.chatSessionCount > 0
+    };
+  }
+
+  /**
+   * Check if guest has any saved chat sessions
+   */
+  async hasSavedChatSessions(fingerprint: string): Promise<boolean> {
+    try {
+      const sessions = await guestChatService.getGuestSessions(fingerprint, {
+        limit: 1,
+        includeMigrated: false
+      });
+      return sessions.length > 0;
+    } catch (error) {
+      console.error('Error checking saved chat sessions:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Get comprehensive guest statistics including chat data
+   */
+  async getComprehensiveStats(fingerprint: string): Promise<{
+    usage: { current: number; max: number; remaining: number };
+    chat: { sessionCount: number; lastActivity: Date | null; hasActiveChats: boolean };
+    database: any;
+  }> {
+    const usageStats = this.getUsageStats({ req: { header: () => '' } } as any);
+    const chatStats = this.getChatStats(fingerprint);
+
+    // Get database stats for this fingerprint
+    let databaseStats = null;
+    try {
+      databaseStats = await guestChatService.getGuestChatStats(fingerprint);
+    } catch (error) {
+      console.error('Error getting database chat stats:', error);
+    }
+
+    return {
+      usage: {
+        current: usageStats.current,
+        max: usageStats.max,
+        remaining: usageStats.remaining
+      },
+      chat: chatStats,
+      database: databaseStats
+    };
+  }
+
+  /**
+   * Clean up guest data after successful migration
+   */
+  async cleanupAfterMigration(fingerprint: string): Promise<void> {
+    // Reset in-memory session
+    this.resetUsage(fingerprint);
+
+    // Archive old sessions in database
+    try {
+      await guestChatService.archiveOldGuestSessions(fingerprint);
+    } catch (error) {
+      console.error('Error archiving old guest sessions:', error);
+    }
   }
 }
 

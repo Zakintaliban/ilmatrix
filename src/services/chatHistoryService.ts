@@ -337,13 +337,124 @@ export async function generateSessionTitle(sessionId: string, userId: string): P
  */
 export async function archiveOldSessions(userId: string): Promise<number> {
   const queryText = `
-    UPDATE chat_sessions 
+    UPDATE chat_sessions
     SET is_archived = true
-    WHERE user_id = $1 
+    WHERE user_id = $1
       AND is_archived = false
       AND last_message_at < NOW() - INTERVAL '30 days'
   `;
 
   const result = await dbQuery(queryText, [userId]);
   return result.rowCount;
+}
+
+/**
+ * Get all chat sessions for a user including migrated guest sessions
+ */
+export async function getAllUserSessions(
+  userId: string,
+  options: { limit?: number; offset?: number; includeArchived?: boolean } = {}
+): Promise<SessionWithRecentMessage[]> {
+  const { limit = 20, offset = 0, includeArchived = false } = options;
+
+  const queryText = `
+    SELECT
+      s.id, s.user_id as "userId", s.title, s.created_at as "createdAt",
+      s.updated_at as "updatedAt", s.last_message_at as "lastMessageAt",
+      s.message_count as "messageCount", s.is_archived as "isArchived",
+      m.content as "lastMessage", m.role as "lastMessageRole",
+      'authenticated' as "sessionType"
+    FROM chat_sessions s
+    LEFT JOIN LATERAL (
+      SELECT content, role FROM chat_messages
+      WHERE session_id = s.id
+      ORDER BY created_at DESC
+      LIMIT 1
+    ) m ON true
+    WHERE s.user_id = $1
+      ${includeArchived ? '' : 'AND s.is_archived = FALSE'}
+    ORDER BY s.last_message_at DESC
+    LIMIT $2 OFFSET $3
+  `;
+
+  const result = await dbQuery(queryText, [userId, limit, offset]);
+  return result.rows;
+}
+
+/**
+ * Check if a user has any guest sessions that can be migrated
+ */
+export async function hasPendingGuestMigrations(guestFingerprint: string): Promise<boolean> {
+  const queryText = `
+    SELECT COUNT(*) as count
+    FROM guest_chat_sessions
+    WHERE guest_fingerprint = $1
+      AND is_migrated = FALSE
+      AND expires_at > NOW()
+  `;
+
+  const result = await dbQuery(queryText, [guestFingerprint]);
+  return parseInt(result.rows[0].count) > 0;
+}
+
+/**
+ * Get guest sessions that were migrated to a specific user
+ */
+export async function getMigratedGuestSessions(userId: string): Promise<SessionWithRecentMessage[]> {
+  const queryText = `
+    SELECT
+      s.id, s.user_id as "userId", s.title, s.created_at as "createdAt",
+      s.updated_at as "updatedAt", s.last_message_at as "lastMessageAt",
+      s.message_count as "messageCount", s.is_archived as "isArchived",
+      m.content as "lastMessage", m.role as "lastMessageRole",
+      'migrated' as "sessionType"
+    FROM chat_sessions s
+    LEFT JOIN LATERAL (
+      SELECT content, role FROM chat_messages
+      WHERE session_id = s.id
+      ORDER BY created_at DESC
+      LIMIT 1
+    ) m ON true
+    WHERE s.user_id = $1
+      AND s.title LIKE '%[migrated]%'
+    ORDER BY s.created_at DESC
+  `;
+
+  const result = await dbQuery(queryText, [userId]);
+  return result.rows;
+}
+
+/**
+ * Search chat sessions by title or content
+ */
+export async function searchChatSessions(
+  userId: string,
+  searchQuery: string,
+  options: { limit?: number; offset?: number; includeArchived?: boolean } = {}
+): Promise<SessionWithRecentMessage[]> {
+  const { limit = 20, offset = 0, includeArchived = false } = options;
+
+  const queryText = `
+    SELECT
+      s.id, s.user_id as "userId", s.title, s.created_at as "createdAt",
+      s.updated_at as "updatedAt", s.last_message_at as "lastMessageAt",
+      s.message_count as "messageCount", s.is_archived as "isArchived",
+      m.content as "lastMessage", m.role as "lastMessageRole"
+    FROM chat_sessions s
+    LEFT JOIN LATERAL (
+      SELECT content, role FROM chat_messages
+      WHERE session_id = s.id
+      ORDER BY created_at DESC
+      LIMIT 1
+    ) m ON true
+    WHERE s.user_id = $1
+      ${includeArchived ? '' : 'AND s.is_archived = FALSE'}
+      AND (s.title ILIKE $2 OR m.content ILIKE $3)
+    ORDER BY s.last_message_at DESC
+    LIMIT $4 OFFSET $5
+  `;
+
+  const searchPattern = `%${searchQuery}%`;
+  const result = await dbQuery(queryText, [userId, searchPattern, searchPattern, limit, offset]);
+  return result.rows;
 }

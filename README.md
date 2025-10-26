@@ -3,7 +3,7 @@
 An AI study companion for university students with **multimodal AI capabilities**. Core features:
 
 - Upload course materials (PDF/DOCX/PPTX/TXT/Images) with **Vision API support**
-- **Image Analysis**: Query visual content using Groq Vision API (Llama 4 Scout)
+- **Image Analysis**: Query visual content using Groq Vision API (Llama 4)
 - **Smart Text Extraction**: OCR for images, preserve visual content for analysis## Storage & Retention
 
 ### What's Stored
