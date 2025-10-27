@@ -55,10 +55,12 @@ export async function handleGoogleCallback(c: Context) {
       Array.isArray(ipAddress) ? ipAddress[0] : ipAddress
     );
 
-    // Set secure session cookie for production
-    const cookieValue = `session=${sessionToken}; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=${7 * 24 * 60 * 60}`;
-    
-    console.log(`[OAuth] Setting cookie: ${cookieValue}`);
+    // Set session cookie (Secure only in production)
+    const isProduction = process.env.NODE_ENV === 'production';
+    const secureFlag = isProduction ? ' Secure;' : '';
+    const cookieValue = `session=${sessionToken}; HttpOnly;${secureFlag} SameSite=Lax; Path=/; Max-Age=${7 * 24 * 60 * 60}`;
+
+    console.log(`[OAuth] Setting cookie (production: ${isProduction}): ${cookieValue}`);
     console.log(`[OAuth] User created/logged in:`, { 
       id: user.id, 
       email: user.email, 

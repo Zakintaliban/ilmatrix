@@ -1,0 +1,810 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full">
+<head>
+    <meta charset="UTF-8">
+    <link rel="icon" type="image/svg+xml" href="./logo.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin - Token Usage Dashboard - ILMATRIX</title>
+
+    <!-- Google Fonts: Plus Jakarta Sans -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;700&display=swap" rel="stylesheet">
+
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        'sans': ['Plus Jakarta Sans', 'SF Pro Display', 'system-ui', 'sans-serif'],
+                    },
+                    colors: {
+                        primary: "#0f0e85",
+                        secondary: "#e44c99",
+                        tertiary: "#1b612f",
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        html {
+            scroll-behavior: smooth;
+        }
+        .stat-number {
+            font-variant-numeric: tabular-nums;
+        }
+        .dark .text-primary {
+            color: #93c5fd !important;
+        }
+        .dark .text-secondary {
+            color: #f9a8d4 !important;
+        }
+        .dark .text-tertiary {
+            color: #86efac !important;
+        }
+
+        /* ========== 5-THEME SYSTEM ==========  */
+
+        /* Theme 3: Resistance Blue (Blue Monochromatic) 🐬 */
+        .theme-blue {
+          --bg-primary: #f0f0ff;
+          --bg-secondary: #e6e6ff;
+          --text-primary: #080751;
+          --text-secondary: #1a18b8;
+          --text-muted: #4d4bff;
+          --button-primary: #0f0e85;
+          --button-primary-hover: #1a18b8;
+          --button-secondary: #4d4bff;
+          --button-secondary-hover: #a3a2ff;
+          --border-color: #a3a2ff;
+          --border-subtle: #d0d0ff;
+        }
+
+        html:not(.dark):not(.theme-blue):not(.theme-pink):not(.theme-green) body {
+          background-color: #f9fafb !important;
+        }
+
+        .theme-blue body {
+          background-color: var(--bg-primary) !important;
+          color: var(--text-primary);
+        }
+
+        .theme-blue .bg-white { background-color: var(--bg-secondary) !important; }
+        .theme-blue .bg-gray-50 { background-color: var(--bg-secondary) !important; }
+        .theme-blue .text-gray-900 { color: var(--text-primary) !important; }
+        .theme-blue .text-gray-700 { color: var(--text-secondary) !important; }
+        .theme-blue .text-gray-600 { color: var(--text-secondary) !important; }
+        .theme-blue .text-gray-500 { color: var(--text-muted) !important; }
+        .theme-blue .border-gray-200 { border-color: var(--border-color) !important; }
+        .theme-blue .border-gray-300 { border-color: var(--border-subtle) !important; }
+        .theme-blue .bg-primary { background-color: var(--button-primary) !important; color: white !important; }
+        .theme-blue .text-primary { color: var(--button-primary) !important; }
+
+        /* Theme 4: Brave Pink (Pink Monochromatic) 🦩 */
+        .theme-pink {
+          --bg-primary: #fff5fa;
+          --bg-secondary: #ffe0f0;
+          --text-primary: #8d2d5f;
+          --text-secondary: #e44c99;
+          --text-muted: #ff69b4;
+          --button-primary: #e44c99;
+          --button-primary-hover: #ff69b4;
+          --button-secondary: #ff69b4;
+          --button-secondary-hover: #ffb3d9;
+          --border-color: #ffb3d9;
+          --border-subtle: #ffe0f0;
+        }
+
+        .theme-pink body {
+          background-color: var(--bg-primary) !important;
+          color: var(--text-primary);
+        }
+
+        .theme-pink .bg-white { background-color: var(--bg-secondary) !important; }
+        .theme-pink .bg-gray-50 { background-color: var(--bg-secondary) !important; }
+        .theme-pink .text-gray-900 { color: var(--text-primary) !important; }
+        .theme-pink .text-gray-700 { color: var(--text-secondary) !important; }
+        .theme-pink .text-gray-600 { color: var(--text-secondary) !important; }
+        .theme-pink .text-gray-500 { color: var(--text-muted) !important; }
+        .theme-pink .border-gray-200 { border-color: var(--border-color) !important; }
+        .theme-pink .border-gray-300 { border-color: var(--border-subtle) !important; }
+        .theme-pink .bg-primary { background-color: var(--button-primary) !important; color: white !important; }
+        .theme-pink .text-primary { color: var(--button-primary) !important; }
+
+        /* Theme 5: Hero Green (Green Monochromatic) 🦖 */
+        .theme-green {
+          --bg-primary: #f0fff3;
+          --bg-secondary: #e0f5e5;
+          --text-primary: #0d3318;
+          --text-secondary: #1b612f;
+          --text-muted: #2d8f4a;
+          --button-primary: #1b612f;
+          --button-primary-hover: #2d8f4a;
+          --button-secondary: #4caf50;
+          --button-secondary-hover: #81c784;
+          --border-color: #a5d6a7;
+          --border-subtle: #c8e6c9;
+        }
+
+        .theme-green body {
+          background-color: var(--bg-primary) !important;
+          color: var(--text-primary);
+        }
+
+        .theme-green .bg-white { background-color: var(--bg-secondary) !important; }
+        .theme-green .bg-gray-50 { background-color: var(--bg-secondary) !important; }
+        .theme-green .text-gray-900 { color: var(--text-primary) !important; }
+        .theme-green .text-gray-700 { color: var(--text-secondary) !important; }
+        .theme-green .text-gray-600 { color: var(--text-secondary) !important; }
+        .theme-green .text-gray-500 { color: var(--text-muted) !important; }
+        .theme-green .border-gray-200 { border-color: var(--border-color) !important; }
+        .theme-green .border-gray-300 { border-color: var(--border-subtle) !important; }
+        .theme-green .bg-primary { background-color: var(--button-primary) !important; color: white !important; }
+        .theme-green .text-primary { color: var(--button-primary) !important; }
+    </style>
+</head>
+<body class="bg-gray-50 dark:bg-black text-gray-900 dark:text-white min-h-screen flex flex-col">
+    <!-- Header -->
+    <header class="bg-primary text-white dark:bg-black border-b border-white/20">
+        <div class="container mx-auto max-w-6xl px-4 py-4 flex items-center justify-between">
+            <div class="flex items-center gap-3">
+                <a href="/" class="text-xl sm:text-2xl font-bold tracking-tight">ILMATRIX</a>
+                <span class="px-3 py-1 text-xs font-semibold text-white bg-red-600 rounded-full">ADMIN</span>
+            </div>
+            <div class="flex items-center gap-2">
+                <nav class="hidden sm:flex items-center gap-2">
+                    <a href="/dashboard.html" class="text-xs sm:text-sm px-3 py-2 rounded-md hover:bg-indigo-900">Back to Dashboard</a>
+                </nav>
+                <div class="flex items-center gap-2">
+                    <!-- User Info (shown when logged in) -->
+                    <div id="userInfo" class="hidden items-center gap-2">
+                        <!-- User Dropdown -->
+                        <div class="relative">
+                            <button
+                                id="userDropdownBtn"
+                                class="flex items-center gap-2 text-xs sm:text-sm text-white/90 hover:text-white transition-colors px-2 py-1 rounded-md hover:bg-white/10"
+                                aria-expanded="false"
+                            >
+                                <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                                    <path fill-rule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clip-rule="evenodd"></path>
+                                </svg>
+                                <span id="userName"></span>
+                                <svg class="w-3 h-3 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="m19 9-7 7-7-7"></path>
+                                </svg>
+                            </button>
+
+                            <!-- Dropdown Menu -->
+                            <div id="userDropdownMenu" class="hidden absolute right-0 mt-2 w-48 bg-gray-50 dark:bg-black rounded-md shadow-lg ring-1 ring-gray-200 dark:ring-white/10 z-50">
+                                <div class="py-1">
+                                    <a href="/dashboard" class="flex items-center gap-2 px-4 py-2 text-sm text-gray-900 dark:text-white hover:bg-gray-100 dark:hover:bg-gray-800">
+                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"></path>
+                                        </svg>
+                                        Dashboard
+                                    </a>
+                                    <a href="/profile" class="flex items-center gap-2 px-4 py-2 text-sm text-gray-900 dark:text-white hover:bg-gray-100 dark:hover:bg-gray-800">
+                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path>
+                                        </svg>
+                                        Profile Settings
+                                    </a>
+                                    <a href="/admin-usage.html" class="flex items-center gap-2 px-4 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-gray-100 dark:hover:bg-gray-800 bg-gray-100 dark:bg-gray-800">
+                                        <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                                            <path d="M12 2L2 7v10c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V7l-10-5z"/>
+                                        </svg>
+                                        Admin Dashboard
+                                    </a>
+                                    <div class="border-t border-gray-200 dark:border-white/10"></div>
+                                    <button
+                                        id="btnLogout"
+                                        class="flex items-center gap-2 w-full text-left px-4 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-gray-100 dark:hover:bg-gray-800"
+                                    >
+                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path>
+                                        </svg>
+                                        Logout
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Theme Toggle Button -->
+                    <button id="btnTheme" class="inline-flex items-center gap-1.5 text-xs sm:text-sm px-3 py-2 rounded-xl border border-white/30 ring-1 ring-black/5 bg-white/80 hover:bg-white/90 text-slate-900 shadow-sm transition-all duration-200 ease-out dark:bg-slate-800/80 dark:hover:bg-slate-800 dark:text-slate-100" title="Toggle theme">
+                        <span class="icon-sun text-yellow-500 dark:hidden">☀️</span>
+                        <span class="icon-moon hidden dark:inline text-slate-100">🌕</span>
+                        <span class="hidden sm:inline">Theme</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <!-- Header -->
+        <div class="mb-8">
+            <h1 class="text-3xl font-bold text-gray-900 dark:text-white">Token Usage Admin Dashboard</h1>
+            <p class="mt-2 text-gray-600 dark:text-gray-400">Monitor and manage token usage across all users</p>
+        </div>
+
+        <!-- Loading State -->
+        <div id="loading-state" class="text-center py-12">
+            <svg class="animate-spin h-12 w-12 mx-auto text-red-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+            <p class="mt-4 text-gray-600 dark:text-gray-400">Loading dashboard...</p>
+        </div>
+
+        <!-- Content -->
+        <div id="content-container" class="hidden">
+            <!-- Aggregate Stats -->
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+                <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 border border-gray-200 dark:border-gray-700">
+                    <h3 class="text-sm font-medium text-gray-600 dark:text-gray-400">Total Users</h3>
+                    <p class="text-3xl font-bold text-gray-900 dark:text-white mt-2 stat-number" id="total-users">0</p>
+                </div>
+
+                <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 border border-gray-200 dark:border-gray-700">
+                    <h3 class="text-sm font-medium text-gray-600 dark:text-gray-400">Weekly Usage</h3>
+                    <p class="text-3xl font-bold text-blue-600 dark:text-blue-400 mt-2 stat-number" id="total-weekly">0</p>
+                </div>
+
+                <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 border border-gray-200 dark:border-gray-700">
+                    <h3 class="text-sm font-medium text-gray-600 dark:text-gray-400">At Limit</h3>
+                    <p class="text-3xl font-bold text-red-600 dark:text-red-400 mt-2 stat-number" id="users-at-limit">0</p>
+                </div>
+
+                <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 border border-gray-200 dark:border-gray-700">
+                    <h3 class="text-sm font-medium text-gray-600 dark:text-gray-400">Near Limit (80%+)</h3>
+                    <p class="text-3xl font-bold text-orange-600 dark:text-orange-400 mt-2 stat-number" id="users-near-limit">0</p>
+                </div>
+            </div>
+
+            <!-- Action Buttons -->
+            <div class="mb-6 flex gap-4">
+                <button onclick="resetWeekly()" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg shadow">
+                    Reset Weekly Usage
+                </button>
+                <button onclick="exportData()" class="px-4 py-2 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-lg shadow">
+                    Export CSV
+                </button>
+                <button onclick="cleanupSessions()" class="px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white font-semibold rounded-lg shadow">
+                    Cleanup Sessions
+                </button>
+            </div>
+
+            <!-- Users Table -->
+            <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md border border-gray-200 dark:border-gray-700">
+                <div class="p-6 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center">
+                    <h3 class="text-lg font-semibold text-gray-900 dark:text-white">All Users</h3>
+                    <input
+                        type="text"
+                        id="search-input"
+                        placeholder="Search by email or name..."
+                        class="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                        onkeyup="filterUsers()"
+                    />
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                        <thead class="bg-gray-50 dark:bg-gray-900">
+                            <tr>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">User</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Weekly Usage</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Monthly Usage</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Status</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="users-tbody" class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                            <tr>
+                                <td colspan="5" class="px-6 py-4 text-center text-sm text-gray-500">Loading users...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- User Detail Modal -->
+    <div id="user-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-screen overflow-y-auto">
+            <div class="p-6 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center">
+                <h3 class="text-xl font-semibold text-gray-900 dark:text-white">User Details</h3>
+                <button onclick="closeModal()" class="text-gray-500 hover:text-gray-700 dark:hover:text-gray-300">
+                    <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                    </svg>
+                </button>
+            </div>
+            <div id="modal-content" class="p-6">
+                Loading...
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = '';
+        let allUsers = [];
+
+        // Theme management
+        (function() {
+          const root = document.documentElement;
+          const themes = ['light', 'dark', 'blue', 'pink', 'green'];
+          const themeEmojis = {
+            light: '☀️',
+            dark: '🌕',
+            blue: '🐬',
+            pink: '🦩',
+            green: '🦖'
+          };
+
+          const persist = (theme) => {
+            try {
+              localStorage.setItem('theme', theme);
+            } catch {}
+          };
+
+          const getSaved = () => {
+            try {
+              const v = localStorage.getItem('theme');
+              return v && themes.includes(v) ? v : null;
+            } catch {}
+            return null;
+          };
+
+          const applyTheme = (theme) => {
+            root.classList.remove('dark', 'theme-blue', 'theme-pink', 'theme-green');
+            if (theme === 'dark') {
+              root.classList.add('dark');
+            } else if (theme === 'blue') {
+              root.classList.add('theme-blue');
+            } else if (theme === 'pink') {
+              root.classList.add('theme-pink');
+            } else if (theme === 'green') {
+              root.classList.add('theme-green');
+            }
+          };
+
+          const updateButton = (theme) => {
+            const iconSun = document.querySelector('.icon-sun');
+            const iconMoon = document.querySelector('.icon-moon');
+            const emoji = themeEmojis[theme] || '☀️';
+
+            if (theme === 'light') {
+              if (iconSun) {
+                iconSun.style.display = 'inline';
+                iconSun.textContent = '☀️';
+              }
+              if (iconMoon) iconMoon.style.display = 'none';
+            } else if (theme === 'dark') {
+              if (iconSun) iconSun.style.display = 'none';
+              if (iconMoon) iconMoon.style.display = 'inline';
+            } else {
+              if (iconSun) {
+                iconSun.style.display = 'inline';
+                iconSun.textContent = emoji;
+              }
+              if (iconMoon) iconMoon.style.display = 'none';
+            }
+          };
+
+          const saved = getSaved();
+          const prefersDark =
+            window.matchMedia &&
+            window.matchMedia("(prefers-color-scheme: dark)").matches;
+          const initial = saved ? saved : (prefersDark ? 'dark' : 'light');
+
+          let currentTheme = initial;
+
+          applyTheme(currentTheme);
+          updateButton(currentTheme);
+          if (!saved) persist(currentTheme);
+
+          const btn = document.getElementById("btnTheme");
+          if (btn) {
+            btn.addEventListener("click", () => {
+              const currentIndex = themes.indexOf(currentTheme);
+              const nextIndex = (currentIndex + 1) % themes.length;
+              const nextTheme = themes[nextIndex];
+
+              currentTheme = nextTheme;
+
+              applyTheme(nextTheme);
+              updateButton(nextTheme);
+              persist(nextTheme);
+            });
+          }
+        })();
+
+        // User dropdown management
+        (function() {
+            const userDropdownBtn = document.getElementById('userDropdownBtn');
+            const userDropdownMenu = document.getElementById('userDropdownMenu');
+
+            if (userDropdownBtn && userDropdownMenu) {
+                userDropdownBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    toggleUserDropdown();
+                });
+
+                document.addEventListener('click', (e) => {
+                    if (!userDropdownBtn.contains(e.target) && !userDropdownMenu.contains(e.target)) {
+                        closeUserDropdown();
+                    }
+                });
+            }
+
+            function toggleUserDropdown() {
+                const isHidden = userDropdownMenu.classList.contains('hidden');
+                if (isHidden) {
+                    userDropdownMenu.classList.remove('hidden');
+                    userDropdownBtn.setAttribute('aria-expanded', 'true');
+                } else {
+                    closeUserDropdown();
+                }
+            }
+
+            function closeUserDropdown() {
+                userDropdownMenu.classList.add('hidden');
+                userDropdownBtn.setAttribute('aria-expanded', 'false');
+            }
+        })();
+
+        // Logout handler
+        document.getElementById('btnLogout')?.addEventListener('click', async () => {
+            try {
+                await fetch('/api/auth/logout', {
+                    method: 'POST',
+                    credentials: 'include'
+                });
+                window.location.href = '/login.html';
+            } catch (error) {
+                console.error('Logout error:', error);
+                window.location.href = '/login.html';
+            }
+        });
+
+        // Format number
+        function formatNumber(num) {
+            return new Intl.NumberFormat().format(num);
+        }
+
+        // Check admin auth
+        async function checkAdminAuth() {
+            try {
+                const response = await fetch(`${API_BASE}/api/admin/usage/dashboard?limit=1`, {
+                    credentials: 'include'
+                });
+
+                if (!response.ok) {
+                    window.location.href = '/login.html?redirect=/admin-usage.html';
+                    return false;
+                }
+
+                // Get user info for display
+                const profileRes = await fetch('/api/auth/profile', { credentials: 'include' });
+                if (profileRes.ok) {
+                    const profile = await profileRes.json();
+                    document.getElementById('userName').textContent = profile.name || profile.email;
+                    document.getElementById('userInfo').classList.remove('hidden');
+                    document.getElementById('userInfo').classList.add('flex');
+                }
+
+                return true;
+            } catch (error) {
+                console.error('Auth check failed:', error);
+                window.location.href = '/login.html';
+                return false;
+            }
+        }
+
+        // Load dashboard data
+        async function loadDashboard() {
+            try {
+                const response = await fetch(`${API_BASE}/api/admin/usage/dashboard?limit=500`, {
+                    credentials: 'include'
+                });
+
+                if (!response.ok) throw new Error('Failed to fetch dashboard data');
+
+                const data = await response.json();
+                allUsers = data.users;
+
+                // Update aggregate stats
+                document.getElementById('total-users').textContent = formatNumber(data.aggregate.total_users);
+                document.getElementById('total-weekly').textContent = formatNumber(data.aggregate.total_tokens_used_weekly);
+                document.getElementById('users-at-limit').textContent = formatNumber(data.aggregate.users_at_weekly_limit);
+                document.getElementById('users-near-limit').textContent = formatNumber(data.aggregate.users_near_weekly_limit);
+
+                // Render users table
+                renderUsersTable(allUsers);
+
+            } catch (error) {
+                console.error('Error loading dashboard:', error);
+                alert('Failed to load dashboard data');
+            }
+        }
+
+        // Render users table
+        function renderUsersTable(users) {
+            const tbody = document.getElementById('users-tbody');
+
+            if (users.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="5" class="px-6 py-4 text-center text-sm text-gray-500">No users found</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = users.map(user => {
+                const weeklyPercentage = user.weekly_percentage.toFixed(1);
+                let statusBadge = '';
+
+                if (user.is_admin) {
+                    statusBadge = '<span class="px-2 py-1 text-xs font-semibold text-purple-800 dark:text-purple-200 bg-purple-100 dark:bg-purple-900 rounded-full">Admin</span>';
+                } else if (!user.token_access_enabled) {
+                    statusBadge = '<span class="px-2 py-1 text-xs font-semibold text-red-800 dark:text-red-200 bg-red-100 dark:bg-red-900 rounded-full">Disabled</span>';
+                } else if (user.weekly_percentage >= 100) {
+                    statusBadge = '<span class="px-2 py-1 text-xs font-semibold text-red-800 dark:text-red-200 bg-red-100 dark:bg-red-900 rounded-full">At Limit</span>';
+                } else if (user.weekly_percentage >= 80) {
+                    statusBadge = '<span class="px-2 py-1 text-xs font-semibold text-orange-800 dark:text-orange-200 bg-orange-100 dark:bg-orange-900 rounded-full">High Usage</span>';
+                } else {
+                    statusBadge = '<span class="px-2 py-1 text-xs font-semibold text-green-800 dark:text-green-200 bg-green-100 dark:bg-green-900 rounded-full">Active</span>';
+                }
+
+                return `
+                    <tr class="hover:bg-gray-50 dark:hover:bg-gray-700">
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            <div class="text-sm font-medium text-gray-900 dark:text-white">${user.name}</div>
+                            <div class="text-sm text-gray-500 dark:text-gray-400">${user.email}</div>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            <div class="text-sm text-gray-900 dark:text-white stat-number">${formatNumber(user.weekly_tokens_used)} / ${formatNumber(user.weekly_token_limit)}</div>
+                            <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2 mt-1">
+                                <div class="h-2 rounded-full ${user.weekly_percentage >= 100 ? 'bg-red-600' : user.weekly_percentage >= 80 ? 'bg-orange-500' : 'bg-green-500'}" style="width: ${Math.min(user.weekly_percentage, 100)}%"></div>
+                            </div>
+                            <div class="text-xs text-gray-500 dark:text-gray-400 mt-1">${weeklyPercentage}%</div>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            <div class="text-sm text-gray-900 dark:text-white stat-number">${formatNumber(user.monthly_tokens_used)} / ${formatNumber(user.monthly_token_limit)}</div>
+                            <div class="text-xs text-gray-500 dark:text-gray-400 mt-1">${user.monthly_percentage.toFixed(1)}%</div>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            ${statusBadge}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm">
+                            <button onclick="viewUser('${user.user_id}')" class="text-blue-600 hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-300 font-medium">
+                                View Details
+                            </button>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        // Filter users
+        function filterUsers() {
+            const searchTerm = document.getElementById('search-input').value.toLowerCase();
+            const filtered = allUsers.filter(user =>
+                user.email.toLowerCase().includes(searchTerm) ||
+                user.name.toLowerCase().includes(searchTerm)
+            );
+            renderUsersTable(filtered);
+        }
+
+        // View user details
+        async function viewUser(userId) {
+            try {
+                const response = await fetch(`${API_BASE}/api/admin/usage/user/${userId}`, {
+                    credentials: 'include'
+                });
+
+                if (!response.ok) throw new Error('Failed to fetch user details');
+
+                const data = await response.json();
+
+                const modalContent = `
+                    <div class="space-y-4">
+                        <div>
+                            <h4 class="font-semibold text-gray-900 dark:text-white mb-2">User Information</h4>
+                            <div class="grid grid-cols-2 gap-4">
+                                <div>
+                                    <p class="text-sm text-gray-600 dark:text-gray-400">Name</p>
+                                    <p class="font-medium text-gray-900 dark:text-white">${data.user.name}</p>
+                                </div>
+                                <div>
+                                    <p class="text-sm text-gray-600 dark:text-gray-400">Email</p>
+                                    <p class="font-medium text-gray-900 dark:text-white">${data.user.email}</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div>
+                            <h4 class="font-semibold text-gray-900 dark:text-white mb-2">Usage Statistics</h4>
+                            <div class="space-y-2">
+                                <div>
+                                    <p class="text-sm text-gray-600 dark:text-gray-400">Weekly: ${formatNumber(data.usage.weekly.used)} / ${formatNumber(data.usage.weekly.limit)} (${data.usage.weekly.percentage.toFixed(1)}%)</p>
+                                </div>
+                                <div>
+                                    <p class="text-sm text-gray-600 dark:text-gray-400">Monthly: ${formatNumber(data.usage.monthly.used)} / ${formatNumber(data.usage.monthly.limit)} (${data.usage.monthly.percentage.toFixed(1)}%)</p>
+                                </div>
+                                <div>
+                                    <p class="text-sm text-gray-600 dark:text-gray-400">Today: ${formatNumber(data.analytics.today)}</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div>
+                            <h4 class="font-semibold text-gray-900 dark:text-white mb-2">Recent Activity</h4>
+                            <div class="max-h-48 overflow-y-auto space-y-1">
+                                ${data.recent_history.map(log => `
+                                    <div class="text-sm text-gray-600 dark:text-gray-400">
+                                        ${new Date(log.created_at).toLocaleString()} - ${log.endpoint} (${formatNumber(log.tokens_used)} tokens)
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </div>
+
+                        <div class="flex gap-2 pt-4">
+                            <button onclick="toggleAdmin('${userId}', ${!data.user.is_admin})" class="px-4 py-2 ${data.user.is_admin ? 'bg-red-600 hover:bg-red-700' : 'bg-purple-600 hover:bg-purple-700'} text-white rounded font-medium">
+                                ${data.user.is_admin ? 'Revoke Admin' : 'Make Admin'}
+                            </button>
+                            <button onclick="toggleAccess('${userId}', ${!data.user.token_access_enabled})" class="px-4 py-2 ${data.user.token_access_enabled ? 'bg-red-600 hover:bg-red-700' : 'bg-green-600 hover:bg-green-700'} text-white rounded font-medium">
+                                ${data.user.token_access_enabled ? 'Disable Access' : 'Enable Access'}
+                            </button>
+                        </div>
+                    </div>
+                `;
+
+                document.getElementById('modal-content').innerHTML = modalContent;
+                document.getElementById('user-modal').classList.remove('hidden');
+
+            } catch (error) {
+                console.error('Error fetching user details:', error);
+                alert('Failed to load user details');
+            }
+        }
+
+        // Close modal
+        function closeModal() {
+            document.getElementById('user-modal').classList.add('hidden');
+        }
+
+        // Toggle admin status
+        async function toggleAdmin(userId, makeAdmin) {
+            if (!confirm(`Are you sure you want to ${makeAdmin ? 'grant' : 'revoke'} admin access?`)) return;
+
+            try {
+                const response = await fetch(`${API_BASE}/api/admin/usage/user/${userId}/set-admin`, {
+                    method: 'POST',
+                    credentials: 'include',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ is_admin: makeAdmin })
+                });
+
+                if (!response.ok) throw new Error('Failed to update admin status');
+
+                alert('Admin status updated successfully');
+                closeModal();
+                loadDashboard();
+
+            } catch (error) {
+                console.error('Error updating admin status:', error);
+                alert('Failed to update admin status');
+            }
+        }
+
+        // Toggle token access
+        async function toggleAccess(userId, enable) {
+            if (!confirm(`Are you sure you want to ${enable ? 'enable' : 'disable'} token access?`)) return;
+
+            try {
+                const response = await fetch(`${API_BASE}/api/admin/usage/user/${userId}/set-access`, {
+                    method: 'POST',
+                    credentials: 'include',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ enabled: enable })
+                });
+
+                if (!response.ok) throw new Error('Failed to update access');
+
+                alert('Token access updated successfully');
+                closeModal();
+                loadDashboard();
+
+            } catch (error) {
+                console.error('Error updating access:', error);
+                alert('Failed to update access');
+            }
+        }
+
+        // Reset weekly usage
+        async function resetWeekly() {
+            if (!confirm('Are you sure you want to reset weekly usage for ALL users?')) return;
+
+            try {
+                const response = await fetch(`${API_BASE}/api/admin/usage/reset/weekly`, {
+                    method: 'POST',
+                    credentials: 'include'
+                });
+
+                if (!response.ok) throw new Error('Failed to reset weekly usage');
+
+                const data = await response.json();
+                alert(`Weekly usage reset for ${data.users_reset} users`);
+                loadDashboard();
+
+            } catch (error) {
+                console.error('Error resetting weekly usage:', error);
+                alert('Failed to reset weekly usage');
+            }
+        }
+
+        // Export data
+        async function exportData() {
+            try {
+                const response = await fetch(`${API_BASE}/api/admin/usage/export`, {
+                    credentials: 'include'
+                });
+
+                if (!response.ok) throw new Error('Failed to export data');
+
+                const blob = await response.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `token-usage-${new Date().toISOString().split('T')[0]}.csv`;
+                document.body.appendChild(a);
+                a.click();
+                window.URL.revokeObjectURL(url);
+                document.body.removeChild(a);
+
+            } catch (error) {
+                console.error('Error exporting data:', error);
+                alert('Failed to export data');
+            }
+        }
+
+        // Cleanup sessions
+        async function cleanupSessions() {
+            try {
+                const response = await fetch(`${API_BASE}/api/admin/usage/cleanup/sessions`, {
+                    method: 'POST',
+                    credentials: 'include'
+                });
+
+                if (!response.ok) throw new Error('Failed to cleanup sessions');
+
+                const data = await response.json();
+                alert(`Cleaned up ${data.sessions_deactivated} expired sessions`);
+
+            } catch (error) {
+                console.error('Error cleaning up sessions:', error);
+                alert('Failed to cleanup sessions');
+            }
+        }
+
+        // Initialize
+        async function init() {
+            const isAdmin = await checkAdminAuth();
+            if (!isAdmin) return;
+
+            await loadDashboard();
+
+            document.getElementById('loading-state').classList.add('hidden');
+            document.getElementById('content-container').classList.remove('hidden');
+
+            // Auto-refresh every 60 seconds
+            setInterval(loadDashboard, 60000);
+        }
+
+        init();
+    </script>
+</body>
+</html>

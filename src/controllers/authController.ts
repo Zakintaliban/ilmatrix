@@ -98,8 +98,10 @@ export async function login(c: Context) {
       Array.isArray(ipAddress) ? ipAddress[0] : ipAddress
     );
 
-    // Set session cookie
-    c.header('Set-Cookie', `session=${sessionToken}; HttpOnly; Secure; SameSite=Strict; Max-Age=${7 * 24 * 60 * 60}; Path=/`);
+    // Set session cookie (Secure only in production)
+    const isProduction = process.env.NODE_ENV === 'production';
+    const secureFlag = isProduction ? ' Secure;' : '';
+    c.header('Set-Cookie', `session=${sessionToken}; HttpOnly;${secureFlag} SameSite=Lax; Max-Age=${7 * 24 * 60 * 60}; Path=/`);
 
     // Reset guest usage after successful login
     try {
@@ -157,7 +159,9 @@ export async function logout(c: Context) {
     await logoutUser(sessionToken);
     
     // Clear session cookie
-    c.header('Set-Cookie', 'session=; HttpOnly; Secure; SameSite=Strict; Max-Age=0; Path=/');
+    const isProduction = process.env.NODE_ENV === 'production';
+    const secureFlag = isProduction ? ' Secure;' : '';
+    c.header('Set-Cookie', `session=; HttpOnly;${secureFlag} SameSite=Lax; Max-Age=0; Path=/`);
     
     return c.json({ message: 'Logout successful' });
     
@@ -187,7 +191,8 @@ export async function getProfile(c: Context) {
         bio: user.bio,
         auth_method: user.auth_method,
         created_at: user.created_at,
-        last_login: user.last_login
+        last_login: user.last_login,
+        is_admin: user.is_admin || false
       }
     });
     
@@ -335,7 +340,9 @@ export async function deleteAccount(c: Context) {
       await query('COMMIT');
       
       // Clear session cookie
-      c.header('Set-Cookie', 'session=; HttpOnly; Secure; SameSite=Strict; Max-Age=0; Path=/');
+      const isProduction = process.env.NODE_ENV === 'production';
+    const secureFlag = isProduction ? ' Secure;' : '';
+    c.header('Set-Cookie', `session=; HttpOnly;${secureFlag} SameSite=Lax; Max-Age=0; Path=/`);
       
       return c.json({ message: 'Account deleted successfully' });
       

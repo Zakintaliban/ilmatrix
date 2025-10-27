@@ -3,6 +3,7 @@ import { rateLimitMiddleware } from "./middleware/rateLimit.js";
 import { guestLimitMiddleware, strictAuthMiddleware } from "./middleware/guestLimit.js";
 import { aiRateLimitMiddleware } from "./middleware/aiRateLimit.js";
 import { abuseDetectionMiddleware } from "./middleware/abuseDetection.js";
+import { tokenUsageMiddleware } from "./middleware/tokenUsageMiddleware.js";
 import { uploadController } from "./controllers/uploadController.js";
 import { materialController } from "./controllers/materialController.js";
 import { aiController } from "./controllers/aiController.js";
@@ -26,6 +27,7 @@ import {
 } from "./controllers/oauthController.js";
 import * as dashboardController from "./controllers/dashboardController.js";
 import * as guestChatController from "./controllers/guestChatController.js";
+import * as usageController from "./controllers/usageController.js";
 
 const api = new Hono();
 
@@ -81,6 +83,23 @@ api.post("/dashboard/materials/:materialId/access", authMiddleware, dashboardCon
 api.get("/dashboard/tags", authMiddleware, dashboardController.getUserTags);
 api.get("/dashboard/tags/:tag/materials", authMiddleware, dashboardController.getMaterialsByTag);
 
+// Token usage endpoints (authenticated users only)
+api.get("/usage/stats", authMiddleware, usageController.getUserStats);
+api.get("/usage/history", authMiddleware, usageController.getUserHistory);
+api.get("/usage/analytics", authMiddleware, usageController.getUserAnalytics);
+
+// Admin token usage endpoints (admin only)
+api.get("/admin/usage/dashboard", authMiddleware, usageController.requireAdmin, usageController.getAdminDashboard);
+api.get("/admin/usage/user/:userId", authMiddleware, usageController.requireAdmin, usageController.getAdminUserDetail);
+api.post("/admin/usage/user/:userId/set-admin", authMiddleware, usageController.requireAdmin, usageController.setUserAdmin);
+api.post("/admin/usage/user/:userId/set-access", authMiddleware, usageController.requireAdmin, usageController.setUserTokenAccess);
+api.post("/admin/usage/user/:userId/update-limits", authMiddleware, usageController.requireAdmin, usageController.updateUserLimits);
+api.post("/admin/usage/reset/weekly", authMiddleware, usageController.requireAdmin, usageController.adminResetWeekly);
+api.post("/admin/usage/reset/monthly", authMiddleware, usageController.requireAdmin, usageController.adminResetMonthly);
+api.post("/admin/usage/cleanup/sessions", authMiddleware, usageController.requireAdmin, usageController.adminCleanupSessions);
+api.post("/admin/usage/cleanup/logs", authMiddleware, usageController.requireAdmin, usageController.adminCleanupLogs);
+api.get("/admin/usage/export", authMiddleware, usageController.requireAdmin, usageController.exportUsageData);
+
 // Guest chat endpoints (no auth required - uses fingerprint)
 api.get("/guest/chat/sessions", guestChatController.getGuestChatSessions);
 api.post("/guest/chat/sessions", guestChatController.createGuestChatSession);
@@ -105,25 +124,27 @@ api.post("/material/:id/remove", (c) =>
 );
 api.delete("/material/:id", (c) => materialController.deleteMaterial(c));
 
-// AI feature endpoints (with enhanced protection)
-api.post("/explain", guestLimitMiddleware, aiRateLimitMiddleware, abuseDetectionMiddleware, (c) => aiController.handleAIRequest(c, "explain"));
-api.post("/quiz", guestLimitMiddleware, aiRateLimitMiddleware, abuseDetectionMiddleware, (c) => aiController.handleAIRequest(c, "quiz"));
-api.post("/forum", guestLimitMiddleware, aiRateLimitMiddleware, abuseDetectionMiddleware, (c) => aiController.handleAIRequest(c, "forum"));
-api.post("/exam", guestLimitMiddleware, aiRateLimitMiddleware, abuseDetectionMiddleware, (c) => aiController.handleAIRequest(c, "exam"));
-api.post("/chat", guestLimitMiddleware, aiRateLimitMiddleware, abuseDetectionMiddleware, (c) => aiController.handleChat(c));
+// AI feature endpoints (with enhanced protection + token usage tracking)
+// Note: optionalAuthMiddleware is implicitly used via guestLimitMiddleware
+// tokenUsageMiddleware runs after auth check and only applies to registered users
+api.post("/explain", optionalAuthMiddleware, tokenUsageMiddleware, guestLimitMiddleware, aiRateLimitMiddleware, abuseDetectionMiddleware, (c) => aiController.handleAIRequest(c, "explain"));
+api.post("/quiz", optionalAuthMiddleware, tokenUsageMiddleware, guestLimitMiddleware, aiRateLimitMiddleware, abuseDetectionMiddleware, (c) => aiController.handleAIRequest(c, "quiz"));
+api.post("/forum", optionalAuthMiddleware, tokenUsageMiddleware, guestLimitMiddleware, aiRateLimitMiddleware, abuseDetectionMiddleware, (c) => aiController.handleAIRequest(c, "forum"));
+api.post("/exam", optionalAuthMiddleware, tokenUsageMiddleware, guestLimitMiddleware, aiRateLimitMiddleware, abuseDetectionMiddleware, (c) => aiController.handleAIRequest(c, "exam"));
+api.post("/chat", optionalAuthMiddleware, tokenUsageMiddleware, guestLimitMiddleware, aiRateLimitMiddleware, abuseDetectionMiddleware, (c) => aiController.handleChat(c));
 
-// MCQ trainer endpoints (with enhanced protection)
-api.post("/quiz/trainer/mcq/start", guestLimitMiddleware, aiRateLimitMiddleware, abuseDetectionMiddleware, (c) => aiController.generateMCQ(c));
+// MCQ trainer endpoints (with enhanced protection + token usage tracking)
+api.post("/quiz/trainer/mcq/start", optionalAuthMiddleware, tokenUsageMiddleware, guestLimitMiddleware, aiRateLimitMiddleware, abuseDetectionMiddleware, (c) => aiController.generateMCQ(c));
 api.post("/quiz/trainer/mcq/score", (c) => aiController.scoreMCQ(c)); // No limit for scoring
 
-// Flashcards endpoint (with guest usage limits)
-api.post("/flashcards", guestLimitMiddleware, (c) => aiController.generateFlashcards(c));
+// Flashcards endpoint (with guest usage limits + token usage tracking)
+api.post("/flashcards", optionalAuthMiddleware, tokenUsageMiddleware, guestLimitMiddleware, (c) => aiController.generateFlashcards(c));
 
-// Dialogue endpoints (with guest usage limits)
-api.post("/dialogue/start", guestLimitMiddleware, (c) => aiController.startDialogue(c));
-api.post("/dialogue/step", guestLimitMiddleware, (c) => aiController.stepDialogue(c));
-api.post("/dialogue/hint", guestLimitMiddleware, (c) => aiController.hintDialogue(c));
-api.post("/dialogue/feedback", guestLimitMiddleware, (c) => aiController.feedbackDialogue(c));
+// Dialogue endpoints (with guest usage limits + token usage tracking)
+api.post("/dialogue/start", optionalAuthMiddleware, tokenUsageMiddleware, guestLimitMiddleware, (c) => aiController.startDialogue(c));
+api.post("/dialogue/step", optionalAuthMiddleware, tokenUsageMiddleware, guestLimitMiddleware, (c) => aiController.stepDialogue(c));
+api.post("/dialogue/hint", optionalAuthMiddleware, tokenUsageMiddleware, guestLimitMiddleware, (c) => aiController.hintDialogue(c));
+api.post("/dialogue/feedback", optionalAuthMiddleware, tokenUsageMiddleware, guestLimitMiddleware, (c) => aiController.feedbackDialogue(c));
 
 // Admin/debug endpoints
 api.post("/admin/cleanup", async (c) => {

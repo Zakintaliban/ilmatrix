@@ -224,6 +224,13 @@
                                         </svg>
                                         Profile Settings
                                     </a>
+                                    <!-- Admin Link (only shown for admins) -->
+                                    <a href="/admin-usage.html" id="admin-link" style="display: none;" class="flex items-center gap-2 px-4 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-gray-100 dark:hover:bg-gray-800">
+                                        <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                                            <path d="M12 2L2 7v10c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V7l-10-5z"/>
+                                        </svg>
+                                        Admin Dashboard
+                                    </a>
                                     <div class="border-t border-gray-200 dark:border-white/10"></div>
                                     <button
                                         id="btnLogout"
@@ -340,6 +347,143 @@
                             <p class="text-sm font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">This Week</p>
                             <p class="text-3xl font-bold text-gray-900 dark:text-white mt-2" id="stat-weekly">0</p>
                             <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">Activity this week</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Token Usage Section -->
+            <div class="mt-8">
+                <div class="bg-white dark:bg-gray-800 shadow rounded-lg overflow-hidden">
+                    <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
+                        <div>
+                            <h3 class="text-lg font-semibold text-gray-900 dark:text-white">Token Usage</h3>
+                            <p class="text-sm text-gray-600 dark:text-gray-400 mt-1">Monitor your AI token consumption</p>
+                        </div>
+                        <div id="usage-badge" class="hidden px-3 py-1 rounded-full text-xs font-semibold">
+                            <!-- Will be filled by JS -->
+                        </div>
+                    </div>
+                    <div class="p-6">
+                        <!-- Loading State -->
+                        <div id="usage-loading" class="text-center py-8">
+                            <div class="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+                            <p class="mt-2 text-sm text-gray-500 dark:text-gray-400">Loading usage data...</p>
+                        </div>
+
+                        <!-- Usage Content -->
+                        <div id="usage-content" class="hidden">
+                            <!-- Usage Stats Grid -->
+                            <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+
+                                <!-- Session Usage -->
+                                <div class="space-y-3">
+                                    <div class="flex items-center justify-between">
+                                        <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Session Usage</span>
+                                        <svg class="h-5 w-5 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                                        </svg>
+                                    </div>
+                                    <div>
+                                        <div class="flex justify-between items-baseline mb-2">
+                                            <span class="text-2xl font-bold text-gray-900 dark:text-white" id="session-used">0</span>
+                                            <span class="text-sm text-gray-600 dark:text-gray-400">/ <span id="session-limit">25,000</span></span>
+                                        </div>
+                                        <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2.5">
+                                            <div id="session-progress" class="bg-gradient-to-r from-green-500 to-green-600 h-2.5 rounded-full transition-all duration-500" style="width: 0%"></div>
+                                        </div>
+                                        <div class="flex justify-between mt-2 text-xs">
+                                            <span class="text-gray-600 dark:text-gray-400">Remaining: <span id="session-remaining" class="font-semibold">25,000</span></span>
+                                            <span id="session-percentage" class="font-semibold text-gray-900 dark:text-white">0%</span>
+                                        </div>
+                                        <p class="text-xs text-gray-500 dark:text-gray-400 mt-2">Expires in: <span id="session-time-remaining">5 hours</span></p>
+                                    </div>
+                                </div>
+
+                                <!-- Weekly Usage -->
+                                <div class="space-y-3">
+                                    <div class="flex items-center justify-between">
+                                        <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Weekly Usage</span>
+                                        <svg class="h-5 w-5 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+                                        </svg>
+                                    </div>
+                                    <div>
+                                        <div class="flex justify-between items-baseline mb-2">
+                                            <span class="text-2xl font-bold text-gray-900 dark:text-white" id="weekly-used">0</span>
+                                            <span class="text-sm text-gray-600 dark:text-gray-400">/ <span id="weekly-limit">250,000</span></span>
+                                        </div>
+                                        <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2.5">
+                                            <div id="weekly-progress" class="h-2.5 rounded-full transition-all duration-500" style="width: 0%"></div>
+                                        </div>
+                                        <div class="flex justify-between mt-2 text-xs">
+                                            <span class="text-gray-600 dark:text-gray-400">Remaining: <span id="weekly-remaining" class="font-semibold">250,000</span></span>
+                                            <span id="weekly-percentage" class="font-semibold text-gray-900 dark:text-white">0%</span>
+                                        </div>
+                                        <p class="text-xs text-gray-500 dark:text-gray-400 mt-2">Resets: <span id="weekly-reset-time">-</span></p>
+                                    </div>
+                                </div>
+
+                                <!-- Monthly Usage -->
+                                <div class="space-y-3">
+                                    <div class="flex items-center justify-between">
+                                        <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Monthly Usage</span>
+                                        <svg class="h-5 w-5 text-purple-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                                        </svg>
+                                    </div>
+                                    <div>
+                                        <div class="flex justify-between items-baseline mb-2">
+                                            <span class="text-2xl font-bold text-gray-900 dark:text-white" id="monthly-used">0</span>
+                                            <span class="text-sm text-gray-600 dark:text-gray-400">/ <span id="monthly-limit">1,000,000</span></span>
+                                        </div>
+                                        <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2.5">
+                                            <div id="monthly-progress" class="bg-gradient-to-r from-purple-500 to-purple-600 h-2.5 rounded-full transition-all duration-500" style="width: 0%"></div>
+                                        </div>
+                                        <div class="flex justify-between mt-2 text-xs">
+                                            <span class="text-gray-600 dark:text-gray-400">Remaining: <span id="monthly-remaining" class="font-semibold">1,000,000</span></span>
+                                            <span id="monthly-percentage" class="font-semibold text-gray-900 dark:text-white">0%</span>
+                                        </div>
+                                        <p class="text-xs text-gray-500 dark:text-gray-400 mt-2">Resets: <span id="monthly-reset-time">-</span></p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Warning Banner -->
+                            <div id="usage-warning-banner" class="hidden p-4 rounded-lg mb-4">
+                                <div class="flex items-start">
+                                    <svg class="h-5 w-5 mt-0.5 mr-3" fill="currentColor" viewBox="0 0 20 20">
+                                        <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/>
+                                    </svg>
+                                    <div class="flex-1">
+                                        <h3 class="font-semibold" id="usage-warning-title">Usage Warning</h3>
+                                        <p class="text-sm mt-1" id="usage-warning-message">-</p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Quick Stats -->
+                            <div class="border-t border-gray-200 dark:border-gray-700 pt-4">
+                                <h4 class="text-sm font-semibold text-gray-900 dark:text-white mb-3">Quick Stats</h4>
+                                <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                                    <div class="text-center p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
+                                        <p class="text-xl font-bold text-gray-900 dark:text-white" id="usage-today">0</p>
+                                        <p class="text-xs text-gray-600 dark:text-gray-400 mt-1">Today</p>
+                                    </div>
+                                    <div class="text-center p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
+                                        <p class="text-xl font-bold text-gray-900 dark:text-white" id="usage-week">0</p>
+                                        <p class="text-xs text-gray-600 dark:text-gray-400 mt-1">This Week</p>
+                                    </div>
+                                    <div class="text-center p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
+                                        <p class="text-xl font-bold text-gray-900 dark:text-white" id="usage-month">0</p>
+                                        <p class="text-xs text-gray-600 dark:text-gray-400 mt-1">This Month</p>
+                                    </div>
+                                    <div class="text-center p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
+                                        <p class="text-xl font-bold text-gray-900 dark:text-white" id="usage-total">0</p>
+                                        <p class="text-xs text-gray-600 dark:text-gray-400 mt-1">All Time</p>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -611,6 +755,8 @@
                 const data = await response.json();
                 state.user = data.user;
                 console.log('Auth successful, user:', state.user.email);
+                console.log('User is_admin:', state.user.is_admin);
+                console.log('Full user object:', state.user);
                 
                 // Show user info in header
                 const userInfo = document.getElementById('userInfo');
@@ -627,6 +773,16 @@
                 if (btnLogin) {
                     btnLogin.classList.add('hidden');
                 }
+
+                // Show admin link if user is admin
+                if (state.user.is_admin) {
+                    const adminLink = document.getElementById('admin-link');
+                    if (adminLink) {
+                        adminLink.style.display = 'flex';
+                        console.log('✅ Admin link shown');
+                    }
+                }
+
                 return true;
             } catch (error) {
                 console.error('Auth check failed:', error);
@@ -677,6 +833,133 @@
                 console.error('Failed to load dashboard:', error);
                 showError('Failed to load dashboard data');
             }
+        }
+
+        // Load token usage data
+        async function loadTokenUsage() {
+            try {
+                // Load usage stats
+                const statsResponse = await apiCall('/usage/stats');
+                const analyticsResponse = await apiCall('/usage/analytics');
+
+                const { usage } = statsResponse;
+                const { analytics } = analyticsResponse;
+
+                // Update weekly usage
+                document.getElementById('weekly-used').textContent = formatNumber(usage.weekly.used);
+                document.getElementById('weekly-limit').textContent = formatNumber(usage.weekly.limit);
+                document.getElementById('weekly-remaining').textContent = formatNumber(usage.weekly.remaining);
+                document.getElementById('weekly-percentage').textContent = usage.weekly.percentage.toFixed(1) + '%';
+                document.getElementById('weekly-progress').style.width = Math.min(usage.weekly.percentage, 100) + '%';
+                document.getElementById('weekly-reset-time').textContent = formatResetDate(usage.weekly.resets_at);
+
+                // Color code weekly progress
+                const weeklyBar = document.getElementById('weekly-progress');
+                if (usage.weekly.percentage >= 100) {
+                    weeklyBar.className = 'h-2.5 rounded-full transition-all duration-500 bg-gradient-to-r from-red-500 to-red-600';
+                } else if (usage.weekly.percentage >= 90) {
+                    weeklyBar.className = 'h-2.5 rounded-full transition-all duration-500 bg-gradient-to-r from-orange-500 to-orange-600';
+                } else if (usage.weekly.percentage >= 80) {
+                    weeklyBar.className = 'h-2.5 rounded-full transition-all duration-500 bg-gradient-to-r from-yellow-500 to-yellow-600';
+                } else {
+                    weeklyBar.className = 'h-2.5 rounded-full transition-all duration-500 bg-gradient-to-r from-blue-500 to-blue-600';
+                }
+
+                // Update session usage
+                document.getElementById('session-used').textContent = formatNumber(usage.session.used);
+                document.getElementById('session-limit').textContent = formatNumber(usage.session.limit);
+                document.getElementById('session-remaining').textContent = formatNumber(usage.session.remaining);
+                document.getElementById('session-percentage').textContent = usage.session.percentage.toFixed(1) + '%';
+                document.getElementById('session-progress').style.width = Math.min(usage.session.percentage, 100) + '%';
+
+                const timeRemaining = usage.session.time_remaining_minutes;
+                if (timeRemaining !== null) {
+                    const hours = Math.floor(timeRemaining / 60);
+                    const minutes = timeRemaining % 60;
+                    document.getElementById('session-time-remaining').textContent = `${hours}h ${minutes}m`;
+                } else {
+                    document.getElementById('session-time-remaining').textContent = '-';
+                }
+
+                // Update monthly usage
+                document.getElementById('monthly-used').textContent = formatNumber(usage.monthly.used);
+                document.getElementById('monthly-limit').textContent = formatNumber(usage.monthly.limit);
+                document.getElementById('monthly-remaining').textContent = formatNumber(usage.monthly.remaining);
+                document.getElementById('monthly-percentage').textContent = usage.monthly.percentage.toFixed(1) + '%';
+                document.getElementById('monthly-progress').style.width = Math.min(usage.monthly.percentage, 100) + '%';
+                document.getElementById('monthly-reset-time').textContent = formatResetDate(usage.monthly.resets_at);
+
+                // Update quick stats
+                document.getElementById('usage-today').textContent = formatNumber(analytics.today);
+                document.getElementById('usage-week').textContent = formatNumber(analytics.this_week);
+                document.getElementById('usage-month').textContent = formatNumber(analytics.this_month);
+                document.getElementById('usage-total').textContent = formatNumber(analytics.total_all_time);
+
+                // Show warning if needed
+                const warningBanner = document.getElementById('usage-warning-banner');
+                const warningTitle = document.getElementById('usage-warning-title');
+                const warningMessage = document.getElementById('usage-warning-message');
+                const usageBadge = document.getElementById('usage-badge');
+
+                if (usage.weekly.percentage >= 80) {
+                    warningBanner.classList.remove('hidden');
+                    usageBadge.classList.remove('hidden');
+
+                    if (usage.weekly.percentage >= 100) {
+                        warningBanner.className = 'p-4 rounded-lg mb-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-800 dark:text-red-200';
+                        warningTitle.textContent = 'Weekly Limit Reached';
+                        warningMessage.textContent = `You've reached your weekly token limit. Usage will resume when the limit resets on ${formatResetDate(usage.weekly.resets_at)}.`;
+                        usageBadge.className = 'px-3 py-1 rounded-full text-xs font-semibold bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200';
+                        usageBadge.textContent = 'At Limit';
+                    } else if (usage.weekly.percentage >= 90) {
+                        warningBanner.className = 'p-4 rounded-lg mb-4 bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 text-orange-800 dark:text-orange-200';
+                        warningTitle.textContent = 'Critical Usage Level';
+                        warningMessage.textContent = `You've used ${usage.weekly.percentage.toFixed(1)}% of your weekly limit. Only ${formatNumber(usage.weekly.remaining)} tokens remaining.`;
+                        usageBadge.className = 'px-3 py-1 rounded-full text-xs font-semibold bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200';
+                        usageBadge.textContent = 'Critical';
+                    } else {
+                        warningBanner.className = 'p-4 rounded-lg mb-4 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 text-yellow-800 dark:text-yellow-200';
+                        warningTitle.textContent = 'High Usage Warning';
+                        warningMessage.textContent = `You've used ${usage.weekly.percentage.toFixed(1)}% of your weekly token limit.`;
+                        usageBadge.className = 'px-3 py-1 rounded-full text-xs font-semibold bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200';
+                        usageBadge.textContent = 'High Usage';
+                    }
+                } else {
+                    warningBanner.classList.add('hidden');
+                    usageBadge.classList.add('hidden');
+                }
+
+                // Show usage content, hide loading
+                document.getElementById('usage-loading').classList.add('hidden');
+                document.getElementById('usage-content').classList.remove('hidden');
+
+            } catch (error) {
+                console.error('Failed to load token usage:', error);
+                document.getElementById('usage-loading').innerHTML = `
+                    <p class="text-center text-red-500 dark:text-red-400">Failed to load usage data</p>
+                `;
+            }
+        }
+
+        // Format number with commas
+        function formatNumber(num) {
+            return new Intl.NumberFormat().format(num);
+        }
+
+        // Format reset date
+        function formatResetDate(dateString) {
+            const date = new Date(dateString);
+            const now = new Date();
+            const diff = date - now;
+
+            if (diff > 0 && diff < 7 * 24 * 60 * 60 * 1000) {
+                const days = Math.floor(diff / (24 * 60 * 60 * 1000));
+                const hours = Math.floor((diff % (24 * 60 * 60 * 1000)) / (60 * 60 * 1000));
+                if (days > 0) return `in ${days}d ${hours}h`;
+                return `in ${hours}h`;
+            }
+
+            return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
         }
 
         // Render recent sessions
@@ -807,9 +1090,10 @@
         // Event listeners
         document.addEventListener('DOMContentLoaded', async () => {
             // Theme already initialized by IIFE
-            
+
             if (await checkAuth()) {
                 await loadDashboard();
+                await loadTokenUsage(); // Load token usage stats
             }
 
             // User menu - only add if element exists

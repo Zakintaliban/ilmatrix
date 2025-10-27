@@ -2,6 +2,7 @@ import type { Context } from "hono";
 import { groqService } from "../services/groqService.js";
 import { mcqScoringService } from "../services/mcqScoringService.js";
 import { materialService } from "../services/materialService.js";
+import { updateTokenUsageAfterRequest } from "../middleware/tokenUsageMiddleware.js";
 
 export class AIController {
   /**
@@ -34,6 +35,24 @@ export class AIController {
         prompt,
       });
 
+      // Track token usage for registered users
+      const tokenUsage = groqService.getLastTokenUsage();
+      if (tokenUsage) {
+        const trackingResult = await updateTokenUsageAfterRequest(c, tokenUsage.total_tokens, {
+          model: groqService.getModelName(),
+          prompt_tokens: tokenUsage.prompt_tokens,
+          completion_tokens: tokenUsage.completion_tokens,
+          task,
+        });
+
+        // Include usage info and warning in response
+        return c.json({
+          answer,
+          token_usage: tokenUsage,
+          usage_warning: trackingResult.warning,
+        });
+      }
+
       return c.json({ answer });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -62,6 +81,23 @@ export class AIController {
         materialText: material,
         messages,
       });
+
+      // Track token usage for registered users
+      const tokenUsage = groqService.getLastTokenUsage();
+      if (tokenUsage) {
+        const trackingResult = await updateTokenUsageAfterRequest(c, tokenUsage.total_tokens, {
+          model: groqService.getModelName(),
+          prompt_tokens: tokenUsage.prompt_tokens,
+          completion_tokens: tokenUsage.completion_tokens,
+          task: 'chat',
+        });
+
+        return c.json({
+          answer,
+          token_usage: tokenUsage,
+          usage_warning: trackingResult.warning,
+        });
+      }
 
       return c.json({ answer });
     } catch (error) {
@@ -95,6 +131,24 @@ export class AIController {
         materialText: material,
         numQuestions: Math.min(Math.max(1, numQuestions), 50), // Limit 1-50 questions
       });
+
+      // Track token usage for registered users
+      const tokenUsage = groqService.getLastTokenUsage();
+      if (tokenUsage) {
+        const trackingResult = await updateTokenUsageAfterRequest(c, tokenUsage.total_tokens, {
+          model: groqService.getModelName(),
+          prompt_tokens: tokenUsage.prompt_tokens,
+          completion_tokens: tokenUsage.completion_tokens,
+          task: 'quiz',
+          num_questions: numQuestions,
+        });
+
+        return c.json({
+          questions,
+          token_usage: tokenUsage,
+          usage_warning: trackingResult.warning,
+        });
+      }
 
       return c.json({ questions });
     } catch (error) {
@@ -153,6 +207,24 @@ export class AIController {
         numCards: Math.min(Math.max(1, numCards), 50), // Limit 1-50 cards
       });
 
+      // Track token usage for registered users
+      const tokenUsage = groqService.getLastTokenUsage();
+      if (tokenUsage) {
+        const trackingResult = await updateTokenUsageAfterRequest(c, tokenUsage.total_tokens, {
+          model: groqService.getModelName(),
+          prompt_tokens: tokenUsage.prompt_tokens,
+          completion_tokens: tokenUsage.completion_tokens,
+          task: 'flashcards',
+          num_cards: numCards,
+        });
+
+        return c.json({
+          cards,
+          token_usage: tokenUsage,
+          usage_warning: trackingResult.warning,
+        });
+      }
+
       return c.json({ cards });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -167,6 +239,17 @@ export class AIController {
       const text = await materialService.readMaterial(materialId, materialText);
 
       const result = await groqService.dialogueStart({ materialText: text });
+
+      // Track token usage for registered users
+      const tokenUsage = groqService.getLastTokenUsage();
+      if (tokenUsage) {
+        await updateTokenUsageAfterRequest(c, tokenUsage.total_tokens, {
+          model: groqService.getModelName(),
+          prompt_tokens: tokenUsage.prompt_tokens,
+          completion_tokens: tokenUsage.completion_tokens,
+          task: 'dialogue_start',
+        });
+      }
 
       // Frontend keeps session; we attach a pseudo id for convenience
       return c.json({ sessionId: crypto.randomUUID(), ...result });
@@ -263,6 +346,17 @@ export class AIController {
         language,
       });
 
+      // Track token usage for registered users
+      const tokenUsage = groqService.getLastTokenUsage();
+      if (tokenUsage) {
+        await updateTokenUsageAfterRequest(c, tokenUsage.total_tokens, {
+          model: groqService.getModelName(),
+          prompt_tokens: tokenUsage.prompt_tokens,
+          completion_tokens: tokenUsage.completion_tokens,
+          task: 'dialogue_step',
+        });
+      }
+
       return c.json(result);
     } catch (error) {
       console.error("Dialogue step error:", error);
@@ -288,6 +382,17 @@ export class AIController {
         currentTopicTitle,
         language,
       });
+
+      // Track token usage for registered users
+      const tokenUsage = groqService.getLastTokenUsage();
+      if (tokenUsage) {
+        await updateTokenUsageAfterRequest(c, tokenUsage.total_tokens, {
+          model: groqService.getModelName(),
+          prompt_tokens: tokenUsage.prompt_tokens,
+          completion_tokens: tokenUsage.completion_tokens,
+          task: 'dialogue_hint',
+        });
+      }
 
       return c.json(result);
     } catch (error) {
@@ -315,6 +420,17 @@ export class AIController {
         history,
         language,
       });
+
+      // Track token usage for registered users
+      const tokenUsage = groqService.getLastTokenUsage();
+      if (tokenUsage) {
+        await updateTokenUsageAfterRequest(c, tokenUsage.total_tokens, {
+          model: groqService.getModelName(),
+          prompt_tokens: tokenUsage.prompt_tokens,
+          completion_tokens: tokenUsage.completion_tokens,
+          task: 'dialogue_feedback',
+        });
+      }
 
       return c.json(result);
     } catch (error) {

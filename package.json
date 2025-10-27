@@ -18,7 +18,8 @@
     "cleanup": "tsx -e \"import { backgroundTaskService } from './src/services/backgroundTaskService.js'; await backgroundTaskService.runCleanupNow(); process.exit(0);\"",
     "migrate": "tsx src/scripts/migrate.ts",
     "db:setup": "npm run migrate run",
-    "db:status": "npm run migrate status"
+    "db:status": "npm run migrate status",
+    "set-admin": "tsx scripts/set-admin.ts"
   },
   "keywords": [],
   "author": "",

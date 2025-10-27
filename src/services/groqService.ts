@@ -131,12 +131,19 @@ export interface DialogueFeedbackResult {
   improvements: string[];
 }
 
+export interface TokenUsage {
+  prompt_tokens: number;
+  completion_tokens: number;
+  total_tokens: number;
+}
+
 /**
  * Service for interacting with Groq AI models
  */
 export class GroqService {
   private client: Groq;
   private limiter = createLimiter(config.groqConcurrency);
+  private lastTokenUsage: TokenUsage | null = null; // Track last request's token usage
   private readonly systemPrompt = `You are Ilmatrix, a study assistant for university students, especially those who prefer studying quietly.
 
 Core rules:
@@ -282,15 +289,21 @@ Core rules:
               temperature: params.temperature || 0.3,
               max_tokens: params.max_tokens || 1500,
             });
-            
-            // Track token usage for rate limiting
-            const tokensUsed = completion.usage?.total_tokens || 0;
-            if (tokensUsed > 0) {
-              console.log(`[GROQ] Tokens used: ${tokensUsed}`);
-              // Store tokens used in response for rate limiting
-              (completion as any)._tokensUsed = tokensUsed;
+
+            // Track token usage
+            if (completion.usage) {
+              this.lastTokenUsage = {
+                prompt_tokens: completion.usage.prompt_tokens || 0,
+                completion_tokens: completion.usage.completion_tokens || 0,
+                total_tokens: completion.usage.total_tokens || 0,
+              };
+
+              console.log(`[GROQ] Tokens used: ${this.lastTokenUsage.total_tokens} (prompt: ${this.lastTokenUsage.prompt_tokens}, completion: ${this.lastTokenUsage.completion_tokens})`);
+            } else {
+              // Fallback if no usage info
+              this.lastTokenUsage = null;
             }
-            
+
             return completion;
           }),
         config.groqTimeoutMs,
@@ -299,6 +312,28 @@ Core rules:
         return completion.choices?.[0]?.message?.content || "";
       });
     });
+  }
+
+  /**
+   * Get token usage from the last API request
+   * Returns null if no request has been made yet or if usage info wasn't available
+   */
+  getLastTokenUsage(): TokenUsage | null {
+    return this.lastTokenUsage;
+  }
+
+  /**
+   * Clear token usage tracking
+   */
+  clearTokenUsage(): void {
+    this.lastTokenUsage = null;
+  }
+
+  /**
+   * Get the current model name being used
+   */
+  getModelName(): string {
+    return config.groqModel;
   }
 
   /**

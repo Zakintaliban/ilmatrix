@@ -20,6 +20,7 @@ export interface User {
   updated_at: Date;
   is_active: boolean;
   last_login?: Date;
+  is_admin?: boolean;
 }
 
 export interface UserWithPassword extends User {
@@ -187,7 +188,7 @@ export async function loginUser(
  */
 export async function getUserBySessionToken(sessionToken: string): Promise<User | null> {
   const result = await query<User & { session_expires_at: Date }>(
-    `SELECT u.id, u.email, u.username, u.name, u.birth_date, u.country, u.phone, u.bio, u.email_verified, u.auth_method, u.created_at, u.updated_at, u.is_active, u.last_login,
+    `SELECT u.id, u.email, u.username, u.name, u.birth_date, u.country, u.phone, u.bio, u.email_verified, u.auth_method, u.created_at, u.updated_at, u.is_active, u.last_login, u.is_admin,
             s.expires_at as session_expires_at
      FROM users u
      JOIN user_sessions s ON u.id = s.user_id
@@ -243,10 +244,10 @@ export async function cleanupExpiredSessions(): Promise<number> {
  */
 export async function getUserById(userId: string): Promise<User | null> {
   const result = await query<User>(
-    'SELECT id, email, username, name, birth_date, country, phone, bio, email_verified, auth_method, created_at, updated_at, is_active, last_login FROM users WHERE id = $1 AND is_active = true',
+    'SELECT id, email, username, name, birth_date, country, phone, bio, email_verified, auth_method, created_at, updated_at, is_active, last_login, is_admin FROM users WHERE id = $1 AND is_active = true',
     [userId]
   );
-  
+
   return result.rows[0] || null;
 }
 
@@ -255,14 +256,14 @@ export async function getUserById(userId: string): Promise<User | null> {
  */
 export async function getUserByIdWithPassword(userId: string): Promise<UserWithPassword | null> {
   const result = await query<UserWithPassword & { password_hash: string }>(
-    'SELECT id, email, username, name, birth_date, country, phone, bio, email_verified, auth_method, created_at, updated_at, is_active, last_login, password_hash FROM users WHERE id = $1 AND is_active = true',
+    'SELECT id, email, username, name, birth_date, country, phone, bio, email_verified, auth_method, created_at, updated_at, is_active, last_login, is_admin, password_hash FROM users WHERE id = $1 AND is_active = true',
     [userId]
   );
-  
+
   if (result.rows.length === 0) {
     return null;
   }
-  
+
   const { password_hash, ...user } = result.rows[0];
   return { ...user, password: password_hash };
 }
