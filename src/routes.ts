@@ -28,6 +28,7 @@ import {
 import * as dashboardController from "./controllers/dashboardController.js";
 import * as guestChatController from "./controllers/guestChatController.js";
 import * as usageController from "./controllers/usageController.js";
+import * as securityController from "./controllers/securityController.js";
 
 const api = new Hono();
 
@@ -99,6 +100,12 @@ api.post("/admin/usage/reset/monthly", authMiddleware, usageController.requireAd
 api.post("/admin/usage/cleanup/sessions", authMiddleware, usageController.requireAdmin, usageController.adminCleanupSessions);
 api.post("/admin/usage/cleanup/logs", authMiddleware, usageController.requireAdmin, usageController.adminCleanupLogs);
 api.get("/admin/usage/export", authMiddleware, usageController.requireAdmin, usageController.exportUsageData);
+
+// Security monitoring endpoints (admin only)
+api.get("/security/stats", authMiddleware, usageController.requireAdmin, securityController.getSecurityStats);
+api.get("/security/suspicious", authMiddleware, usageController.requireAdmin, securityController.getRecentSuspiciousActivities);
+api.get("/security/device/:deviceId", authMiddleware, usageController.requireAdmin, securityController.getDeviceSuspiciousActivities);
+api.get("/security/pattern/:pattern", authMiddleware, usageController.requireAdmin, securityController.getPatternReport);
 
 // Guest chat endpoints (no auth required - uses fingerprint)
 api.get("/guest/chat/sessions", guestChatController.getGuestChatSessions);

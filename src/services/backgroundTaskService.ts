@@ -1,5 +1,6 @@
 import { materialService } from "../services/materialService.js";
 import { guestSessionService } from "../services/guestSessionService.js";
+import { behaviorAnalysisService } from "../services/behaviorAnalysisService.js";
 import config from "../config/env.js";
 
 /**
@@ -33,12 +34,19 @@ export class BackgroundTaskService {
       try {
         // Cleanup old materials
         const materialsCleaned = await materialService.cleanupOldMaterials();
-        
+
         // Cleanup expired guest sessions
         const guestSessionsResult = guestSessionService.cleanupExpiredSessions();
-        
-        if (materialsCleaned > 0 || guestSessionsResult.cleaned > 0) {
-          console.log(`Background cleanup: ${materialsCleaned} old materials, ${guestSessionsResult.cleaned} guest sessions cleaned`);
+
+        // Cleanup old behavioral analysis data (keep last 24 hours)
+        const behaviorResult = behaviorAnalysisService.cleanup(24 * 60 * 60 * 1000);
+
+        if (materialsCleaned > 0 || guestSessionsResult.cleaned > 0 || behaviorResult.profilesCleaned > 0) {
+          console.log(
+            `Background cleanup: ${materialsCleaned} materials, ` +
+            `${guestSessionsResult.cleaned} guest sessions, ` +
+            `${behaviorResult.profilesCleaned} behavior profiles cleaned`
+          );
         }
       } catch (error) {
         console.error("Error during background cleanup:", error);
@@ -66,16 +74,22 @@ export class BackgroundTaskService {
   /**
    * Run cleanup immediately
    */
-  async runCleanupNow(): Promise<{ materials: number; guestSessions: number }> {
+  async runCleanupNow(): Promise<{ materials: number; guestSessions: number; behaviorProfiles: number }> {
     try {
       const materialsCleaned = await materialService.cleanupOldMaterials();
       const guestSessionsResult = guestSessionService.cleanupExpiredSessions();
-      
-      console.log(`Manual cleanup completed: ${materialsCleaned} materials removed, ${guestSessionsResult.cleaned} guest sessions cleaned`);
-      
+      const behaviorResult = behaviorAnalysisService.cleanup(24 * 60 * 60 * 1000);
+
+      console.log(
+        `Manual cleanup completed: ${materialsCleaned} materials, ` +
+        `${guestSessionsResult.cleaned} guest sessions, ` +
+        `${behaviorResult.profilesCleaned} behavior profiles cleaned`
+      );
+
       return {
         materials: materialsCleaned,
-        guestSessions: guestSessionsResult.cleaned
+        guestSessions: guestSessionsResult.cleaned,
+        behaviorProfiles: behaviorResult.profilesCleaned
       };
     } catch (error) {
       console.error("Error during manual cleanup:", error);

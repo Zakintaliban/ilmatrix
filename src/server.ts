@@ -26,15 +26,29 @@ class IlmatrixServer {
    */
   private setupRoutes(): void {
     // Health check at root level
-    this.app.get("/api/health", (c) =>
-      c.json({
+    this.app.get("/api/health", async (c) => {
+      const { behaviorAnalysisService } = await import(
+        "./services/behaviorAnalysisService.js"
+      );
+      const { guestSessionService } = await import(
+        "./services/guestSessionService.js"
+      );
+
+      const behaviorStats = behaviorAnalysisService.getStats();
+      const guestStats = guestSessionService.getStats();
+
+      return c.json({
         ok: true,
         uptime: process.uptime(),
         version: process.env.npm_package_version || "unknown",
         model: config.groqModel,
         hasApiKey: !!config.groqApiKey,
-      })
-    );
+        security: {
+          guestSessions: guestStats,
+          behaviorAnalysis: behaviorStats,
+        },
+      });
+    });
 
     // Mount API routes
     this.app.route("/api", api);
