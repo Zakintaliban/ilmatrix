@@ -19,15 +19,73 @@ class GuestSessionManager {
   private readonly SESSION_EXPIRY_HOURS = 24;
 
   /**
-   * Generate unique fingerprint for guest identification
+   * Get or create device ID from HTTP-only cookie
+   * This provides persistent tracking even if IP changes
    */
-  generateFingerprint(c: Context): string {
+  private getOrCreateDeviceId(c: Context): string {
+    // Try to get existing device ID from cookie
+    const cookieHeader = c.req.header('cookie');
+    if (cookieHeader) {
+      const match = cookieHeader.match(/device_id=([^;]+)/);
+      if (match) {
+        return match[1];
+      }
+    }
+
+    // Generate new device ID if not found
+    const newDeviceId = crypto.randomUUID();
+
+    // Set HTTP-only cookie (expires in 1 year)
+    // HttpOnly: prevents JavaScript access (XSS protection)
+    // Secure: only sent over HTTPS
+    // SameSite=Lax: CSRF protection while allowing normal navigation
+    const maxAge = 365 * 24 * 60 * 60; // 1 year in seconds
+    c.header('Set-Cookie',
+      `device_id=${newDeviceId}; HttpOnly; Secure; SameSite=Lax; Max-Age=${maxAge}; Path=/`
+    );
+
+    return newDeviceId;
+  }
+
+  /**
+   * Get browser fingerprint for monitoring/logging purposes
+   * This includes IP and headers for anomaly detection
+   */
+  private getBrowserFingerprint(c: Context): string {
     const ipAddress = this.getClientIP(c);
     const userAgent = c.req.header('user-agent') || 'unknown';
-    
-    // Create hash from IP + User-Agent for privacy
-    const data = `${ipAddress}:${userAgent}`;
-    return crypto.createHash('sha256').update(data).digest('hex').substring(0, 16);
+    const acceptLanguage = c.req.header('accept-language') || 'unknown';
+    const acceptEncoding = c.req.header('accept-encoding') || 'unknown';
+    const accept = c.req.header('accept') || 'unknown';
+
+    const data = `${ipAddress}:${userAgent}:${acceptLanguage}:${acceptEncoding}:${accept}`;
+    return crypto.createHash('sha256').update(data).digest('hex').substring(0, 12);
+  }
+
+  /**
+   * Generate unique fingerprint for guest identification
+   * PRIMARY KEY: device_id (persists across IP/browser changes)
+   * SECONDARY: browser fingerprint (for monitoring)
+   *
+   * This approach blocks VPN/Warp bypass because device_id is the session key
+   */
+  generateFingerprint(c: Context): string {
+    // Device ID is the primary identifier (persists in HTTP-only cookie)
+    const deviceId = this.getOrCreateDeviceId(c);
+
+    // Browser fingerprint is for monitoring only (detect suspicious changes)
+    const browserFingerprint = this.getBrowserFingerprint(c);
+
+    // Store browser fingerprint for anomaly detection (optional future use)
+    const session = this.sessions.get(deviceId);
+    if (session) {
+      session.ipAddress = this.getClientIP(c);
+      session.userAgent = c.req.header('user-agent') || 'unknown';
+    }
+
+    // Return device_id as the fingerprint (session key)
+    // This ensures VPN/Warp bypass doesn't work
+    return deviceId;
   }
 
   /**
