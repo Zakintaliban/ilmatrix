@@ -6,7 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob:; connect-src 'self' https://cdn.jsdelivr.net; font-src 'self' data: https://fonts.gstatic.com; object-src 'none'; base-uri 'self'"
+      content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.tailwindcss.com https://unpkg.com https://cdnjs.cloudflare.com https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob:; connect-src 'self' https://cdn.jsdelivr.net https://unpkg.com; font-src 'self' data: https://fonts.gstatic.com; object-src 'none'; base-uri 'self'"
     />
     <title>ILMATRIX — About Us</title>
 
@@ -250,6 +250,64 @@
       .theme-green .hover\:bg-indigo-900:hover { background-color: var(--button-primary-hover) !important; }
       .theme-green .hover\:bg-green-600:hover { background-color: var(--button-secondary-hover) !important; }
       .theme-green .hover\:bg-pink-500:hover { background-color: var(--button-secondary-hover) !important; }
+
+      /* ========== LENIS SMOOTH SCROLL ========== */
+      html.lenis,
+      html.lenis body {
+        height: auto;
+      }
+
+      .lenis.lenis-smooth {
+        scroll-behavior: auto !important;
+      }
+
+      .lenis.lenis-smooth [data-lenis-prevent] {
+        overscroll-behavior: contain;
+      }
+
+      .lenis.lenis-stopped {
+        overflow: hidden;
+      }
+
+      .lenis.lenis-smooth iframe {
+        pointer-events: none;
+      }
+
+      /* ========== ANIMATION UTILITIES ========== */
+      .will-change-transform {
+        will-change: transform;
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        * {
+          animation-duration: 0.01ms !important;
+          animation-iteration-count: 1 !important;
+          transition-duration: 0.01ms !important;
+        }
+      }
+
+      /* Glass effect for text content - all screen sizes */
+      .glass-effect {
+        background: rgba(255, 255, 255, 0.75);
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        border-radius: 1.25rem;
+        padding: 2rem;
+        box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.15);
+        border: 1px solid rgba(255, 255, 255, 0.3);
+        transition: all 0.3s ease;
+      }
+
+      .dark .glass-effect {
+        background: rgba(15, 23, 42, 0.75);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+      }
+
+      @media (max-width: 640px) {
+        .glass-effect {
+          padding: 1.5rem;
+        }
+      }
     </style>
     <!-- Structured data -->
     <script type="application/ld+json">
@@ -686,5 +744,17 @@
         }
       })();
     </script>
+
+    <!-- Animation Libraries (CDN) -->
+    <script src="https://unpkg.com/lenis@1.0.42/dist/lenis.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/ScrollTrigger.min.js"></script>
+    <script src="https://unpkg.com/split-type@0.3.4/umd/index.js"></script>
+
+    <!-- Custom JavaScript Modules -->
+    <script src="./js/scroll-animations.js"></script>
+    <script src="./js/text-effects.js"></script>
+    <script src="./js/page-transitions.js"></script>
+    <script src="./js/card-interactions.js"></script>
   </body>
 </html>
