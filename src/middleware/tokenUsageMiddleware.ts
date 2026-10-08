@@ -16,6 +16,9 @@ import type { Context, Next } from 'hono';
 import * as tokenUsageService from '../services/tokenUsageService.js';
 import * as kreditService from '../services/kreditService.js';
 import { kreditForUsage } from '../config/plans.js';
+import { isPaymentsEnabled } from '../services/paymentService.js';
+
+const UPGRADE_URL = '/dashboard.html#upgrade';
 
 /**
  * Extract request type from endpoint path
@@ -87,15 +90,17 @@ export async function tokenUsageMiddleware(c: Context, next: Next) {
     const message = !status.accessEnabled
       ? 'Akses AI untuk akunmu sedang dinonaktifkan. Hubungi dukungan ILMATRIX.'
       : `Kredit belajarmu sudah habis. Kredit paket ${status.planName} terisi lagi ${formatResetTime(status.weeklyResetsAt)}.`;
+    const canBuy = status.accessEnabled && isPaymentsEnabled();
 
     return c.json(
       {
-        error: message,
-        // Text tools render `answer`, so the student sees the reason in the chat
-        answer: message,
+        error: canBuy ? `${message} Atau tambah kredit di Dashboard.` : message,
+        // Text tools render `answer` as Markdown, so the student sees the reason (and a way out) in the chat
+        answer: canBuy ? `${message} Butuh sekarang? [Tambah kredit](${UPGRADE_URL}).` : message,
         code: status.accessEnabled ? 'KREDIT_EXHAUSTED' : 'AI_ACCESS_DISABLED',
         kredit: kreditSummary(status),
         reset_time: status.weeklyResetsAt,
+        ...(canBuy ? { upgrade_url: UPGRADE_URL } : {}),
       },
       429
     );

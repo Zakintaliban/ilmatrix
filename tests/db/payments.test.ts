@@ -500,3 +500,20 @@ test("deleting the account keeps the payment record without the user", { skip },
   assert.equal(paid.status, "paid");
   assert.match(paid.review_note, /account was deleted/);
 });
+
+test("when kredit runs out the message links to buying more (only if payments are on)", { skip }, async () => {
+  const u = await createUser();
+  await query(`UPDATE users SET weekly_kredit_used = 150 WHERE id = $1`, [u.id]);
+  const explain = () => request("POST", "/explain", { cookie: u.cookie, json: { materialText: `Materi ${randomUUID()}: fotosintesis.` } });
+
+  const res = await explain();
+  assert.equal(res.status, 429);
+  assert.equal(res.body.code, "KREDIT_EXHAUSTED");
+  assert.equal(res.body.upgrade_url, "/dashboard.html#upgrade");
+  assert.match(res.body.answer, /\[Tambah kredit\]\(\/dashboard\.html#upgrade\)/);
+
+  config.midtransServerKey = "";
+  const off = await explain();
+  assert.equal(off.body.upgrade_url, undefined);
+  assert.doesNotMatch(off.body.answer, /Tambah kredit/);
+});

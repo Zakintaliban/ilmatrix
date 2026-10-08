@@ -310,6 +310,40 @@
                     </table>
                 </div>
             </div>
+
+            <!-- Payments (Midtrans) -->
+            <div class="mt-8 bg-white dark:bg-gray-800 rounded-lg shadow-md border border-gray-200 dark:border-gray-700">
+                <div class="p-6 border-b border-gray-200 dark:border-gray-700 flex flex-wrap gap-3 justify-between items-center">
+                    <h3 class="text-lg font-semibold text-gray-900 dark:text-white">Payments</h3>
+                    <label class="text-sm text-gray-600 dark:text-gray-300">Status
+                        <select id="payments-filter" class="ml-2 px-3 py-1.5 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
+                            <option value="">All</option>
+                            <option value="pending">Pending</option>
+                            <option value="paid">Paid</option>
+                            <option value="failed">Failed</option>
+                            <option value="expired">Expired</option>
+                            <option value="refunded">Refunded</option>
+                        </select>
+                    </label>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700 text-sm">
+                        <thead class="bg-gray-50 dark:bg-gray-900">
+                            <tr>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Order</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">User</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Product</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Amount</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Status</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Created</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Review</th>
+                                <th class="px-4 py-3"></th>
+                            </tr>
+                        </thead>
+                        <tbody id="payments-tbody" class="divide-y divide-gray-200 dark:divide-gray-700 text-gray-900 dark:text-white"></tbody>
+                    </table>
+                </div>
+            </div>
         </div>
     </main>
 
@@ -843,12 +877,80 @@
             }
         }
 
+        // Payments: built with DOM methods only (order ids and emails are data, not HTML)
+        async function loadPayments() {
+            const tbody = document.getElementById('payments-tbody');
+            const status = document.getElementById('payments-filter').value;
+            const cell = (text, className = 'px-4 py-2 whitespace-nowrap') => {
+                const td = document.createElement('td');
+                td.className = className;
+                td.textContent = text ?? '';
+                return td;
+            };
+            try {
+                const response = await fetch(`${API_BASE}/api/admin/payments?limit=100${status ? `&status=${status}` : ''}`, { credentials: 'include' });
+                if (!response.ok) throw new Error('Failed to load payments');
+                const { payments } = await response.json();
+                if (!payments.length) {
+                    const row = document.createElement('tr');
+                    row.append(cell('No payments yet', 'px-4 py-4 text-center text-gray-500'));
+                    row.firstChild.colSpan = 8;
+                    tbody.replaceChildren(row);
+                    return;
+                }
+                tbody.replaceChildren(...payments.map((p) => {
+                    const row = document.createElement('tr');
+                    row.append(
+                        cell(p.order_id, 'px-4 py-2 whitespace-nowrap font-mono text-xs'),
+                        cell(p.user_email || '(deleted account)'),
+                        cell(p.product),
+                        cell('Rp' + Number(p.amount_idr).toLocaleString('id-ID')),
+                        cell(p.status + (p.provider_status && p.provider_status !== p.status ? ` (${p.provider_status})` : '')),
+                        cell(new Date(p.created_at).toLocaleString('id-ID', { dateStyle: 'short', timeStyle: 'short' })),
+                        cell(p.review_note || '', 'px-4 py-2 text-xs text-red-600 dark:text-red-400 max-w-xs')
+                    );
+                    const actions = cell('');
+                    if (p.status === 'pending' || p.review_note) {
+                        const button = document.createElement('button');
+                        button.type = 'button';
+                        button.className = 'text-xs font-medium text-blue-600 dark:text-blue-400 underline';
+                        button.textContent = 'Re-check';
+                        button.addEventListener('click', () => resyncPayment(p.order_id, button));
+                        actions.append(button);
+                    }
+                    row.append(actions);
+                    return row;
+                }));
+            } catch (error) {
+                const row = document.createElement('tr');
+                row.append(cell(error.message, 'px-4 py-4 text-center text-red-600'));
+                row.firstChild.colSpan = 8;
+                tbody.replaceChildren(row);
+            }
+        }
+
+        async function resyncPayment(orderId, button) {
+            button.disabled = true;
+            button.textContent = 'Checking…';
+            try {
+                const response = await fetch(`${API_BASE}/api/admin/payments/${encodeURIComponent(orderId)}/sync`, { method: 'POST', credentials: 'include' });
+                const data = await response.json().catch(() => ({}));
+                if (!response.ok) throw new Error(data.error || 'Re-check failed');
+            } catch (error) {
+                alert(error.message);
+            }
+            await loadPayments();
+            await loadDashboard();
+        }
+
         // Initialize
         async function init() {
             const isAdmin = await checkAdminAuth();
             if (!isAdmin) return;
 
             await loadDashboard();
+            await loadPayments();
+            document.getElementById('payments-filter').addEventListener('change', loadPayments);
 
             document.getElementById('loading-state').classList.add('hidden');
             document.getElementById('content-container').classList.remove('hidden');
