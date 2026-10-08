@@ -8,7 +8,7 @@ export class MaterialController {
    */
   async getMaterial(c: Context) {
     try {
-      const materialId = c.req.param("id");
+      const materialId = c.req.param("id")!;
 
       if (!isValidMaterialId(materialId)) {
         return c.json({ error: "Invalid material ID" }, 400);
@@ -32,7 +32,7 @@ export class MaterialController {
    */
   async removeFileFromMaterial(c: Context) {
     try {
-      const materialId = c.req.param("id");
+      const materialId = c.req.param("id")!;
 
       if (!isValidMaterialId(materialId)) {
         return c.json({ error: "Invalid material ID" }, 400);
@@ -70,7 +70,7 @@ export class MaterialController {
    */
   async deleteMaterial(c: Context) {
     try {
-      const materialId = c.req.param("id");
+      const materialId = c.req.param("id")!;
 
       if (!isValidMaterialId(materialId)) {
         return c.json({ error: "Invalid material ID" }, 400);

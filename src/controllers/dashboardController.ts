@@ -110,7 +110,7 @@ export async function getChatMessages(c: Context) {
       return c.json({ error: 'Authentication required' }, 401);
     }
 
-    const sessionId = c.req.param('sessionId');
+    const sessionId = c.req.param('sessionId')!;
     const limit = parseInt(c.req.query('limit') || '50');
     const offset = parseInt(c.req.query('offset') || '0');
 
@@ -139,7 +139,7 @@ export async function addChatMessage(c: Context) {
       return c.json({ error: 'Authentication required' }, 401);
     }
 
-    const sessionId = c.req.param('sessionId');
+    const sessionId = c.req.param('sessionId')!;
     const { role, content, materialId, endpoint, tokensUsed } = await c.req.json();
 
     if (!role || !content) {
@@ -179,7 +179,7 @@ export async function updateChatSession(c: Context) {
       return c.json({ error: 'Authentication required' }, 401);
     }
 
-    const sessionId = c.req.param('sessionId');
+    const sessionId = c.req.param('sessionId')!;
     const updates = await c.req.json();
 
     const session = await chatHistoryService.updateSession(sessionId, userId, updates);
@@ -204,7 +204,7 @@ export async function deleteChatSession(c: Context) {
       return c.json({ error: 'Authentication required' }, 401);
     }
 
-    const sessionId = c.req.param('sessionId');
+    const sessionId = c.req.param('sessionId')!;
     const deleted = await chatHistoryService.deleteSession(sessionId, userId);
 
     if (!deleted) {
@@ -305,7 +305,7 @@ export async function updateSavedMaterial(c: Context) {
       return c.json({ error: 'Authentication required' }, 401);
     }
 
-    const materialId = c.req.param('materialId');
+    const materialId = c.req.param('materialId')!;
     const updates = await c.req.json();
 
     const material = await userMaterialService.updateUserMaterial(materialId, userId, updates);
@@ -330,7 +330,7 @@ export async function deleteSavedMaterial(c: Context) {
       return c.json({ error: 'Authentication required' }, 401);
     }
 
-    const materialId = c.req.param('materialId');
+    const materialId = c.req.param('materialId')!;
     const deleted = await userMaterialService.deleteUserMaterial(materialId, userId);
 
     if (!deleted) {
@@ -354,7 +354,7 @@ export async function recordMaterialAccess(c: Context) {
       return c.json({ error: 'Authentication required' }, 401);
     }
 
-    const materialId = c.req.param('materialId');
+    const materialId = c.req.param('materialId')!;
     await userMaterialService.recordMaterialAccess(materialId, userId);
 
     return c.json({ success: true });
@@ -392,7 +392,7 @@ export async function getMaterialsByTag(c: Context) {
       return c.json({ error: 'Authentication required' }, 401);
     }
 
-    const tag = c.req.param('tag');
+    const tag = c.req.param('tag')!;
     const materials = await userMaterialService.getMaterialsByTag(userId, tag);
 
     return c.json({ materials, tag });
@@ -412,7 +412,7 @@ export async function generateSessionTitle(c: Context) {
       return c.json({ error: 'Authentication required' }, 401);
     }
 
-    const sessionId = c.req.param('sessionId');
+    const sessionId = c.req.param('sessionId')!;
     const title = await chatHistoryService.generateSessionTitle(sessionId, userId);
 
     // Update the session with the generated title

@@ -26,22 +26,22 @@
   "license": "Apache-2.0",
   "description": "",
   "dependencies": {
-    "@hono/node-server": "^1.19.1",
+    "@hono/node-server": "^1.19.17",
     "bcryptjs": "^3.0.2",
     "dotenv": "^17.2.1",
-    "groq-sdk": "^0.34.0",
-    "hono": "^4.9.5",
+    "groq-sdk": "^1.6.0",
+    "hono": "^4.13.13",
     "jszip": "^3.10.1",
     "pdfjs-dist": "^5.4.149",
     "pg": "^8.16.3",
-    "resend": "^6.1.2"
+    "resend": "^6.1.2",
+    "tsx": "^4.20.6"
   },
   "devDependencies": {
     "@types/bcryptjs": "^2.4.6",
     "@types/node": "^24.3.0",
     "@types/pg": "^8.15.5",
     "nodemon": "^3.1.10",
-    "tsx": "^4.20.6",
     "typescript": "^5.9.2"
   },
   "engines": {
