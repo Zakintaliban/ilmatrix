@@ -18,6 +18,8 @@ export interface AppConfig {
   // Material Configuration
   materialClamp: number;
   materialTtlMinutes: number;
+  materialUserRetentionDays: number;
+  materialUserQuotaBytes: number;
 
   // Rate Limiting
   rateLimitMax: number;
@@ -140,7 +142,11 @@ export const config: AppConfig = {
 
   // Material Configuration
   materialClamp: Math.max(4000, getEnvNumber("MATERIAL_CLAMP", 100000)),
+  // Guest materials expire this long after last use
   materialTtlMinutes: Math.max(1, getEnvNumber("MATERIAL_TTL_MINUTES", 60)),
+  // Signed-in users' materials (Postgres) expire this long after last use; saved ones never do
+  materialUserRetentionDays: Math.max(1, getEnvNumber("MATERIAL_USER_RETENTION_DAYS", 180)),
+  materialUserQuotaBytes: Math.max(1, getEnvNumber("MATERIAL_USER_QUOTA_MB", 200)) * 1024 * 1024,
 
   // Rate Limiting
   rateLimitMax: Math.max(1, getEnvNumber("RATE_LIMIT_MAX", 120)),

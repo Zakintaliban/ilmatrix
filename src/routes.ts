@@ -124,12 +124,12 @@ api.post("/guest/chat/migrate", authMiddleware, guestChatController.migrateGuest
 // Upload endpoints (optional auth)
 api.post("/upload", optionalAuthMiddleware, (c) => uploadController.handleUpload(c));
 
-// Material management endpoints
-api.get("/material/:id", (c) => materialController.getMaterial(c));
-api.post("/material/:id/remove", (c) =>
+// Material management endpoints (optional auth: owned materials are only visible to their owner)
+api.get("/material/:id", optionalAuthMiddleware, (c) => materialController.getMaterial(c));
+api.post("/material/:id/remove", optionalAuthMiddleware, (c) =>
   materialController.removeFileFromMaterial(c)
 );
-api.delete("/material/:id", (c) => materialController.deleteMaterial(c));
+api.delete("/material/:id", optionalAuthMiddleware, (c) => materialController.deleteMaterial(c));
 
 // AI feature endpoints (with enhanced protection + token usage tracking)
 // Note: optionalAuthMiddleware is implicitly used via guestLimitMiddleware

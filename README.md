@@ -13,24 +13,36 @@ An AI study companion for university students with **multimodal AI capabilities*
 
 ### What's Stored
 
-- The app extracts text from uploaded files (PDF/DOCX/PPTX/Images/TXT) and stores only the extracted text as `uploads/<materialId>.txt`
+- The app extracts text from uploaded files (PDF/DOCX/PPTX/Images/TXT) and stores only the extracted text in the Postgres
+  `materials` table (or `uploads/<materialId>.txt` when no database is configured)
 - **Original files are never saved** - only the extracted text content
+- Signed-in users' materials are private to them; guest materials are reachable only by their (unguessable) ID.
+  A signed-in user who uses a guest upload (e.g. right after logging in) takes ownership of it
 
 ### Size Limits
 
 - **10 MB total** per material (enforced at upload/append)
 - Individual file size limits handled by extraction services
 
-### Auto-Delete (TTL)
+### Retention
 
-- Background cleaner deletes material files older than `MATERIAL_TTL_MINUTES` (default: 60 minutes)
-- Runs at intervals with proper resource management (`unref()` timers for graceful shutdown)
-- Implemented in [backgroundTaskService](src/services/backgroundTaskService.ts)
+| Material | Kept for | Setting |
+|---|---|---|
+| Guest upload | 60 minutes after last use | `MATERIAL_TTL_MINUTES` |
+| Signed-in upload | 180 days after last use | `MATERIAL_USER_RETENTION_DAYS` |
+| Saved to the library | until the user deletes it (or their account) | — |
 
-### PaaS Deployment
+- Signed-in users can store up to `MATERIAL_USER_QUOTA_MB` (default 200 MB) of extracted text
+- A background cleaner deletes expired materials ([backgroundTaskService](src/services/backgroundTaskService.ts)); deleting
+  an account deletes its materials
 
-- On platforms with ephemeral disks, data may vanish on redeploy
-- Use persistent volume/path for durability, or rely on TTL cleaner to prevent storage growth) and get help:
+### Deployment
+
+- Run `npm run migrate run` after deploying so the `materials` table exists (PostgreSQL 12+). Until then the app logs a
+  warning and falls back to local files, which do not survive a redeploy
+- Without a database (local development), materials use `uploads/<id>.txt` files with the guest TTL
+
+Students upload their materials and get help:
   - **Explain** material (concise + short citations)
   - **MCQ Quiz** (generate, answer with simple "1 a" format, deterministic grading, per-question feedback for wrong answers only)
   - **Flashcards** (auto‑generated flip cards from your materials)
@@ -81,6 +93,7 @@ Run tests:
 npm test              # Full test suite (services + AI tools + integration)
 npm run test:services # Service layer only (fast, no API calls)
 npm run test:ai       # AI layer + every study tool endpoint, with a fake Groq client
+npm run test:db       # Postgres material storage (needs TEST_DATABASE_URL to a disposable database; skipped otherwise)
 npm run test:smoke    # Integration tests (API endpoints)
 npm run groq:check    # Live check of every study tool against the real Groq API (needs GROQ_API_KEY)
 ```
@@ -92,6 +105,7 @@ Test files:
 
 - `tests/services/` - Service layer unit tests
 - `tests/ai/` - AI provider unit tests and the study-tool regression suite
+- `tests/db/` - Tests against a real Postgres (`TEST_DATABASE_URL=postgresql://... npm run test:db`; the database is migrated and receives test rows)
 - `tests/smoke.test.ts` - API integration tests
 
 ## Development & Troubleshooting
@@ -174,7 +188,10 @@ Server (default): <http://localhost:8787>
 - GROQ_STRUCTURED_OUTPUTS: Use strict JSON-schema outputs for quiz/flashcard/dialogue tools (default `true`). Rejected schemas automatically fall back to JSON mode.
 - PORT: Server port (default: 8787)
 - MATERIAL_CLAMP: Max characters of materials included per request (default 100000). Increase for better recall (higher cost), decrease to save tokens.
-- MATERIAL_TTL_MINUTES: Minutes to keep uploaded materials before auto-deletion (default 60). A background cleaner periodically removes old .txt material files from the uploads folder. See [src/routes.ts](src/routes.ts:735).
+- MATERIAL_TTL_MINUTES: Minutes to keep guest materials after their last use (default 60). Also the TTL of file-based storage when no database is configured.
+- MATERIAL_USER_RETENTION_DAYS: Days to keep signed-in users' materials after their last use (default 180). Materials saved to the library are kept until deleted.
+- MATERIAL_USER_QUOTA_MB: Maximum extracted text stored per signed-in user (default 200).
+- DATABASE_SSL: `true`/`false` to override database SSL (default: on when NODE_ENV=production). Note that npm runs every script with NODE_ENV=production because `.npmrc` sets `omit=dev`, so set `DATABASE_SSL=false` for a local Postgres without SSL.
 - RATE_LIMIT_MAX: Requests per minute per IP (default 120). Lightweight token bucket applied to all /api routes. See [middleware](src/routes.ts:70).
 - PDF_MAX_PAGES: Max PDF pages extracted per file (default 200). See [extractPdfTextImpl()](src/extract/pdf.ts:50).
 - GROQ_CONCURRENCY: Concurrent LLM requests per process, including image OCR (default 4). See [groqProvider](src/services/groqProvider.ts).
@@ -184,13 +201,13 @@ Server (default): <http://localhost:8787>
 ## Storage & retention
 
 - What’s stored:
-  - The app extracts text from your uploaded files (PDF/DOCX/PPTX/Images/TXT) and stores only the extracted text as uploads/&lt;materialId&gt;.txt. Originals are not saved.
+  - The app extracts text from your uploaded files (PDF/DOCX/PPTX/Images/TXT) and stores only the extracted text in Postgres (`materials` table). Originals are not saved.
 - Size limits:
-  - 10 MB total per material (enforced at upload/append).
-- Auto delete (TTL):
-  - A background cleaner deletes material .txt files older than MATERIAL_TTL_MINUTES (default 60). This runs at intervals and is designed to be resilient. Implemented in [src/routes.ts](src/routes.ts).
-- Persistence on PaaS:
-  - If you deploy to platforms with ephemeral disks, data may vanish on redeploy. Use a persistent volume/path if you need durability, or rely on the default TTL cleaner to avoid storage growth.
+  - 10 MB of extracted text per upload; `MATERIAL_USER_QUOTA_MB` (default 200) per signed-in user.
+- Retention:
+  - Guest materials: `MATERIAL_TTL_MINUTES` after last use. Signed-in: `MATERIAL_USER_RETENTION_DAYS` after last use. Saved to the library: until deleted. See the retention table at the top of this README.
+- Without a database:
+  - Materials fall back to `uploads/<materialId>.txt` files with the guest TTL; on platforms with ephemeral disks they vanish on redeploy.
 
 ## Security & accessibility
 

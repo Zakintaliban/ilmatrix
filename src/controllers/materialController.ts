@@ -2,6 +2,11 @@ import type { Context } from "hono";
 import { materialService } from "../services/materialService.js";
 import { isValidMaterialId } from "../utils/security.js";
 
+/** Signed-in user making the request (owned materials are only visible to their owner). */
+function requestUserId(c: Context): string | null {
+  return c.get("user")?.id ?? null;
+}
+
 export class MaterialController {
   /**
    * Get material information and file list
@@ -14,7 +19,7 @@ export class MaterialController {
         return c.json({ error: "Invalid material ID" }, 400);
       }
 
-      const materialInfo = await materialService.getMaterialInfo(materialId);
+      const materialInfo = await materialService.getMaterialInfo(materialId, requestUserId(c));
       return c.json(materialInfo);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -47,7 +52,8 @@ export class MaterialController {
 
       const result = await materialService.removeFileFromMaterial(
         materialId,
-        fileName
+        fileName,
+        requestUserId(c)
       );
 
       return c.json({
@@ -76,7 +82,7 @@ export class MaterialController {
         return c.json({ error: "Invalid material ID" }, 400);
       }
 
-      await materialService.deleteMaterial(materialId);
+      await materialService.deleteMaterial(materialId, requestUserId(c));
 
       return c.json({
         success: true,

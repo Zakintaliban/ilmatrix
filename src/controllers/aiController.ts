@@ -32,6 +32,11 @@ export function sanitizeChatMessages(raw: unknown[]): ChatMessage[] {
   return messages;
 }
 
+/** Signed-in user making the request (owned materials are only readable by their owner). */
+function requestUserId(c: Context): string | null {
+  return c.get("user")?.id ?? null;
+}
+
 function clampInt(value: unknown, fallback: number, min: number, max: number): number {
   const n = Math.floor(Number(value));
   return Number.isFinite(n) ? Math.min(Math.max(min, n), max) : fallback;
@@ -55,7 +60,8 @@ export class AIController {
 
       const material = await materialService.readMaterial(
         materialId,
-        materialText
+        materialText,
+        requestUserId(c)
       );
 
       if (!material.trim()) {
@@ -113,7 +119,7 @@ export class AIController {
 
       const material =
         materialId || materialText
-          ? await materialService.readMaterial(materialId, materialText)
+          ? await materialService.readMaterial(materialId, materialText, requestUserId(c))
           : "";
 
       const { result: answer, usage: tokenUsage, model } = await groqService.track(() =>
@@ -161,7 +167,8 @@ export class AIController {
 
       const material = await materialService.readMaterial(
         materialId,
-        materialText
+        materialText,
+        requestUserId(c)
       );
 
       if (!material.trim()) {
@@ -238,7 +245,8 @@ export class AIController {
 
       const material = await materialService.readMaterial(
         materialId,
-        materialText
+        materialText,
+        requestUserId(c)
       );
 
       if (!material.trim()) {
@@ -283,7 +291,7 @@ export class AIController {
       if (!materialId && !materialText) {
         return c.json({ error: "materialId or materialText is required" }, 400);
       }
-      const text = await materialService.readMaterial(materialId, materialText);
+      const text = await materialService.readMaterial(materialId, materialText, requestUserId(c));
 
       const { result, usage: tokenUsage, model } = await groqService.track(() =>
         groqService.dialogueStart({ materialText: text })
@@ -335,7 +343,7 @@ export class AIController {
         return c.json({ error: "userMessage is required" }, 400);
       }
 
-      const text = await materialService.readMaterial(materialId, materialText);
+      const text = await materialService.readMaterial(materialId, materialText, requestUserId(c));
 
       // Special checkpoint: "How am I doing?"
       const isHowAmIDoing =
@@ -441,7 +449,7 @@ export class AIController {
         return c.json({ error: "currentTopicTitle is required" }, 400);
       }
 
-      const text = await materialService.readMaterial(materialId, materialText);
+      const text = await materialService.readMaterial(materialId, materialText, requestUserId(c));
 
       const { result, usage: tokenUsage, model } = await groqService.track(() =>
         groqService.dialogueHint({
@@ -486,7 +494,7 @@ export class AIController {
         return c.json({ error: "topics array is required" }, 400);
       }
 
-      const text = await materialService.readMaterial(materialId, materialText);
+      const text = await materialService.readMaterial(materialId, materialText, requestUserId(c));
 
       const { result, usage: tokenUsage, model } = await groqService.track(() =>
         groqService.dialogueFeedback({

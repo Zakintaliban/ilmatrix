@@ -2,6 +2,7 @@ import type { Context } from "hono";
 import { materialService } from "../services/materialService.js";
 import { extractionService } from "../services/extractionService.js";
 import { validateContentLength } from "../utils/security.js";
+import { MaterialQuotaError } from "../services/materialStore.js";
 import config from "../config/env.js";
 
 export class UploadController {
@@ -42,6 +43,7 @@ export class UploadController {
 
       // Extract text from all files
       const extractionResult = await extractionService.extractFromFiles(files);
+      const userId: string | null = c.get("user")?.id ?? null;
 
       // Handle material creation or appending
       let materialId: string;
@@ -51,26 +53,30 @@ export class UploadController {
         try {
           await materialService.appendToMaterial(
             targetId,
-            extractionResult.combinedContent
+            extractionResult.combinedContent,
+            userId
           );
           materialId = targetId;
           wasAppended = true;
         } catch (error) {
+          if (error instanceof MaterialQuotaError) throw error;
           // If append fails, create new material
           materialId = await materialService.createMaterial(
-            extractionResult.combinedContent
+            extractionResult.combinedContent,
+            userId
           );
           wasAppended = false;
         }
       } else {
         materialId = await materialService.createMaterial(
-          extractionResult.combinedContent
+          extractionResult.combinedContent,
+          userId
         );
         wasAppended = false;
       }
 
       // Get final material info
-      const materialInfo = await materialService.getMaterialInfo(materialId);
+      const materialInfo = await materialService.getMaterialInfo(materialId, userId);
 
       return c.json({
         materialId,
@@ -87,7 +93,7 @@ export class UploadController {
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      return c.json({ error: message }, 400);
+      return c.json({ error: message }, error instanceof MaterialQuotaError ? 413 : 400);
     }
   }
 

@@ -1,6 +1,7 @@
 import { Context } from 'hono';
 import * as chatHistoryService from '../services/chatHistoryService.js';
 import * as userMaterialService from '../services/userMaterialService.js';
+import { MaterialNotFoundError } from '../services/materialStore.js';
 
 // Helper function to get user ID from context
 function getUserId(c: Context): string | null {
@@ -292,6 +293,9 @@ export async function saveMaterial(c: Context) {
     return c.json({ material: savedMaterial });
   } catch (error) {
     console.error('Save material error:', error);
+    if (error instanceof MaterialNotFoundError) {
+      return c.json({ error: 'Material not found' }, 404);
+    }
     return c.json({ error: 'Failed to save material' }, 500);
   }
 }
