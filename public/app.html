@@ -6,7 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob:; connect-src 'self' https://cdn.jsdelivr.net; font-src 'self' data: https://fonts.gstatic.com; object-src 'none'; base-uri 'self'"
+      content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://cdn.jsdelivr.net https://challenges.cloudflare.com; frame-src https://challenges.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob:; connect-src 'self' https://cdn.jsdelivr.net; font-src 'self' data: https://fonts.gstatic.com; object-src 'none'; base-uri 'self'"
     />
     <title>ILMATRIX — App</title>
 
@@ -141,6 +141,8 @@
     <!-- Markdown renderer + sanitizer -->
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js"></script>
+    <!-- Guest bot check (Turnstile); retries /api calls after verification -->
+    <script src="/js/guest-verify.js"></script>
 
     <style>
       * {
@@ -5609,7 +5611,7 @@
                 </svg>
               </div>
               <h3 class="text-lg font-bold mb-2">Trial Limit Reached! 🚀</h3>
-              <p class="mb-4">You've used all 5 free AI features. Create a free account to continue using ILMATRIX!</p>
+              <p class="mb-4">${escapeHtml(errorData.error || "You've used all 5 free AI features. Create a free account to continue using ILMATRIX!")}</p>
               <div class="space-y-2">
                 <a href="/login" class="inline-block bg-white text-red-600 font-bold py-2 px-6 rounded-lg hover:bg-gray-100 transition-colors">
                   Login / Sign Up
@@ -5637,7 +5639,7 @@
                 </svg>
               </div>
               <h2 class="text-xl font-bold text-gray-900 dark:text-white mb-2">Trial Limit Reached!</h2>
-              <p class="text-gray-600 dark:text-gray-300 mb-6">${errorData.error || 'You\'ve used all 5 free AI features. Create a free account to continue!'}</p>
+              <p class="text-gray-600 dark:text-gray-300 mb-6">${escapeHtml(errorData.error || 'You\'ve used all 5 free AI features. Create a free account to continue!')}</p>
             </div>
             
             <div class="space-y-3">
