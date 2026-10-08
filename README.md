@@ -148,7 +148,7 @@ client and cannot detect a model being retired or rejecting a parameter.
 Test files:
 
 - `tests/services/` - Service layer unit tests
-- `tests/ai/` - AI provider unit tests, the study-tool regression suite and guest protection (Turnstile, IP caps, client IP)
+- `tests/ai/` - AI provider unit tests, the study-tool regression suite, guest protection (Turnstile, IP caps, client IP) and the AI rate limiter
 - `tests/db/` - Tests against a real Postgres (`TEST_DATABASE_URL=postgresql://... npm run test:db`; the database is migrated and receives test rows)
 - `tests/smoke.test.ts` - API integration tests
 
@@ -238,6 +238,8 @@ Server (default): <http://localhost:8787>
 - KREDIT_FREE_WEEKLY: Weekly kredit on the free plan (default 150). Paid plans and products are defined in [src/config/plans.ts](src/config/plans.ts).
 - DATABASE_SSL: `true`/`false` to override database SSL (default: on when NODE_ENV=production). Note that npm runs every script with NODE_ENV=production because `.npmrc` sets `omit=dev`, so set `DATABASE_SSL=false` for a local Postgres without SSL.
 - RATE_LIMIT_MAX: Requests per minute per IP (default 120). Lightweight token bucket applied to all /api routes. See [middleware](src/routes.ts:70).
+- AI_RATE_LIMIT_PER_MINUTE / AI_RATE_LIMIT_PER_HOUR: AI requests per user (guests: per device) in sliding 1-minute and 1-hour windows (defaults 12 and 150). See [aiRateLimit](src/middleware/aiRateLimit.ts).
+- AI_MAX_CONCURRENT: AI requests one user/device may have in flight (default 2); more get an immediate `429` instead of queueing for the shared Groq slots.
 - PDF_MAX_PAGES: Max PDF pages extracted per file (default 200). See [extractPdfTextImpl()](src/extract/pdf.ts:50).
 - GROQ_CONCURRENCY: Concurrent LLM requests per process, including image OCR (default 4). See [groqProvider](src/services/groqProvider.ts).
 - GROQ_TIMEOUT_MS: Per-request LLM timeout in ms, enforced by the Groq SDK (default 45000). See [groqProvider](src/services/groqProvider.ts).
@@ -263,6 +265,7 @@ Server (default): <http://localhost:8787>
 - Security hardening:
   - Path traversal protection for materials I/O; only UUID v4-like ids are accepted and paths are validated inside uploads/ (see [security utils](src/utils/security.ts)).
   - Global per-IP rate limiting (default 120 req/min) via a lightweight token bucket (see [rate limit middleware](src/middleware/rateLimit.ts)). Tune with RATE_LIMIT_MAX.
+  - AI rate limiting per user or guest device on every AI endpoint: 12/min and 150/hour (sliding windows), at most 2 in flight. Rejected requests return `429` with `code: "AI_RATE_LIMITED"` or `"AI_CONCURRENCY_LIMIT"`, a message in `error`/`answer` and `Retry-After`; they are not charged kredit and do not use a guest trial (see [aiRateLimit](src/middleware/aiRateLimit.ts)). In memory, per instance.
   - CSP applied to static pages to restrict sources (see [app](public/app.html), [index](public/index.html), [about](public/about.html)). The app page also allows `https://challenges.cloudflare.com` (script + frame) for Turnstile.
   - Guest bot protection: Turnstile device verification and per-IP daily caps (see [Guest access & bot protection](#guest-access--bot-protection)).
   - Best-effort Content-Length guard on uploads to quickly reject oversized requests (see [upload controller](src/controllers/uploadController.ts)).
