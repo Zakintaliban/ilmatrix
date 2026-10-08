@@ -317,3 +317,28 @@ test("admin dashboard and CSV export report kredit, with safe CSV quoting", { sk
   const line = String(csv.body.__raw).split("\n").find((l) => l.includes(u.id))!;
   assert.ok(line.includes(`"'=HYPERLINK(""http://evil""), ""Budi"""`), line);
 });
+
+test("the AI rate limit counts per account: a new device cookie does not reset it", { skip }, async () => {
+  const config = (await import("../../src/config/env.js")).default;
+  const { aiRateLimiter } = await import("../../src/middleware/aiRateLimit.js");
+  const saved = config.aiRateLimitPerMinute;
+  config.aiRateLimitPerMinute = 2;
+  try {
+    const u = await createUser();
+    const withDevice = () => `${u.cookie}; device_id=${randomUUID()}`;
+    assert.equal((await explain(withDevice())).status, 200);
+    assert.equal((await explain(withDevice())).status, 200);
+
+    const limited = await explain(withDevice());
+    assert.equal(limited.status, 429);
+    assert.equal(limited.body.code, "AI_RATE_LIMITED");
+    assert.equal((await userRow(u.id)).weekly, Number((2 * CHARGE).toFixed(2)), "the rejected request is not charged");
+
+    // Same IP, different account: unaffected
+    const other = await createUser();
+    assert.equal((await explain(other.cookie)).status, 200);
+  } finally {
+    config.aiRateLimitPerMinute = saved;
+    aiRateLimiter.reset();
+  }
+});

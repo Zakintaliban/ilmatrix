@@ -10,6 +10,7 @@ import config from "../../src/config/env.js";
 import { groqService } from "../../src/services/groqService.js";
 import { GroqProvider } from "../../src/services/groqProvider.js";
 import { guestIpLimiter } from "../../src/services/guestIpLimiter.js";
+import { aiRateLimiter } from "../../src/middleware/aiRateLimit.js";
 import { setTurnstileVerifier, type TurnstileVerifier } from "../../src/services/turnstileService.js";
 import { getClientIp } from "../../src/utils/security.js";
 import { completion, createFakeGroq, TEST_PROVIDER_CONFIG } from "./fakeGroq.js";
@@ -45,6 +46,7 @@ beforeEach(() => {
   verifierCalls = [];
   setTurnstileVerifier(fakeVerifier);
   guestIpLimiter.reset();
+  aiRateLimiter.reset();
   Object.assign(config, saved, { clientIpHeader: "x-real-ip" });
 });
 

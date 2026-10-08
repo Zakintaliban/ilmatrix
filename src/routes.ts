@@ -138,27 +138,27 @@ api.post("/material/:id/remove", optionalAuthMiddleware, (c) =>
 );
 api.delete("/material/:id", optionalAuthMiddleware, (c) => materialController.deleteMaterial(c));
 
-// AI feature endpoints (with enhanced protection + token usage tracking)
-// Note: optionalAuthMiddleware is implicitly used via guestLimitMiddleware
-// tokenUsageMiddleware runs after auth check and only applies to registered users
-api.post("/explain", optionalAuthMiddleware, tokenUsageMiddleware, guestLimitMiddleware, aiRateLimitMiddleware, abuseDetectionMiddleware, (c) => aiController.handleAIRequest(c, "explain"));
-api.post("/quiz", optionalAuthMiddleware, tokenUsageMiddleware, guestLimitMiddleware, aiRateLimitMiddleware, abuseDetectionMiddleware, (c) => aiController.handleAIRequest(c, "quiz"));
-api.post("/forum", optionalAuthMiddleware, tokenUsageMiddleware, guestLimitMiddleware, aiRateLimitMiddleware, abuseDetectionMiddleware, (c) => aiController.handleAIRequest(c, "forum"));
-api.post("/exam", optionalAuthMiddleware, tokenUsageMiddleware, guestLimitMiddleware, aiRateLimitMiddleware, abuseDetectionMiddleware, (c) => aiController.handleAIRequest(c, "exam"));
-api.post("/chat", optionalAuthMiddleware, tokenUsageMiddleware, guestLimitMiddleware, aiRateLimitMiddleware, abuseDetectionMiddleware, (c) => aiController.handleChat(c));
+// AI feature endpoints. Order matters: auth → kredit check (signed-in users) →
+// AI rate limit (per user/device, before the guest limit so a rejected request
+// doesn't use up a guest's trial) → guest limit → handler
+api.post("/explain", optionalAuthMiddleware, tokenUsageMiddleware, aiRateLimitMiddleware, guestLimitMiddleware, abuseDetectionMiddleware, (c) => aiController.handleAIRequest(c, "explain"));
+api.post("/quiz", optionalAuthMiddleware, tokenUsageMiddleware, aiRateLimitMiddleware, guestLimitMiddleware, abuseDetectionMiddleware, (c) => aiController.handleAIRequest(c, "quiz"));
+api.post("/forum", optionalAuthMiddleware, tokenUsageMiddleware, aiRateLimitMiddleware, guestLimitMiddleware, abuseDetectionMiddleware, (c) => aiController.handleAIRequest(c, "forum"));
+api.post("/exam", optionalAuthMiddleware, tokenUsageMiddleware, aiRateLimitMiddleware, guestLimitMiddleware, abuseDetectionMiddleware, (c) => aiController.handleAIRequest(c, "exam"));
+api.post("/chat", optionalAuthMiddleware, tokenUsageMiddleware, aiRateLimitMiddleware, guestLimitMiddleware, abuseDetectionMiddleware, (c) => aiController.handleChat(c));
 
 // MCQ trainer endpoints (with enhanced protection + token usage tracking)
-api.post("/quiz/trainer/mcq/start", optionalAuthMiddleware, tokenUsageMiddleware, guestLimitMiddleware, aiRateLimitMiddleware, abuseDetectionMiddleware, (c) => aiController.generateMCQ(c));
+api.post("/quiz/trainer/mcq/start", optionalAuthMiddleware, tokenUsageMiddleware, aiRateLimitMiddleware, guestLimitMiddleware, abuseDetectionMiddleware, (c) => aiController.generateMCQ(c));
 api.post("/quiz/trainer/mcq/score", (c) => aiController.scoreMCQ(c)); // No limit for scoring
 
-// Flashcards endpoint (with guest usage limits + token usage tracking)
-api.post("/flashcards", optionalAuthMiddleware, tokenUsageMiddleware, guestLimitMiddleware, (c) => aiController.generateFlashcards(c));
+// Flashcards endpoint (AI rate limit, guest limit, kredit)
+api.post("/flashcards", optionalAuthMiddleware, tokenUsageMiddleware, aiRateLimitMiddleware, guestLimitMiddleware, (c) => aiController.generateFlashcards(c));
 
-// Dialogue endpoints (with guest usage limits + token usage tracking)
-api.post("/dialogue/start", optionalAuthMiddleware, tokenUsageMiddleware, guestLimitMiddleware, (c) => aiController.startDialogue(c));
-api.post("/dialogue/step", optionalAuthMiddleware, tokenUsageMiddleware, guestLimitMiddleware, (c) => aiController.stepDialogue(c));
-api.post("/dialogue/hint", optionalAuthMiddleware, tokenUsageMiddleware, guestLimitMiddleware, (c) => aiController.hintDialogue(c));
-api.post("/dialogue/feedback", optionalAuthMiddleware, tokenUsageMiddleware, guestLimitMiddleware, (c) => aiController.feedbackDialogue(c));
+// Dialogue endpoints (AI rate limit, guest limit, kredit)
+api.post("/dialogue/start", optionalAuthMiddleware, tokenUsageMiddleware, aiRateLimitMiddleware, guestLimitMiddleware, (c) => aiController.startDialogue(c));
+api.post("/dialogue/step", optionalAuthMiddleware, tokenUsageMiddleware, aiRateLimitMiddleware, guestLimitMiddleware, (c) => aiController.stepDialogue(c));
+api.post("/dialogue/hint", optionalAuthMiddleware, tokenUsageMiddleware, aiRateLimitMiddleware, guestLimitMiddleware, (c) => aiController.hintDialogue(c));
+api.post("/dialogue/feedback", optionalAuthMiddleware, tokenUsageMiddleware, aiRateLimitMiddleware, guestLimitMiddleware, (c) => aiController.feedbackDialogue(c));
 
 // Admin/debug endpoints
 api.post("/admin/cleanup", authMiddleware, usageController.requireAdmin, async (c) => {

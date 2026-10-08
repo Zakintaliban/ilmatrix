@@ -17,6 +17,12 @@ import api, { stopBackgroundTasks } from "../../src/routes.js";
 import { groqService } from "../../src/services/groqService.js";
 import { GroqProvider } from "../../src/services/groqProvider.js";
 import { apiError, completion, createFakeGroq, TEST_PROVIDER_CONFIG, type FakeHandler } from "./fakeGroq.js";
+import config from "../../src/config/env.js";
+import { aiRateLimiter } from "../../src/middleware/aiRateLimit.js";
+
+// Every request here comes from one client; the AI rate limit has its own suite (aiRateLimit.test.ts)
+config.aiRateLimitPerMinute = 10_000;
+config.aiRateLimitPerHour = 10_000;
 
 const TOPICS = [
   { id: 1, title: "Definisi fotosintesis" },
@@ -61,7 +67,10 @@ function useGroq(handler: FakeHandler) {
   (groqService as any).provider = new GroqProvider({ client: fake.client, config: TEST_PROVIDER_CONFIG });
 }
 
-beforeEach(() => useGroq(defaultHandler));
+beforeEach(() => {
+  useGroq(defaultHandler);
+  aiRateLimiter.reset();
+});
 
 after(() => {
   stopBackgroundTasks();

@@ -37,6 +37,11 @@ export interface AppConfig {
   rateLimitMax: number;
   rateLimitWindowMs: number;
 
+  // AI endpoints, per user (guests: per device, or per IP without a device cookie)
+  aiRateLimitPerMinute: number;
+  aiRateLimitPerHour: number;
+  aiMaxConcurrent: number;
+
   // Client IP & guest abuse protection
   clientIpHeader: ClientIpHeader;
   turnstileSiteKey: string;
@@ -170,6 +175,12 @@ export const config: AppConfig = {
   // Rate Limiting
   rateLimitMax: Math.max(1, getEnvNumber("RATE_LIMIT_MAX", 120)),
   rateLimitWindowMs: 60_000, // 1 minute
+
+  // AI endpoints: sliding-window caps and requests in flight per user/guest device.
+  // Kredit bounds spend; these keep one client from flooding the shared Groq queue.
+  aiRateLimitPerMinute: Math.max(1, getEnvNumber("AI_RATE_LIMIT_PER_MINUTE", 12)),
+  aiRateLimitPerHour: Math.max(1, getEnvNumber("AI_RATE_LIMIT_PER_HOUR", 150)),
+  aiMaxConcurrent: Math.max(1, getEnvNumber("AI_MAX_CONCURRENT", 2)),
 
   // Client IP & guest abuse protection
   // Railway's edge overwrites X-Real-IP; behind Cloudflare's proxy use cf-connecting-ip
