@@ -67,6 +67,7 @@ class IlmatrixServer {
       "/profile",
       "/verify-email",
       "/email-verified",
+      "/payment",
     ];
 
     cleanUrls.forEach((path) => {

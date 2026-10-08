@@ -178,38 +178,43 @@ export async function chargeKredit(userId: string, kredit: number, tokens = 0): 
 /** Add kredit outside the weekly allowance (pass, top-up or admin grant). */
 export async function grantKredit(
   userId: string,
-  grant: { source: string; kredit: number; validDays: number | null; reference?: string }
+  grant: { source: string; kredit: number; validDays: number | null; reference?: string },
+  db: Db = { query }
 ): Promise<void> {
   if (!(grant.kredit > 0)) throw new Error("Kredit must be positive");
-  await query(
+  await db.query(
     `INSERT INTO kredit_grants (user_id, source, kredit_total, expires_at, reference)
      VALUES ($1, $2, $3, CASE WHEN $4::int IS NULL THEN NULL ELSE NOW() + make_interval(days => $4::int) END, $5)`,
     [userId, grant.source, round2(grant.kredit), grant.validDays, grant.reference || null]
   );
 }
 
-/** Grant a catalogue product (e.g. after a payment). */
-export async function grantProduct(userId: string, code: KreditProductCode, reference?: string): Promise<void> {
+/** Grant a catalogue product (e.g. after a payment). Pass `db` to run inside a transaction. */
+export async function grantProduct(userId: string, code: KreditProductCode, reference?: string, db: Db = { query }): Promise<void> {
   const product = KREDIT_PRODUCTS[code];
-  await grantKredit(userId, {
-    source: code,
-    kredit: product.kredit,
-    validDays: product.validDays,
-    reference,
-  });
+  await grantKredit(
+    userId,
+    {
+      source: code,
+      kredit: product.kredit,
+      validDays: product.validDays,
+      reference,
+    },
+    db
+  );
 }
 
 /**
  * Put a user on a plan. Paid plans run for `days` (default: the plan's
  * duration), extending an active period of the same plan.
  */
-export async function setPlan(userId: string, plan: PlanCode, days?: number): Promise<void> {
+export async function setPlan(userId: string, plan: PlanCode, days?: number, db: Db = { query }): Promise<void> {
   if (plan === "free") {
-    await query(`UPDATE users SET plan = 'free', plan_expires_at = NULL, updated_at = NOW() WHERE id = $1`, [userId]);
+    await db.query(`UPDATE users SET plan = 'free', plan_expires_at = NULL, updated_at = NOW() WHERE id = $1`, [userId]);
     return;
   }
   const duration = days ?? PLANS[plan].durationDays ?? 30;
-  await query(
+  await db.query(
     `UPDATE users
      SET plan_expires_at = CASE
            WHEN plan = $2 AND plan_expires_at > NOW() THEN plan_expires_at

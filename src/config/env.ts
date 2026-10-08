@@ -75,6 +75,14 @@ export interface AppConfig {
   googleClientSecret?: string;
   googleRedirectUri: string;
 
+  // Payments (Midtrans Snap)
+  midtransServerKey: string;
+  midtransIsProduction: boolean;
+  /** Snap payment methods to offer (empty = everything active on the merchant account). */
+  midtransEnabledPayments: string[];
+  /** Webhook URL sent per transaction (X-Override-Notification); empty = the dashboard setting. */
+  midtransNotificationUrl: string;
+
   // Environment Detection
   isNetlify: boolean;
   isDevelopment: boolean;
@@ -220,6 +228,19 @@ export const config: AppConfig = {
   googleClientSecret: process.env.GOOGLE_CLIENT_SECRET,
   googleRedirectUri: process.env.GOOGLE_REDIRECT_URI || `${process.env.BASE_URL || "http://localhost:8787"}/api/auth/google/callback`,
 
+  // Payments (Midtrans Snap). Disabled until MIDTRANS_SERVER_KEY is set.
+  midtransServerKey: getEnvString("MIDTRANS_SERVER_KEY", "").trim(),
+  midtransIsProduction: getEnvBoolean("MIDTRANS_IS_PRODUCTION", false),
+  midtransEnabledPayments: getEnvString("MIDTRANS_ENABLED_PAYMENTS", "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean),
+  // Default: our webhook, but only for a public HTTPS BASE_URL (Midtrans can't reach localhost)
+  midtransNotificationUrl: getEnvString(
+    "MIDTRANS_NOTIFICATION_URL",
+    /^https:\/\//.test(process.env.BASE_URL || "") ? `${process.env.BASE_URL}/api/payments/midtrans/notification` : ""
+  ).trim(),
+
   // Environment Detection
   isNetlify: !!process.env.NETLIFY,
   isDevelopment: process.env.NODE_ENV === "development",
@@ -236,6 +257,14 @@ if (!config.groqApiKey && config.isProduction) {
 if (config.isProduction && !(config.turnstileSiteKey && config.turnstileSecretKey)) {
   console.warn(
     "Warning: TURNSTILE_SITE_KEY/TURNSTILE_SECRET_KEY are not set. Guest AI is protected only by per-IP caps."
+  );
+}
+
+// Sandbox server keys start with "SB-"; a mismatch means payments hit the wrong Midtrans environment
+if (config.midtransServerKey && config.midtransServerKey.startsWith("SB-") === config.midtransIsProduction) {
+  console.warn(
+    `Warning: MIDTRANS_IS_PRODUCTION=${config.midtransIsProduction} but MIDTRANS_SERVER_KEY looks like a ` +
+      `${config.midtransServerKey.startsWith("SB-") ? "sandbox" : "production"} key.`
   );
 }
 

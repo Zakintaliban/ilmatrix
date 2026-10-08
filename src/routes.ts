@@ -32,6 +32,7 @@ import * as guestChatController from "./controllers/guestChatController.js";
 import * as usageController from "./controllers/usageController.js";
 import * as securityController from "./controllers/securityController.js";
 import * as guestVerifyController from "./controllers/guestVerifyController.js";
+import * as paymentController from "./controllers/paymentController.js";
 
 const api = new Hono();
 
@@ -125,6 +126,15 @@ api.get("/security/suspicious", authMiddleware, usageController.requireAdmin, se
 api.get("/security/device/:deviceId", authMiddleware, usageController.requireAdmin, securityController.getDeviceSuspiciousActivities);
 api.get("/security/pattern/:pattern", authMiddleware, usageController.requireAdmin, securityController.getPatternReport);
 api.get("/admin/client-ip", authMiddleware, usageController.requireAdmin, guestVerifyController.getClientIpInfo);
+
+// Payments (Midtrans Snap). The webhook has no session: it is verified by signature + Get Status
+api.get("/payments/products", paymentController.getProducts);
+api.post("/payments/midtrans/notification", paymentController.midtransNotification);
+api.post("/payments/checkout", authMiddleware, paymentController.checkout);
+api.get("/payments", authMiddleware, paymentController.listMyPayments);
+api.get("/payments/:orderId", authMiddleware, paymentController.getPaymentStatus);
+api.get("/admin/payments", authMiddleware, usageController.requireAdmin, paymentController.adminListPayments);
+api.post("/admin/payments/:orderId/sync", authMiddleware, usageController.requireAdmin, paymentController.adminSyncPayment);
 
 // Guest human check (Cloudflare Turnstile) before guest AI use
 api.post("/guest/verify", (c) => guestVerifyController.verifyGuest(c));
