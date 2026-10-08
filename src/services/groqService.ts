@@ -356,30 +356,22 @@ Core rules:
     } catch {
       // fall through to lenient extraction
     }
-    try {
-      // Try to find JSON in code blocks first (array or object)
-      const jsonBlockMatch = trimmed.match(
-        /```(?:json)?\s*([{\[][\s\S]*?[}\]])\s*```/
-      );
-      if (jsonBlockMatch) {
-        return JSON.parse(jsonBlockMatch[1]);
+    // Code block first, then a top-level object, then an array. Each is tried
+    // on its own: a bare array of objects also matches the object pattern.
+    const candidates = [
+      trimmed.match(/```(?:json)?\s*([{\[][\s\S]*?[}\]])\s*```/)?.[1],
+      trimmed.match(/\{[\s\S]*\}/)?.[0],
+      trimmed.match(/\[[\s\S]*\]/)?.[0],
+    ];
+    for (const candidate of candidates) {
+      if (!candidate) continue;
+      try {
+        return JSON.parse(candidate);
+      } catch {
+        // try the next candidate
       }
-
-      // Prefer a top-level object, then an array
-      const objectMatch = trimmed.match(/\{[\s\S]*\}/);
-      if (objectMatch) {
-        return JSON.parse(objectMatch[0]);
-      }
-
-      const arrayMatch = trimmed.match(/\[[\s\S]*\]/);
-      if (arrayMatch) {
-        return JSON.parse(arrayMatch[0]);
-      }
-
-      return null;
-    } catch {
-      return null;
     }
+    return null;
   }
 
   /** Accept both `{ <key>: [...] }` and a bare array. */
@@ -470,10 +462,11 @@ ${this.clampText(this.stripImageData(params.materialText))}
             vision: true,
           });
         } catch (error) {
-          if (!(error instanceof AIServiceError) || error.code !== "vision_unavailable") {
+          // Any vision-side failure (unavailable, busy, timeout) degrades to text
+          if (!(error instanceof AIServiceError) || error.code === "not_configured") {
             throw error;
           }
-          console.warn("[AI] Vision model unavailable; answering from text only");
+          console.warn(`[AI] Vision request failed (${error.code}); answering from text only`);
         }
       }
 

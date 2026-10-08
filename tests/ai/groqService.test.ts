@@ -172,6 +172,23 @@ test("MCQ parsing still accepts a bare array inside a code fence (prompt-only fa
   assert.equal(questions[0].answer, "C");
 });
 
+test("MCQ parsing accepts a bare array surrounded by text (prompt-only fallback)", async () => {
+  const { service } = serviceWith(() =>
+    completion('Berikut soalnya: [{"question":"Q1?","options":["a","b","c","d","e"],"answer":"A"},{"question":"Q2?","options":["a","b","c","d","e"],"answer":"D"}] Semoga membantu.')
+  );
+  const questions = await service.generateQuizTrainerMCQ({ materialText: MATERIAL, numQuestions: 2 });
+  assert.deepEqual(questions.map((q) => q.answer), ["A", "D"]);
+});
+
+test("a schema rejected by the API without naming json_schema is still downgraded", async () => {
+  const { service, calls } = serviceWith((params, i) => {
+    if (i === 0) throw apiError(400, "Invalid schema: keyword 'enum' is not supported");
+    return completion('{"cards":[{"id":1,"front":"F","back":"B"}]}');
+  });
+  assert.equal((await service.generateFlashcards({ materialText: MATERIAL, numCards: 1 })).length, 1);
+  assert.equal(calls[1].params.response_format.type, "json_object");
+});
+
 test("flashcards and dialogue tools return their documented shapes", async () => {
   const responses: Record<string, string> = {
     flashcards: JSON.stringify({ cards: [{ id: 3, front: "F", back: "B" }] }),
@@ -371,6 +388,19 @@ test("when the vision model is unavailable, chat degrades to text-only", async (
   assert.deepEqual(calls.map((c) => c.params.model), ["qwen/qwen3.8-27b", "openai/gpt-oss-120b"]);
   assert.doesNotMatch(JSON.stringify(calls[1].params.messages), /base64,/);
   assert.match(calls[1].params.messages[0].content, /could not be analyzed/);
+});
+
+test("a busy vision model also degrades to a text-only answer", async () => {
+  const { service, calls } = serviceWith((params) => {
+    if (params.model === "qwen/qwen3.8-27b") throw apiError(429, "Rate limit reached");
+    return completion("Jawaban teks saja");
+  });
+  const answer = await service.generateChat({
+    materialText: imageMaterial("foto.jpg"),
+    messages: [{ role: "user", content: "Apa isi gambar?" }],
+  });
+  assert.equal(answer, "Jawaban teks saja");
+  assert.equal(calls.length, 2);
 });
 
 test("vision disabled by config: chat answers from text without calling a vision model", async () => {

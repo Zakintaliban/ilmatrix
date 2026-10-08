@@ -228,7 +228,7 @@ export function buildParams(model: string, req: CompletionRequest, cfg: Provider
  */
 function downgradeParams(params: any, err: unknown): boolean {
   const msg = errorText(err);
-  if (params.response_format && /response_format|json_schema|json_object|json_validate|structured output/.test(msg)) {
+  if (params.response_format && /response_format|schema|json_object|json_validate|structured output/.test(msg)) {
     if (params.response_format.type === "json_schema") {
       params.response_format = { type: "json_object" };
     } else {

@@ -567,8 +567,8 @@ lecturer/class licences · SMA TKA/UTBK track with PP Tunas parental consent · 
 2. `feat(ai)`: model migration and AI provider hardening (P0-1…P0-5, P0-8).
 3. `fix(security)`: P0-10 quick wins.
 4. `fix(upload)`: every file of a multi-file upload is now extracted (P0-11).
-5. `test(ai)`: 29 provider/service unit tests + 19 endpoint regression tests (all study tools) with a fake Groq client;
-   `npm run groq:check` live script. Full suite: 58 tests passing. Boot verified via `npm start` and `npm run build` +
+5. `test(ai)`: 32 provider/service unit tests + 19 endpoint regression tests (all study tools) with a fake Groq client;
+   `npm run groq:check` live script. Full suite: 61 tests passing. Boot verified via `npm start` and `npm run build` +
    `node dist/server.js` (no DB, no key). Old deployments that still set `GROQ_MODEL` to Maverick are remapped with a
    warning.
 6. `docs`: this report, `.env.example`, README, PROJECT-STRUCTURE.
