@@ -85,7 +85,7 @@ Browser (app.html) ──fetch JSON──▶ Hono /api/*
 
 | Feature | Exists? | Implementation | Working today? | Keep? | Improve? |
 |---|---|---|---|---|---|
-| Upload PDF/DOCX/PPTX/TXT → text | Yes | `src/extract/*`, `extractionService` | ✅ (no AI) | Yes | Zip-bomb guard. DOCX/PPTX entity decoding is a no-op (`.replace(/&/g,"&")`). Scanned PDFs get no OCR |
+| Upload PDF/DOCX/PPTX/TXT → text | Yes | `src/extract/*`, `extractionService` | ⚠️ multi-file uploads kept **only the last file** (fixed) | Yes | Zip-bomb guard. DOCX/PPTX entity decoding is a no-op (`.replace(/&/g,"&")`). Scanned PDFs get no OCR |
 | Image OCR on upload | Yes | `extract/image.ts` → hardcoded Maverick | ❌ model retired. Silently stores the base64 image instead | Yes | Route to vision model (done, §19.1) |
 | Image Q&A in chat | Yes | `generateChat` multimodal → hardcoded Maverick | ❌ | Yes | Vision routing + degrade (done) |
 | Explain / Forum / Exam / Quiz (text) | Yes | `generateAnswer`: **one generic prompt with only a `TASK: X` label** | ❌ model | Yes | Task-specific prompts (P1). Reframe Forum (see §13) |
@@ -172,6 +172,7 @@ to the correct request.
 | Token accounting | `groqService.lastTokenUsage` is a **singleton field**. Concurrent requests overwrite it, so users are billed for each other's calls, and a failed call bills the previous call's usage | P0 (billing integrity) |
 | Error surface | Groq errors are returned to the student as a 200 "answer" containing raw provider messages | P0 |
 | Timeout | `withTimeout` rejects but **doesn't abort** the HTTP call, and the SDK's own retries stack on top (up to ~3×45s) | P0 |
+| Multi-file upload | The UI sends several `file` parts but `parseBody()` keeps only the last repeated key, so **only one file per upload was ever extracted** (found by the new regression suite) | P0 (fixed) |
 | Deployment | `.npmrc omit=dev` + `"start": "tsx …"` (tsx is a devDependency) → clean install has no `tsx` → **process fails to start** | P0 |
 | `aiRateLimit` | `recordAITokenUsage` is **never called**, so hourly limits never trigger. The burst check is also wrong (it only looks at the timestamp of the last request) | P1 |
 | `abuseDetection` | Inspects `message`/`materialText`/`question`, but the UI sends `messages`/`prompt`/`materialId`, so the check is **effectively inert**. (A suspected ReDoS in its regex was benchmarked and is *not* exploitable in V8: 2 ms at 20k chars) | P1 |
@@ -527,6 +528,7 @@ Effort is for one developer, in days.
 | P0-7 | Old SDK, vulnerable hono | upgrade groq-sdk 1.6, patch hono/node-server, audit fix | `package*.json` | S | 0.25 | — | Security |
 | P0-8 | Raw errors, no fallback, timeouts don't abort | error mapping, fallback, SDK timeout/retries | `groqService.ts` | S | 0.5 | Friendly errors | Uptime |
 | P0-9 | No AI or tool tests | mocked-Groq unit + endpoint regression suites, live check script | `tests/ai/*`, `scripts/groq-live-check.ts` | M | 1 | — | Safe migration |
+| P0-11 | Multi-file uploads silently dropped all but one file | `parseBody({ all: true })` | `uploadController.ts` | XS | 0.1 | All uploaded files used | — |
 | P0-10 | Quick security wins | system-role filter + history caps, IDOR fix, no token logging, admin-only cleanup | `aiController.ts`, `chatHistoryService.ts`, `oauthController.ts`, `routes.ts` | S | 0.5 | — | Security |
 
 ### P1: must have before launch (needs approval)
@@ -564,8 +566,16 @@ lecturer/class licences · SMA TKA/UTBK track with PP Tunas parental consent · 
 1. `chore(deps)`: groq-sdk ^1.6.0, hono / @hono/node-server security patches, `npm audit fix`, `tsx` → dependencies.
 2. `feat(ai)`: model migration and AI provider hardening (P0-1…P0-5, P0-8).
 3. `fix(security)`: P0-10 quick wins.
-4. `test(ai)`: mocked-Groq unit tests + endpoint regression suite for every study tool; `npm run groq:check` live script.
-5. `docs`: this report, `.env.example`, README model section.
+4. `fix(upload)`: every file of a multi-file upload is now extracted (P0-11).
+5. `test(ai)`: 29 provider/service unit tests + 19 endpoint regression tests (all study tools) with a fake Groq client;
+   `npm run groq:check` live script. Full suite: 58 tests passing. Boot verified via `npm start` and `npm run build` +
+   `node dist/server.js` (no DB, no key). Old deployments that still set `GROQ_MODEL` to Maverick are remapped with a
+   warning.
+6. `docs`: this report, `.env.example`, README, PROJECT-STRUCTURE.
+
+**Not verifiable from the sandbox (Groq blocked):** live behaviour of strict JSON schemas on gpt-oss, the exact Qwen
+vision parameters, and real latency and cost. The provider downgrades rejected parameters automatically, but run
+`npm run groq:check` once before deploying.
 
 ### 19.2 Waiting for your approval
 1. **Positioning:** beachhead = S1 students before UTS/UAS. Main selling point = Exam Mode on own materials.

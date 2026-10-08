@@ -1,9 +1,14 @@
-# ILMATRIX (Hono + Groq + Meta Llama)
+# ILMATRIX (Hono + Groq)
+
+> **2026 modernization:** Groq retired Llama 4 Maverick on 2026-03-09. ILMATRIX now runs on
+> `openai/gpt-oss-120b` (fallback `openai/gpt-oss-20b`, vision `qwen/qwen3.8-27b`). See
+> [docs/AUDIT_AND_STRATEGY_2026.md](docs/AUDIT_AND_STRATEGY_2026.md) for the full audit, model
+> research, product positioning, pricing and roadmap.
 
 An AI study companion for university students with **multimodal AI capabilities**. Core features:
 
 - Upload course materials (PDF/DOCX/PPTX/TXT/Images) with **Vision API support**
-- **Image Analysis**: Query visual content using Groq Vision API (Llama 4)
+- **Image Analysis**: Query visual content using a Groq vision model (configurable via `GROQ_VISION_MODEL`)
 - **Smart Text Extraction**: OCR for images, preserve visual content for analysis## Storage & Retention
 
 ### What's Stored
@@ -37,7 +42,7 @@ An AI study companion for university students with **multimodal AI capabilities*
 Tech stack:
 
 - **Hono.js** (Node adapter) for API and static hosting
-- **Groq SDK** with Meta Llama models (including Vision API for images)
+- **Groq SDK** with OpenAI gpt-oss models (text) and a configurable vision model for images
 - **TypeScript** (ESM, NodeNext) with clean architecture
 - **Extraction**: pdfjs-dist (PDF), Groq Vision API (OCR for images), JSZip (DOCX/PPTX)
 - **Tailwind CSS** (CDN)
@@ -73,14 +78,20 @@ The project uses a comprehensive test suite with proper resource management:
 Run tests:
 
 ```bash
-npm test              # Full test suite (services + integration)
+npm test              # Full test suite (services + AI tools + integration)
 npm run test:services # Service layer only (fast, no API calls)
+npm run test:ai       # AI layer + every study tool endpoint, with a fake Groq client
 npm run test:smoke    # Integration tests (API endpoints)
+npm run groq:check    # Live check of every study tool against the real Groq API (needs GROQ_API_KEY)
 ```
+
+Run `npm run groq:check` before deploying any model or SDK change: the automated tests use a fake Groq
+client and cannot detect a model being retired or rejecting a parameter.
 
 Test files:
 
 - `tests/services/` - Service layer unit tests
+- `tests/ai/` - AI provider unit tests and the study-tool regression suite
 - `tests/smoke.test.ts` - API integration tests
 
 ## Development & Troubleshooting
@@ -116,7 +127,7 @@ Test files:
 Tech stack:
 
 - Hono.js (Node adapter) for API and static hosting
-- Groq SDK with Meta Llama models (including Vision API for images)
+- Groq SDK with OpenAI gpt-oss models (text) and a configurable vision model for images
 - TypeScript (ESM, NodeNext) with clean architecture
 - Extraction: pdfjs-dist (PDF), Groq Vision API (OCR for images), JSZip (DOCX/PPTX)
 - Tailwind CSS (CDN)
@@ -137,7 +148,7 @@ cp .env.example .env
 # Edit .env and set your Groq key
 # GROQ_API_KEY=sk_...
 # Optional:
-# GROQ_MODEL=meta-llama/llama-4-maverick-17b-128e-instruct
+# GROQ_MODEL=openai/gpt-oss-120b
 ```
 
 3. Run in development:
@@ -156,16 +167,18 @@ Server (default): <http://localhost:8787>
 ## Environment variables
 
 - GROQ_API_KEY: Your Groq API key (required)
-- GROQ_MODEL: Groq model id (default set in code)
+- GROQ_MODEL: Primary text model (default `openai/gpt-oss-120b`). Retired model IDs (e.g. Llama 4 Maverick) are remapped to Groq's recommended replacement with a warning.
+- GROQ_FALLBACK_MODEL: Used when the primary model is rate limited, down or decommissioned (default `openai/gpt-oss-20b`; empty disables).
+- GROQ_VISION_MODEL: Model for images (OCR and image questions in chat). Default `qwen/qwen3.8-27b`, a **Preview** model on Groq; empty disables vision and chat falls back to text-only.
+- GROQ_REASONING_EFFORT: Reasoning effort for free-form answers (`low` | `medium` | `high`, default `medium`). JSON tools always use `low`.
+- GROQ_STRUCTURED_OUTPUTS: Use strict JSON-schema outputs for quiz/flashcard/dialogue tools (default `true`). Rejected schemas automatically fall back to JSON mode.
 - PORT: Server port (default: 8787)
 - MATERIAL_CLAMP: Max characters of materials included per request (default 100000). Increase for better recall (higher cost), decrease to save tokens.
 - MATERIAL_TTL_MINUTES: Minutes to keep uploaded materials before auto-deletion (default 60). A background cleaner periodically removes old .txt material files from the uploads folder. See [src/routes.ts](src/routes.ts:735).
 - RATE_LIMIT_MAX: Requests per minute per IP (default 120). Lightweight token bucket applied to all /api routes. See [middleware](src/routes.ts:70).
 - PDF_MAX_PAGES: Max PDF pages extracted per file (default 200). See [extractPdfTextImpl()](src/extract/pdf.ts:50).
-- OCR_CONCURRENCY: Max concurrent OCR workers for images (default 1). See [extractImageText()](src/extract/image.ts:1).
-- OCR_TIMEOUT_MS: Per-image OCR timeout in ms (default 30000).
-- GROQ_CONCURRENCY: Concurrent LLM requests (default 4). See [groqService](src/services/groqService.ts).
-- GROQ_TIMEOUT_MS: Per-request LLM timeout in ms (default 45000). See [concurrency utils](src/utils/concurrency.ts).
+- GROQ_CONCURRENCY: Concurrent LLM requests per process, including image OCR (default 4). See [groqProvider](src/services/groqProvider.ts).
+- GROQ_TIMEOUT_MS: Per-request LLM timeout in ms, enforced by the Groq SDK (default 45000). See [groqProvider](src/services/groqProvider.ts).
 - EXTRACTION_CONCURRENCY: Max concurrent file extraction operations (default 2). See [extractionService](src/services/extractionService.ts).
 
 ## Storage & retention
@@ -339,7 +352,7 @@ curl -H "Content-Type: application/json" \
 ## Extraction
 
 - pdfjs-dist for PDFs (fonts/CMaps wired)
-- Groq Vision API for images (multimodal LLM with context understanding)
+- Groq vision model for images (`GROQ_VISION_MODEL`); if vision is unavailable the image is kept for later analysis
 - JSZip for DOCX/PPTX (extracts text from XML)
 - Plain text files read directly
 
@@ -348,9 +361,11 @@ curl -H "Content-Type: application/json" \
 - npm run dev → start with hot reload
 - npm run start → start without nodemon
 - npm run build → type-check and emit
-- npm test → run complete test suite (services + smoke tests)
+- npm test → run complete test suite (services + AI tools + smoke tests)
 - npm run test:services → run service layer unit tests
+- npm run test:ai → run AI layer and study-tool regression tests (fake Groq client)
 - npm run test:smoke → run API integration tests
+- npm run groq:check → live check of every study tool against Groq (needs GROQ_API_KEY)
 
 ## Notes and next steps
 
