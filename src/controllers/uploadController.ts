@@ -23,7 +23,8 @@ export class UploadController {
         return c.json({ error: validation.error }, 413);
       }
 
-      const body = await c.req.parseBody();
+      // all: true keeps every value of repeated fields (the UI sends several "file" parts)
+      const body = await c.req.parseBody({ all: true });
       const files = this.extractFilesFromBody(body);
 
       if (!files.length) {
