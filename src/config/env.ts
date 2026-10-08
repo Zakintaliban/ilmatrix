@@ -8,6 +8,10 @@ export interface AppConfig {
   // Groq Configuration
   groqApiKey: string;
   groqModel: string;
+  groqFallbackModel: string;
+  groqVisionModel: string;
+  groqReasoningEffort: "none" | "low" | "medium" | "high";
+  groqStructuredOutputs: boolean;
   groqConcurrency: number;
   groqTimeoutMs: number;
 
@@ -75,6 +79,44 @@ function getEnvBoolean(key: string, defaultValue: boolean): boolean {
   return /^(true|1|yes|on)$/i.test(value);
 }
 
+/**
+ * Model IDs Groq has shut down, mapped to the replacement Groq recommends.
+ * Existing deployments may still set these explicitly in GROQ_MODEL.
+ */
+const RETIRED_GROQ_MODELS: Record<string, string> = {
+  "meta-llama/llama-4-maverick-17b-128e-instruct": "openai/gpt-oss-120b",
+  "meta-llama/llama-4-scout-17b-16e-instruct": "openai/gpt-oss-120b",
+  "moonshotai/kimi-k2-instruct": "openai/gpt-oss-120b",
+  "moonshotai/kimi-k2-instruct-0905": "openai/gpt-oss-120b",
+  "qwen/qwen3-32b": "openai/gpt-oss-120b",
+  "llama-3.3-70b-versatile": "openai/gpt-oss-120b",
+  "llama-3.1-8b-instant": "openai/gpt-oss-20b",
+  "groq/compound": "openai/gpt-oss-120b",
+  "groq/compound-mini": "openai/gpt-oss-20b",
+};
+
+export function resolveGroqModel(key: string, model: string): string {
+  const replacement = RETIRED_GROQ_MODELS[model];
+  if (!replacement) return model;
+  console.warn(
+    `[CONFIG] ${key}=${model} has been retired by Groq; using ${replacement} instead. Update your environment.`
+  );
+  return replacement;
+}
+
+/** Like getEnvString, but an explicitly empty value disables the feature. */
+function getEnvOptional(key: string, defaultValue: string): string {
+  const value = process.env[key];
+  return value === undefined ? defaultValue : value.trim();
+}
+
+function getEnvReasoningEffort(key: string, defaultValue: AppConfig["groqReasoningEffort"]): AppConfig["groqReasoningEffort"] {
+  const value = (process.env[key] || "").trim().toLowerCase();
+  return value === "none" || value === "low" || value === "medium" || value === "high"
+    ? value
+    : defaultValue;
+}
+
 export const config: AppConfig = {
   // Server Configuration
   port: getEnvNumber("PORT", 8787),
@@ -82,10 +124,17 @@ export const config: AppConfig = {
 
   // Groq Configuration
   groqApiKey: getEnvString("GROQ_API_KEY", ""),
-  groqModel: getEnvString(
-    "GROQ_MODEL",
-    "meta-llama/llama-4-maverick-17b-128e-instruct"
+  // meta-llama/llama-4-maverick-17b-128e-instruct was retired by Groq on 2026-03-09.
+  groqModel: resolveGroqModel("GROQ_MODEL", getEnvString("GROQ_MODEL", "openai/gpt-oss-120b")),
+  // Used when the primary model is rate limited, down or decommissioned. Empty disables.
+  groqFallbackModel: resolveGroqModel(
+    "GROQ_FALLBACK_MODEL",
+    getEnvOptional("GROQ_FALLBACK_MODEL", "openai/gpt-oss-20b")
   ),
+  // gpt-oss is text-only; images go here. Preview model on Groq. Empty disables vision.
+  groqVisionModel: getEnvOptional("GROQ_VISION_MODEL", "qwen/qwen3.8-27b"),
+  groqReasoningEffort: getEnvReasoningEffort("GROQ_REASONING_EFFORT", "medium"),
+  groqStructuredOutputs: getEnvBoolean("GROQ_STRUCTURED_OUTPUTS", true),
   groqConcurrency: Math.max(1, getEnvNumber("GROQ_CONCURRENCY", 4)),
   groqTimeoutMs: Math.max(1000, getEnvNumber("GROQ_TIMEOUT_MS", 45000)),
 
