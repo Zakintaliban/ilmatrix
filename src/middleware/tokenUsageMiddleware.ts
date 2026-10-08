@@ -123,7 +123,8 @@ export async function tokenUsageMiddleware(c: Context, next: Next) {
 export async function updateTokenUsageAfterRequest(
   c: Context,
   tokensUsed: number,
-  metadata: Record<string, any> = {}
+  metadata: Record<string, any> = {},
+  options: { setHeaders?: boolean } = {}
 ): Promise<{
   success: boolean;
   kredit?: ReturnType<typeof kreditSummary>;
@@ -174,10 +175,13 @@ export async function updateTokenUsageAfterRequest(
       }
     }
 
-    c.header('X-Kredit-Used', kredit.toFixed(2));
-    c.header('X-Kredit-Remaining', status.totalRemaining.toFixed(2));
-    c.header('X-Kredit-Weekly-Limit', String(status.weeklyLimit));
-    if (notification) c.header('X-Kredit-Warning', notification);
+    // A streamed response has already sent its headers (the done event carries the warning)
+    if (options.setHeaders !== false) {
+      c.header('X-Kredit-Used', kredit.toFixed(2));
+      c.header('X-Kredit-Remaining', status.totalRemaining.toFixed(2));
+      c.header('X-Kredit-Weekly-Limit', String(status.weeklyLimit));
+      if (notification) c.header('X-Kredit-Warning', notification);
+    }
 
     return { success: true, kredit: kreditSummary(status), warning, notification };
   } catch (error) {

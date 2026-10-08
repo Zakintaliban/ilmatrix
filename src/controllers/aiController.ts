@@ -1,5 +1,7 @@
 import type { Context } from "hono";
-import { groqService, type ChatMessage } from "../services/groqService.js";
+import { streamSSE } from "hono/streaming";
+import { AIServiceError, groqService, type ChatMessage, type StreamResult } from "../services/groqService.js";
+import type { StreamOptions } from "../services/groqProvider.js";
 import { mcqScoringService } from "../services/mcqScoringService.js";
 import { materialService } from "../services/materialService.js";
 import { updateTokenUsageAfterRequest } from "../middleware/tokenUsageMiddleware.js";
@@ -42,6 +44,77 @@ function clampInt(value: unknown, fallback: number, min: number, max: number): n
   return Number.isFinite(n) ? Math.min(Math.max(min, n), max) : fallback;
 }
 
+/** Keep-alive comment interval: proxies may close an idle connection while the model reasons. */
+const KEEP_ALIVE_MS = 15_000;
+
+/**
+ * Stream an AI answer as Server-Sent Events:
+ *   event: start  {}
+ *   event: delta  {"text": "..."}             (repeated)
+ *   event: done   {"answer", "token_usage", "usage_warning"}
+ *   event: error  {"error", "code"}           (instead of done)
+ * Validation, auth, kredit and rate limits run before the stream opens and
+ * answer with normal JSON errors. Kredit is charged when the stream ends
+ * (estimated if the student leaves early); the AI rate-limit slot is held
+ * until then through `streamDone`.
+ */
+function streamAnswer(c: Context, task: string, produce: (opts: StreamOptions) => Promise<StreamResult>) {
+  let finished!: () => void;
+  c.set("streamDone", new Promise<void>((resolve) => (finished = resolve)));
+  // Ask reverse proxies (nginx-style) not to buffer the event stream
+  c.header("X-Accel-Buffering", "no");
+
+  return streamSSE(c, async (stream) => {
+    const abort = new AbortController();
+    stream.onAbort(() => abort.abort());
+    const keepAlive = setInterval(() => void stream.write(": keep-alive\n\n").catch(() => {}), KEEP_ALIVE_MS);
+    const send = (event: string, data: unknown) =>
+      stream.writeSSE({ event, data: JSON.stringify(data) }).catch(() => {
+        // client gone; the abort handler stops generation
+      });
+
+    try {
+      await send("start", {});
+      const { result, usage, model, kredit } = await groqService.track(() =>
+        produce({ signal: abort.signal, onDelta: (text) => void send("delta", { text }) })
+      );
+
+      let usageWarning: string | undefined;
+      if (usage) {
+        const tracking = await updateTokenUsageAfterRequest(
+          c,
+          usage.total_tokens,
+          {
+            model: model || groqService.getModelName(),
+            kredit,
+            prompt_tokens: usage.prompt_tokens,
+            completion_tokens: usage.completion_tokens,
+            task,
+            streamed: true,
+            ...(result.aborted ? { aborted: true } : {}),
+            ...(result.estimated ? { estimated: true } : {}),
+          },
+          { setHeaders: false }
+        );
+        usageWarning = tracking.warning;
+      }
+      if (!result.aborted) {
+        await send("done", { answer: result.content, token_usage: usage, usage_warning: usageWarning });
+      }
+    } catch (error) {
+      const known = error instanceof AIServiceError;
+      if (!known) console.error(`[AI] ${task} stream failed:`, error);
+      await send("error", {
+        error: known ? error.userMessage : "Terjadi kesalahan pada layanan AI. Coba lagi.",
+        code: known ? error.code : "unknown",
+      });
+    } finally {
+      clearInterval(keepAlive);
+      finished();
+    }
+  });
+}
+
 export class AIController {
   /**
    * Handle general AI requests (explain, quiz, forum, exam)
@@ -66,6 +139,10 @@ export class AIController {
 
       if (!material.trim()) {
         return c.json({ error: "No material content found" }, 400);
+      }
+
+      if (body.stream === true) {
+        return streamAnswer(c, task, (opts) => groqService.streamAnswer({ materialText: material, task, prompt }, opts));
       }
 
       const { result: answer, usage: tokenUsage, model, kredit } = await groqService.track(() =>
@@ -122,6 +199,10 @@ export class AIController {
         materialId || materialText
           ? await materialService.readMaterial(materialId, materialText, requestUserId(c))
           : "";
+
+      if (body.stream === true) {
+        return streamAnswer(c, "chat", (opts) => groqService.streamChat({ materialText: material, messages: chatMessages }, opts));
+      }
 
       const { result: answer, usage: tokenUsage, model, kredit } = await groqService.track(() =>
         groqService.generateChat({

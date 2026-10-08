@@ -41,6 +41,20 @@ export interface CompletionResult {
   usage: TokenUsage | null;
 }
 
+export interface StreamOptions {
+  /** Called with each piece of visible answer text, in order. */
+  onDelta: (text: string) => void;
+  /** Abort (e.g. the client disconnected): stops generation upstream. */
+  signal?: AbortSignal;
+}
+
+export interface StreamResult extends CompletionResult {
+  /** The caller aborted; `content` is what was produced until then. */
+  aborted: boolean;
+  /** Usage was estimated (Groq's usage arrives only in the final chunk). */
+  estimated: boolean;
+}
+
 /** Minimal surface of the Groq SDK we depend on (lets tests inject a fake). */
 export interface ChatClient {
   chat: {
@@ -166,6 +180,39 @@ function recordUsage(store: UsageStore | undefined, result: CompletionResult): v
     prompt_tokens: (prev?.prompt_tokens || 0) + result.usage.prompt_tokens,
     completion_tokens: (prev?.completion_tokens || 0) + result.usage.completion_tokens,
     total_tokens: (prev?.total_tokens || 0) + result.usage.total_tokens,
+  };
+}
+
+/** Text characters in a request's messages (image parts excluded). */
+function messageTextLength(messages: any[]): number {
+  let n = 0;
+  for (const m of messages) {
+    if (typeof m?.content === "string") n += m.content.length;
+    else if (Array.isArray(m?.content)) {
+      for (const part of m.content) if (part?.type === "text" && typeof part.text === "string") n += part.text.length;
+    }
+  }
+  return n;
+}
+
+/**
+ * Rough usage for a stream that ended before Groq reported it (~4 characters
+ * per token). Hidden reasoning tokens can't be seen, so this errs low.
+ */
+export function estimateUsage(messages: any[], content: string): TokenUsage {
+  const prompt_tokens = Math.ceil(messageTextLength(messages) / 4);
+  const completion_tokens = Math.ceil(content.length / 4);
+  return { prompt_tokens, completion_tokens, total_tokens: prompt_tokens + completion_tokens };
+}
+
+let warnedNoStreamUsage = false;
+
+function toTokenUsage(u: any): TokenUsage | null {
+  if (!u) return null;
+  return {
+    prompt_tokens: u.prompt_tokens || 0,
+    completion_tokens: u.completion_tokens || 0,
+    total_tokens: u.total_tokens || (u.prompt_tokens || 0) + (u.completion_tokens || 0),
   };
 }
 
@@ -398,6 +445,135 @@ export class GroqProvider {
       }
     }
     throw toAIServiceError(lastError, req.vision);
+  }
+
+  /**
+   * Stream an answer. Same routing, fallback and error mapping as complete(),
+   * with two differences: the fallback model is only tried while nothing has
+   * been sent to the caller yet, and the concurrency slot is held until the
+   * stream ends. Usage comes from Groq's final chunk (x_groq.usage); if the
+   * caller aborts first it is estimated and still recorded.
+   */
+  async stream(req: CompletionRequest, opts: StreamOptions): Promise<StreamResult> {
+    if (!this.isConfigured) {
+      throw new AIServiceError("not_configured");
+    }
+    if (req.vision && !this.hasVision) {
+      throw new AIServiceError("vision_unavailable");
+    }
+    const store = usageStorage.getStore();
+    const models = req.vision
+      ? [this.cfg.visionModel]
+      : [this.cfg.model, this.cfg.fallbackModel].filter((m, i, all) => !!m && all.indexOf(m) === i);
+
+    let lastError: unknown;
+    let emitted = false;
+    const onDelta = (text: string) => {
+      emitted = true;
+      opts.onDelta(text);
+    };
+
+    for (let i = 0; i < models.length; i++) {
+      const model = models[i];
+      try {
+        this.breaker.assertClosed();
+        const result = await this.limiter(() => this.streamWithModel(model, req, onDelta, opts.signal));
+        if (!result.aborted) this.breaker.onSuccess();
+        recordUsage(store, result);
+        return result;
+      } catch (err) {
+        lastError = err;
+        if (err instanceof AIServiceError) throw err;
+        const providerFailure = isProviderFailure(err);
+        if (providerFailure) this.breaker.onProviderFailure();
+        // Once text has reached the student, switching models would restart the answer
+        const canFallBack = providerFailure && !emitted && i < models.length - 1;
+        console.error(
+          `[GROQ] ${model} stream failed (status ${statusOf(err) ?? "n/a"})${canFallBack ? `, falling back to ${models[i + 1]}` : ""}:`,
+          (err as any)?.message || err
+        );
+        if (!canFallBack) break;
+      }
+    }
+    throw toAIServiceError(lastError, req.vision);
+  }
+
+  private async streamWithModel(
+    model: string,
+    req: CompletionRequest,
+    onDelta: (text: string) => void,
+    signal?: AbortSignal
+  ): Promise<StreamResult> {
+    const params = { ...buildParams(model, req, this.cfg), stream: true };
+    const controller = new AbortController();
+    const forwardAbort = () => controller.abort();
+    if (signal?.aborted) controller.abort();
+    signal?.addEventListener("abort", forwardAbort, { once: true });
+
+    // The SDK timeout covers the request; this one covers a stream that stalls
+    let idleTimer: NodeJS.Timeout | undefined;
+    let stalled = false;
+    const resetIdle = () => {
+      clearTimeout(idleTimer);
+      idleTimer = setTimeout(() => {
+        stalled = true;
+        controller.abort();
+      }, this.cfg.timeoutMs);
+    };
+
+    let content = "";
+    let usage: TokenUsage | null = null;
+    try {
+      for (let attempt = 0; ; attempt++) {
+        try {
+          resetIdle();
+          const stream = await this.getClient().chat.completions.create(params, { signal: controller.signal });
+          for await (const chunk of stream as AsyncIterable<any>) {
+            resetIdle();
+            const groq = chunk?.x_groq;
+            if (groq?.error) {
+              throw Object.assign(new Error(`Groq stopped the stream: ${groq.error}`), { status: 500 });
+            }
+            usage = toTokenUsage(groq?.usage || chunk?.usage) || usage;
+            // Only the visible answer; reasoning (if a model sends it) is never forwarded
+            const text = chunk?.choices?.[0]?.delta?.content;
+            if (typeof text === "string" && text) {
+              content += text;
+              onDelta(text);
+            }
+          }
+          if (signal?.aborted) break;
+          if (!usage) {
+            // Never leave a streamed answer unbilled if Groq stops reporting usage on streams
+            if (!warnedNoStreamUsage) {
+              warnedNoStreamUsage = true;
+              console.warn(`[GROQ] ${model} stream ended without usage (x_groq.usage); charging an estimate`);
+            }
+            return { content, model, usage: estimateUsage(req.messages, content), aborted: false, estimated: true };
+          }
+          console.log(
+            `[GROQ] ${model} stream tokens: ${usage.total_tokens} (prompt: ${usage.prompt_tokens}, completion: ${usage.completion_tokens})`
+          );
+          return { content, model, usage, aborted: false, estimated: false };
+        } catch (err) {
+          if (signal?.aborted) break;
+          if (stalled) throw new Error(`stream timed out after ${this.cfg.timeoutMs} ms without data`);
+          if (!content && statusOf(err) === 400 && attempt < 3 && downgradeParams(params, err)) {
+            console.warn(`[GROQ] ${model} rejected an optional parameter; retrying the stream with a simpler request`);
+            continue;
+          }
+          throw err;
+        }
+      }
+      // Aborted by the caller: keep what was produced and estimate what it cost
+      const estimated = !usage;
+      const finalUsage = usage ?? estimateUsage(req.messages, content);
+      console.log(`[GROQ] ${model} stream aborted by the client after ${content.length} chars${estimated ? " (usage estimated)" : ""}`);
+      return { content, model, usage: finalUsage, aborted: true, estimated };
+    } finally {
+      clearTimeout(idleTimer);
+      signal?.removeEventListener("abort", forwardAbort);
+    }
   }
 
   private async completeWithModel(model: string, req: CompletionRequest): Promise<CompletionResult> {

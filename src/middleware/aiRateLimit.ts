@@ -143,9 +143,16 @@ export async function aiRateLimitMiddleware(c: Context, next: Next) {
     );
   }
 
+  // A streamed answer keeps its slot until the stream ends, not when the response starts
+  let releaseLater = false;
   try {
     await next();
+    const streamDone = c.get("streamDone") as Promise<void> | undefined;
+    if (streamDone) {
+      releaseLater = true;
+      void streamDone.finally(() => aiRateLimiter.release(key));
+    }
   } finally {
-    aiRateLimiter.release(key);
+    if (!releaseLater) aiRateLimiter.release(key);
   }
 }

@@ -6,10 +6,12 @@ import {
   type ChatClient,
   type CompletionRequest,
   type ProviderConfig,
+  type StreamOptions,
+  type StreamResult,
   type TokenUsage,
 } from "./groqProvider.js";
 
-export type { TokenUsage } from "./groqProvider.js";
+export type { StreamResult, TokenUsage } from "./groqProvider.js";
 export { AIServiceError } from "./groqProvider.js";
 
 export interface ChatMessage {
@@ -198,6 +200,17 @@ const DIALOGUE_FEEDBACK_SCHEMA = {
 /**
  * Service for interacting with Groq AI models
  */
+type AnswerParams = {
+  materialText: string;
+  task: "explain" | "quiz" | "forum" | "exam";
+  prompt?: string;
+};
+
+type ChatParams = {
+  materialText: string;
+  messages: ChatMessage[];
+};
+
 export class GroqService {
   private provider: GroqProvider;
   private readonly systemPrompt = `You are Ilmatrix, a study assistant for university students, especially those who prefer studying quietly.
@@ -386,14 +399,8 @@ Core rules:
     return error instanceof Error ? error.message : String(error);
   }
 
-  /**
-   * Generate answer for general questions
-   */
-  async generateAnswer(params: {
-    materialText: string;
-    task: "explain" | "quiz" | "forum" | "exam";
-    prompt?: string;
-  }): Promise<string> {
+  /** Prompt for the explain / quiz / forum / exam tools. */
+  private answerRequest(params: AnswerParams): CompletionRequest {
     const content = `
 TASK: ${params.task.toUpperCase()}
 ${params.prompt ? `PROMPT: ${params.prompt}` : ""}
@@ -403,15 +410,21 @@ MATERIALS:
 ${this.clampText(this.stripImageData(params.materialText))}
 ---
 `;
+    return {
+      messages: [
+        { role: "system", content: this.systemPrompt },
+        { role: "user", content },
+      ],
+      maxOutputTokens: 2500,
+    };
+  }
 
+  /**
+   * Generate answer for general questions
+   */
+  async generateAnswer(params: AnswerParams): Promise<string> {
     try {
-      return await this.complete({
-        messages: [
-          { role: "system", content: this.systemPrompt },
-          { role: "user", content },
-        ],
-        maxOutputTokens: 2500,
-      });
+      return await this.complete(this.answerRequest(params));
     } catch (error) {
       console.error(`[AI] ${params.task} failed:`, error);
       return `I encountered an error while processing your request: ${this.errorMessage(error)}`;
@@ -419,22 +432,45 @@ ${this.clampText(this.stripImageData(params.materialText))}
   }
 
   /**
-   * Generate chat response with multimodal support
+   * Stream an explain / quiz / forum / exam answer. Errors are thrown
+   * (AIServiceError) so the caller can report them on the stream.
    */
-  async generateChat(params: {
-    materialText: string;
-    messages: ChatMessage[];
-  }): Promise<string> {
-    // Build messages with multimodal support
+  streamAnswer(params: AnswerParams, opts: StreamOptions): Promise<StreamResult> {
+    return this.provider.stream(this.answerRequest(params), opts);
+  }
+
+  /**
+   * Chat requests: a vision request when the material has images and a vision
+   * model is configured, plus the text-only request used otherwise (or when
+   * vision fails).
+   */
+  private chatRequests(params: ChatParams): { vision: CompletionRequest | null; text: CompletionRequest } {
     // System message must be plain text only
     const systemMessage = this.systemPrompt + (params.materialText ? "\n\nContext materials will be provided in the next message." : "");
 
-    const buildMessages = (materialMessage: any | null): any[] => {
-      const messages: any[] = [{ role: "system", content: systemMessage }];
+    const buildMessages = (materialMessage: any | null, system = systemMessage): any[] => {
+      const messages: any[] = [{ role: "system", content: system }];
       if (materialMessage) messages.push(materialMessage);
       messages.push(...params.messages);
       return messages;
     };
+
+    // Extract images from material if present
+    const materialContent = params.materialText ? this.extractImagesFromMaterial(params.materialText) : [];
+    const hasImages = materialContent.some((c: any) => c.type === "image_url");
+
+    const vision =
+      hasImages && this.provider.hasVision
+        ? {
+            messages: buildMessages({
+              role: "user",
+              content: [{ type: "text", text: "Context materials:" }, ...materialContent],
+            }),
+            maxOutputTokens: 2500,
+            reasoningEffort: "low" as const,
+            vision: true,
+          }
+        : null;
 
     const textOnlyMaterial = params.materialText
       ? {
@@ -442,45 +478,62 @@ ${this.clampText(this.stripImageData(params.materialText))}
           content: `Context materials:\n---\n${this.clampText(this.stripImageData(params.materialText))}\n---`,
         }
       : null;
+    const note = hasImages
+      ? "\n\n(Note: the attached images could not be analyzed right now; answer from the text and tell the student the images were not viewed.)"
+      : "";
+    const text = { messages: buildMessages(textOnlyMaterial, systemMessage + note), maxOutputTokens: 2500 };
 
+    return { vision, text };
+  }
+
+  /** Any vision-side failure (unavailable, busy, timeout) degrades to text. */
+  private visionCanDegrade(error: unknown): boolean {
+    return error instanceof AIServiceError && error.code !== "not_configured";
+  }
+
+  /**
+   * Generate chat response with multimodal support
+   */
+  async generateChat(params: ChatParams): Promise<string> {
     try {
-      // Extract images from material if present
-      const materialContent = params.materialText
-        ? this.extractImagesFromMaterial(params.materialText)
-        : [];
-      const hasImages = materialContent.some((c: any) => c.type === "image_url");
-
-      if (hasImages && this.provider.hasVision) {
+      const { vision, text } = this.chatRequests(params);
+      if (vision) {
         try {
-          return await this.complete({
-            messages: buildMessages({
-              role: "user",
-              content: [{ type: "text", text: "Context materials:" }, ...materialContent],
-            }),
-            maxOutputTokens: 2500,
-            reasoningEffort: "low",
-            vision: true,
-          });
+          return await this.complete(vision);
         } catch (error) {
-          // Any vision-side failure (unavailable, busy, timeout) degrades to text
-          if (!(error instanceof AIServiceError) || error.code === "not_configured") {
-            throw error;
-          }
-          console.warn(`[AI] Vision request failed (${error.code}); answering from text only`);
+          if (!this.visionCanDegrade(error)) throw error;
+          console.warn(`[AI] Vision request failed (${(error as AIServiceError).code}); answering from text only`);
         }
       }
-
-      const note = hasImages
-        ? "\n\n(Note: the attached images could not be analyzed right now; answer from the text and tell the student the images were not viewed.)"
-        : "";
-      const messages = buildMessages(textOnlyMaterial);
-      if (note) messages[0] = { role: "system", content: systemMessage + note };
-
-      return await this.complete({ messages, maxOutputTokens: 2500 });
+      return await this.complete(text);
     } catch (error) {
       console.error("[AI] chat failed:", error);
       return `I encountered an error while processing your chat: ${this.errorMessage(error)}`;
     }
+  }
+
+  /**
+   * Stream a chat answer (same requests as generateChat). Vision falls back to
+   * text only if it fails before sending anything. Errors are thrown.
+   */
+  async streamChat(params: ChatParams, opts: StreamOptions): Promise<StreamResult> {
+    const { vision, text } = this.chatRequests(params);
+    if (vision) {
+      let emitted = false;
+      try {
+        return await this.provider.stream(vision, {
+          ...opts,
+          onDelta: (t) => {
+            emitted = true;
+            opts.onDelta(t);
+          },
+        });
+      } catch (error) {
+        if (emitted || !this.visionCanDegrade(error)) throw error;
+        console.warn(`[AI] Vision stream failed (${(error as AIServiceError).code}); answering from text only`);
+      }
+    }
+    return this.provider.stream(text, opts);
   }
 
   /**

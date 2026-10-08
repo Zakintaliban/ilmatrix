@@ -27,6 +27,8 @@ let fakeCalls: any[] = [];
 // Every fake completion uses 1,000 prompt + 500 completion tokens:
 // on gpt-oss-120b that is (1000*0.15 + 500*0.6)/1e6 USD * 4500 = 2.03 kredit
 const CHARGE = 2.03;
+/** Streamed answers from the fake Groq (tests change these). */
+const stream = { pieces: ["Jawa", "ban."], delayMs: 0 };
 const createdUsers: string[] = [];
 
 before(async () => {
@@ -41,8 +43,12 @@ before(async () => {
 
   const { groqService } = await import("../../src/services/groqService.js");
   const { GroqProvider } = await import("../../src/services/groqProvider.js");
-  const { createFakeGroq, completion, TEST_PROVIDER_CONFIG } = await import("../ai/fakeGroq.js");
-  const fake = createFakeGroq((params) => completion(params.model.startsWith("qwen") ? "TEKS PANJANG DARI GAMBAR ".repeat(5) : "Jawaban.", { prompt: 1000, completion: 500 }));
+  const { createFakeGroq, completion, streamOf, TEST_PROVIDER_CONFIG } = await import("../ai/fakeGroq.js");
+  const fake = createFakeGroq((params, _i, options) =>
+    params.stream
+      ? streamOf(stream.pieces, { usage: { prompt: 1000, completion: 500 }, delayMs: stream.delayMs, signal: options?.signal })
+      : completion(params.model.startsWith("qwen") ? "TEKS PANJANG DARI GAMBAR ".repeat(5) : "Jawaban.", { prompt: 1000, completion: 500 })
+  );
   fakeCalls = fake.calls;
   (groqService as any).provider = new GroqProvider({ client: fake.client, config: TEST_PROVIDER_CONFIG });
 });
@@ -342,4 +348,54 @@ test("the AI rate limit counts per account: a new device cookie does not reset i
     config.aiRateLimitPerMinute = saved;
     aiRateLimiter.reset();
   }
+});
+
+test("a streamed answer is charged from the usage Groq reports at the end", { skip }, async () => {
+  stream.pieces = ["Jawa", "ban."];
+  stream.delayMs = 0;
+  const u = await createUser();
+  const res = await api.fetch(
+    new Request("http://local/explain", {
+      method: "POST",
+      headers: { "content-type": "application/json", cookie: u.cookie },
+      body: JSON.stringify({ materialText: `Materi ${++n}: fotosintesis.`, stream: true }),
+    })
+  );
+  const text = await res.text();
+  assert.match(text, /event: done/);
+  assert.match(text, /"total_tokens":1500/);
+  assert.equal((await userRow(u.id)).weekly, CHARGE);
+  const log = await query(`SELECT kredit_used::float AS kredit, metadata FROM token_usage_logs WHERE user_id = $1`, [u.id]);
+  assert.equal(log.rows[0].kredit, CHARGE);
+  assert.equal(log.rows[0].metadata.streamed, true);
+});
+
+test("leaving a stream early is charged an estimate of what was used", { skip }, async () => {
+  stream.pieces = Array.from({ length: 60 }, (_, i) => `kata${i} `);
+  stream.delayMs = 20;
+  const u = await createUser();
+  const res = await api.fetch(
+    new Request("http://local/explain", {
+      method: "POST",
+      headers: { "content-type": "application/json", cookie: u.cookie },
+      body: JSON.stringify({ materialText: `Materi ${++n}: fotosintesis.`, stream: true }),
+    })
+  );
+  const reader = res.body!.getReader();
+  let seen = "";
+  while (!/event: delta/.test(seen)) seen += new TextDecoder().decode((await reader.read()).value);
+  await reader.cancel();
+
+  let row: any;
+  for (let i = 0; i < 100; i++) {
+    row = await userRow(u.id);
+    if (row.weekly > 0) break;
+    await new Promise((r) => setTimeout(r, 20));
+  }
+  assert.ok(row.weekly > 0 && row.weekly < CHARGE, `estimated charge expected, got ${row.weekly}`);
+  const log = await query(`SELECT metadata FROM token_usage_logs WHERE user_id = $1`, [u.id]);
+  assert.equal(log.rows[0].metadata.aborted, true);
+  assert.equal(log.rows[0].metadata.estimated, true);
+  stream.pieces = ["Jawa", "ban."];
+  stream.delayMs = 0;
 });
