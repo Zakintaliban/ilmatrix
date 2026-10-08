@@ -56,7 +56,8 @@ before(async () => {
     const { rows } = await query(`INSERT INTO users (email, name) VALUES ($1, $2) RETURNING id`, [email, `User ${key}`]);
     const token = randomBytes(32).toString("hex");
     await query(
-      `INSERT INTO user_sessions (user_id, session_token, expires_at) VALUES ($1, $2, NOW() + INTERVAL '1 day')`,
+      `INSERT INTO user_sessions (user_id, session_token, expires_at)
+       VALUES ($1, encode(sha256(convert_to($2, 'UTF8')), 'hex'), NOW() + INTERVAL '1 day')`,
       [rows[0].id, token]
     );
     users[key] = { id: rows[0].id, cookie: `session=${token}` };

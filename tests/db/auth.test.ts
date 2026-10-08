@@ -84,7 +84,8 @@ async function createUser(opts: { verified?: boolean; password?: boolean; email?
 async function createSession(userId: string): Promise<string> {
   const token = randomBytes(32).toString("hex");
   await query(
-    `INSERT INTO user_sessions (user_id, session_token, expires_at) VALUES ($1, $2, NOW() + INTERVAL '1 day')`,
+    `INSERT INTO user_sessions (user_id, session_token, expires_at)
+       VALUES ($1, encode(sha256(convert_to($2, 'UTF8')), 'hex'), NOW() + INTERVAL '1 day')`,
     [userId, token]
   );
   return token;
@@ -357,4 +358,52 @@ test("resend verification answers the same for unknown, verified and unverified 
     answers.add(res.body.message);
   }
   assert.equal(answers.size, 1);
+});
+
+// ---------------------------------------------------------------------------
+// Session tokens at rest (S15)
+// ---------------------------------------------------------------------------
+
+test("sessions are stored as SHA-256 hashes; the stored value is not a usable cookie", { skip }, async () => {
+  const u = await createUser();
+  const res = await login(u.email);
+  const token = res.session!;
+  const { rows } = await query(`SELECT session_token FROM user_sessions WHERE user_id = $1`, [u.id]);
+  assert.equal(rows.length, 1);
+  const { createHash } = await import("node:crypto");
+  assert.equal(rows[0].session_token, createHash("sha256").update(token).digest("hex"));
+  assert.notEqual(rows[0].session_token, token);
+
+  assert.equal((await profile(rows[0].session_token)).status, 401, "a leaked database row can't be replayed");
+  assert.equal((await profile(token)).status, 200);
+
+  assert.equal((await request("POST", "/auth/logout", { cookie: `session=${token}` })).status, 200);
+  assert.equal((await query(`SELECT 1 FROM user_sessions WHERE user_id = $1`, [u.id])).rowCount, 0, "logout finds the hashed row");
+});
+
+test("migration 013 hashes existing plaintext tokens once, and re-running it changes nothing", { skip }, async () => {
+  const { readFileSync } = await import("node:fs");
+  const { createHash } = await import("node:crypto");
+  const { getDatabase } = await import("../../src/services/databaseService.js");
+  const sql = readFileSync(new URL("../../migrations/013_hash_session_tokens.sql", import.meta.url), "utf8");
+  const u = await createUser();
+  const plaintext = randomBytes(32).toString("hex");
+  const hashed = createHash("sha256").update(plaintext).digest("hex");
+
+  const client = await getDatabase().connect();
+  try {
+    await client.query("BEGIN");
+    // Simulate a database from before the migration: no marker, a plaintext token
+    await client.query(`COMMENT ON COLUMN user_sessions.session_token IS NULL`);
+    await client.query(`INSERT INTO user_sessions (user_id, session_token, expires_at) VALUES ($1, $2, NOW() + INTERVAL '1 day')`, [u.id, plaintext]);
+    await client.query(sql);
+    const once = await client.query(`SELECT session_token FROM user_sessions WHERE user_id = $1`, [u.id]);
+    assert.equal(once.rows[0].session_token, hashed);
+    await client.query(sql);
+    const twice = await client.query(`SELECT session_token FROM user_sessions WHERE user_id = $1`, [u.id]);
+    assert.equal(twice.rows[0].session_token, hashed, "not hashed twice");
+  } finally {
+    await client.query("ROLLBACK");
+    client.release();
+  }
 });

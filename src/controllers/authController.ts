@@ -10,6 +10,7 @@ import {
   getUserByIdWithPassword,
   verifyEmail,
   resendVerificationEmail,
+  hashSessionToken,
   AuthError,
   CreateUserData,
   LoginCredentials
@@ -362,7 +363,10 @@ export async function changePassword(c: Context) {
 
     // Sign out every other session (e.g. someone who learned the old password)
     const currentToken = getSessionFromRequest(c);
-    await query('DELETE FROM user_sessions WHERE user_id = $1 AND session_token <> $2', [user.id, currentToken ?? '']);
+    await query('DELETE FROM user_sessions WHERE user_id = $1 AND session_token <> $2', [
+      user.id,
+      currentToken ? hashSessionToken(currentToken) : '',
+    ]);
     
     return c.json({ message: 'Password updated successfully' });
     

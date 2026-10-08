@@ -73,6 +73,15 @@ export function generateSessionToken(): string {
   return crypto.randomBytes(32).toString('hex');
 }
 
+/**
+ * Sessions are stored as the SHA-256 of the cookie value (migration 013), so the
+ * database never holds a usable token. Tokens are 256-bit random, so a fast
+ * unsalted hash is enough.
+ */
+export function hashSessionToken(token: string): string {
+  return crypto.createHash('sha256').update(token, 'utf8').digest('hex');
+}
+
 /** Why a login was refused (mapped to an HTTP status by the controller). */
 export class AuthError extends Error {
   constructor(public code: 'INVALID_CREDENTIALS' | 'EMAIL_NOT_VERIFIED', message: string) {
@@ -118,7 +127,7 @@ export async function createSession(
   await db.query(
     `INSERT INTO user_sessions (user_id, session_token, expires_at, user_agent, ip_address)
      VALUES ($1, $2, $3, $4, $5)`,
-    [userId, sessionToken, expiresAt, userAgent || null, validIpAddress]
+    [userId, hashSessionToken(sessionToken), expiresAt, userAgent || null, validIpAddress]
   );
   return sessionToken;
 }
@@ -229,7 +238,7 @@ export async function getUserBySessionToken(sessionToken: string): Promise<User 
      FROM users u
      JOIN user_sessions s ON u.id = s.user_id
      WHERE s.session_token = $1 AND s.expires_at > NOW() AND u.is_active = true`,
-    [sessionToken]
+    [hashSessionToken(sessionToken)]
   );
   
   if (result.rows.length === 0) {
@@ -246,7 +255,7 @@ export async function getUserBySessionToken(sessionToken: string): Promise<User 
 export async function logoutUser(sessionToken: string): Promise<boolean> {
   const result = await query(
     'DELETE FROM user_sessions WHERE session_token = $1',
-    [sessionToken]
+    [hashSessionToken(sessionToken)]
   );
   
   return result.rowCount > 0;
