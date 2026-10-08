@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" type="image/svg+xml" href="./logo.svg" />
+    <title>Status Pembayaran - ILMATRIX</title>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;700&display=swap" rel="stylesheet">
+
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: { sans: ['Plus Jakarta Sans', 'system-ui', 'sans-serif'] },
+                    colors: { primary: "#0f0e85", secondary: "#e44c99", tertiary: "#1b612f" },
+                },
+            },
+        };
+        // Same theme choice as the other pages
+        (function () {
+            let saved = null;
+            try { saved = localStorage.getItem('theme'); } catch {}
+            const dark = saved ? saved === 'dark' : window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+            if (dark) document.documentElement.classList.add('dark');
+        })();
+    </script>
+</head>
+<body class="min-h-screen bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-white flex items-center justify-center p-4">
+    <main class="w-full max-w-md bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-8 text-center">
+        <h1 class="text-2xl font-bold">Status Pembayaran</h1>
+
+        <div id="status-icon" class="mx-auto my-6 flex h-16 w-16 items-center justify-center rounded-full bg-gray-100 dark:bg-gray-700" aria-hidden="true">
+            <div class="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent motion-reduce:animate-none"></div>
+        </div>
+
+        <div role="status" aria-live="polite">
+            <p id="status-title" class="text-lg font-semibold">Memeriksa pembayaran…</p>
+            <p id="status-detail" class="mt-2 text-sm text-gray-600 dark:text-gray-300"></p>
+        </div>
+
+        <div id="status-actions" class="mt-6 flex flex-col gap-3"></div>
+    </main>
+
+    <script>
+        (function () {
+            const POLL_MS = 3000;
+            const MAX_WAIT_MS = 3 * 60 * 1000;
+            const ORDER_ID = /^[A-Za-z0-9\-_~.]{1,50}$/;
+
+            const title = document.getElementById('status-title');
+            const detail = document.getElementById('status-detail');
+            const icon = document.getElementById('status-icon');
+            const actions = document.getElementById('status-actions');
+
+            function action(label, href, primary) {
+                const link = document.createElement('a');
+                link.href = href;
+                link.textContent = label;
+                link.className = primary
+                    ? 'rounded-md bg-primary px-4 py-2 text-sm font-semibold text-white hover:opacity-90'
+                    : 'rounded-md border border-gray-300 dark:border-gray-600 px-4 py-2 text-sm font-semibold hover:bg-gray-50 dark:hover:bg-gray-700';
+                return link;
+            }
+
+            function show(state, heading, text, links) {
+                title.textContent = heading;
+                detail.textContent = text || '';
+                actions.replaceChildren(...(links || []));
+                const symbols = { paid: ['✓', 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300'], failed: ['✕', 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300'], info: ['i', 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300'] };
+                if (symbols[state]) {
+                    icon.className = `mx-auto my-6 flex h-16 w-16 items-center justify-center rounded-full text-3xl font-bold ${symbols[state][1]}`;
+                    icon.textContent = symbols[state][0];
+                }
+            }
+
+            const orderId = new URLSearchParams(window.location.search).get('order_id');
+            if (!orderId || !ORDER_ID.test(orderId)) {
+                show('info', 'Pembayaran tidak ditemukan', 'Cek riwayat pembayaran di dashboard.', [action('Ke Dashboard', '/dashboard.html#upgrade', true)]);
+                return;
+            }
+
+            const startedAt = Date.now();
+
+            async function check() {
+                let response;
+                try {
+                    response = await fetch(`/api/payments/${encodeURIComponent(orderId)}`, { credentials: 'include' });
+                } catch {
+                    return schedule('Koneksi terputus, mencoba lagi…');
+                }
+                if (response.status === 401) {
+                    show('info', 'Masuk untuk melihat status', 'Pembayaranmu tetap diproses walaupun kamu belum masuk.', [action('Masuk', '/login.html', true)]);
+                    return;
+                }
+                if (response.status === 404) {
+                    show('info', 'Pembayaran tidak ditemukan', 'Pastikan kamu masuk dengan akun yang sama saat membeli.', [action('Ke Dashboard', '/dashboard.html#upgrade', true)]);
+                    return;
+                }
+                const data = await response.json().catch(() => ({}));
+                const payment = data.payment;
+                if (!response.ok || !payment) return schedule('Mencoba lagi…');
+
+                const what = `${payment.product_name} (Rp${Number(payment.amount_idr).toLocaleString('id-ID')})`;
+                if (payment.status === 'paid') {
+                    show('paid', 'Pembayaran berhasil', `${what} sudah aktif di akunmu.`, [action('Mulai Belajar', '/app', true), action('Lihat Kredit', '/dashboard.html', false)]);
+                } else if (payment.status === 'failed' || payment.status === 'expired') {
+                    show('failed', payment.status === 'expired' ? 'Pembayaran kedaluwarsa' : 'Pembayaran tidak berhasil', `${what} belum dibayar. Kamu bisa mencoba lagi.`, [action('Coba Lagi', '/dashboard.html#upgrade', true)]);
+                } else if (payment.status === 'refunded') {
+                    show('info', 'Pembayaran dikembalikan', `${what} telah dikembalikan.`, [action('Ke Dashboard', '/dashboard.html', true)]);
+                } else {
+                    schedule(`Menunggu konfirmasi untuk ${what}. Kalau kamu memilih transfer bank, selesaikan pembayaran sesuai instruksi.`);
+                }
+            }
+
+            function schedule(message) {
+                if (Date.now() - startedAt > MAX_WAIT_MS) {
+                    show('info', 'Pembayaran belum terkonfirmasi', 'Kamu boleh menutup halaman ini. Kredit masuk otomatis begitu pembayaran diterima.', [action('Ke Dashboard', '/dashboard.html#upgrade', true)]);
+                    return;
+                }
+                title.textContent = 'Menunggu pembayaran…';
+                detail.textContent = message;
+                setTimeout(check, POLL_MS);
+            }
+
+            check();
+        })();
+    </script>
+</body>
+</html>

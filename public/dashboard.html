@@ -352,13 +352,13 @@
                 </div>
             </div>
 
-            <!-- Token Usage Section -->
+            <!-- Kredit Usage Section -->
             <div class="mt-8">
                 <div class="bg-white dark:bg-gray-800 shadow rounded-lg overflow-hidden">
                     <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
                         <div>
-                            <h3 class="text-lg font-semibold text-gray-900 dark:text-white">Token Usage</h3>
-                            <p class="text-sm text-gray-600 dark:text-gray-400 mt-1">Monitor your AI token consumption</p>
+                            <h3 class="text-lg font-semibold text-gray-900 dark:text-white">Kredit Belajar</h3>
+                            <p class="text-sm text-gray-600 dark:text-gray-400 mt-1">Setiap penjelasan, kuis, dan flashcard memakai kredit</p>
                         </div>
                         <div id="usage-badge" class="hidden px-3 py-1 rounded-full text-xs font-semibold">
                             <!-- Will be filled by JS -->
@@ -376,34 +376,28 @@
                             <!-- Usage Stats Grid -->
                             <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
 
-                                <!-- Session Usage -->
+                                <!-- Plan & extra kredit -->
                                 <div class="space-y-3">
                                     <div class="flex items-center justify-between">
-                                        <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Session Usage</span>
+                                        <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Paket</span>
                                         <svg class="h-5 w-5 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
                                         </svg>
                                     </div>
                                     <div>
                                         <div class="flex justify-between items-baseline mb-2">
-                                            <span class="text-2xl font-bold text-gray-900 dark:text-white" id="session-used">0</span>
-                                            <span class="text-sm text-gray-600 dark:text-gray-400">/ <span id="session-limit">25,000</span></span>
+                                            <span class="text-2xl font-bold text-gray-900 dark:text-white" id="plan-name">-</span>
+                                            <span class="text-sm text-gray-600 dark:text-gray-400" id="plan-expiry"></span>
                                         </div>
-                                        <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2.5">
-                                            <div id="session-progress" class="bg-gradient-to-r from-green-500 to-green-600 h-2.5 rounded-full transition-all duration-500" style="width: 0%"></div>
-                                        </div>
-                                        <div class="flex justify-between mt-2 text-xs">
-                                            <span class="text-gray-600 dark:text-gray-400">Remaining: <span id="session-remaining" class="font-semibold">25,000</span></span>
-                                            <span id="session-percentage" class="font-semibold text-gray-900 dark:text-white">0%</span>
-                                        </div>
-                                        <p class="text-xs text-gray-500 dark:text-gray-400 mt-2">Expires in: <span id="session-time-remaining">5 hours</span></p>
+                                        <p class="text-sm text-gray-600 dark:text-gray-400">Kredit tambahan (pass &amp; top-up): <span id="extra-remaining" class="font-semibold text-gray-900 dark:text-white">0</span></p>
+                                        <p class="text-xs text-gray-500 dark:text-gray-400 mt-2">Total kredit tersisa: <span id="total-remaining" class="font-semibold">0</span></p>
                                     </div>
                                 </div>
 
                                 <!-- Weekly Usage -->
                                 <div class="space-y-3">
                                     <div class="flex items-center justify-between">
-                                        <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Weekly Usage</span>
+                                        <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Minggu Ini</span>
                                         <svg class="h-5 w-5 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
                                         </svg>
@@ -411,23 +405,23 @@
                                     <div>
                                         <div class="flex justify-between items-baseline mb-2">
                                             <span class="text-2xl font-bold text-gray-900 dark:text-white" id="weekly-used">0</span>
-                                            <span class="text-sm text-gray-600 dark:text-gray-400">/ <span id="weekly-limit">250,000</span></span>
+                                            <span class="text-sm text-gray-600 dark:text-gray-400">/ <span id="weekly-limit">150</span> kredit</span>
                                         </div>
                                         <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2.5">
                                             <div id="weekly-progress" class="h-2.5 rounded-full transition-all duration-500" style="width: 0%"></div>
                                         </div>
                                         <div class="flex justify-between mt-2 text-xs">
-                                            <span class="text-gray-600 dark:text-gray-400">Remaining: <span id="weekly-remaining" class="font-semibold">250,000</span></span>
+                                            <span class="text-gray-600 dark:text-gray-400">Sisa: <span id="weekly-remaining" class="font-semibold">150</span></span>
                                             <span id="weekly-percentage" class="font-semibold text-gray-900 dark:text-white">0%</span>
                                         </div>
-                                        <p class="text-xs text-gray-500 dark:text-gray-400 mt-2">Resets: <span id="weekly-reset-time">-</span></p>
+                                        <p class="text-xs text-gray-500 dark:text-gray-400 mt-2">Terisi lagi: <span id="weekly-reset-time">-</span></p>
                                     </div>
                                 </div>
 
                                 <!-- Monthly Usage -->
                                 <div class="space-y-3">
                                     <div class="flex items-center justify-between">
-                                        <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Monthly Usage</span>
+                                        <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Bulan Ini</span>
                                         <svg class="h-5 w-5 text-purple-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
                                         </svg>
@@ -435,16 +429,9 @@
                                     <div>
                                         <div class="flex justify-between items-baseline mb-2">
                                             <span class="text-2xl font-bold text-gray-900 dark:text-white" id="monthly-used">0</span>
-                                            <span class="text-sm text-gray-600 dark:text-gray-400">/ <span id="monthly-limit">1,000,000</span></span>
+                                            <span class="text-sm text-gray-600 dark:text-gray-400">kredit dipakai</span>
                                         </div>
-                                        <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2.5">
-                                            <div id="monthly-progress" class="bg-gradient-to-r from-purple-500 to-purple-600 h-2.5 rounded-full transition-all duration-500" style="width: 0%"></div>
-                                        </div>
-                                        <div class="flex justify-between mt-2 text-xs">
-                                            <span class="text-gray-600 dark:text-gray-400">Remaining: <span id="monthly-remaining" class="font-semibold">1,000,000</span></span>
-                                            <span id="monthly-percentage" class="font-semibold text-gray-900 dark:text-white">0%</span>
-                                        </div>
-                                        <p class="text-xs text-gray-500 dark:text-gray-400 mt-2">Resets: <span id="monthly-reset-time">-</span></p>
+                                        <p class="text-xs text-gray-500 dark:text-gray-400 mt-2">Dihitung ulang: <span id="monthly-reset-time">-</span></p>
                                     </div>
                                 </div>
                             </div>
@@ -488,6 +475,24 @@
                     </div>
                 </div>
             </div>
+
+            <!-- Buy kredit and plans (Midtrans) -->
+            <section id="upgrade" class="hidden mt-8 scroll-mt-20" aria-labelledby="upgrade-title">
+                <div class="bg-white dark:bg-gray-800 shadow rounded-lg overflow-hidden">
+                    <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+                        <h3 id="upgrade-title" class="text-lg font-semibold text-gray-900 dark:text-white">Tambah Kredit</h3>
+                        <p class="text-sm text-gray-600 dark:text-gray-400 mt-1">Bayar dengan QRIS, e-wallet, atau metode lain lewat Midtrans. <a href="/harga.html" class="underline">Detail harga</a> · <a href="/syarat-ketentuan.html" class="underline">Syarat &amp; Ketentuan</a> · <a href="/kebijakan-pengembalian.html" class="underline">Pengembalian dana</a></p>
+                    </div>
+                    <div class="p-6">
+                        <p id="upgrade-message" class="hidden mb-4 text-sm rounded-md p-3" role="status"></p>
+                        <ul id="upgrade-products" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4" aria-label="Produk"></ul>
+                        <div id="payment-history" class="hidden mt-6 border-t border-gray-200 dark:border-gray-700 pt-4">
+                            <h4 class="text-sm font-semibold text-gray-900 dark:text-white">Riwayat Pembayaran</h4>
+                            <ul id="payment-history-list" class="mt-2 divide-y divide-gray-200 dark:divide-gray-700"></ul>
+                        </div>
+                    </div>
+                </div>
+            </section>
 
             <!-- Main Content Grid -->
             <!-- Removed Recent Chat Sessions and Recent Materials cards -->
@@ -845,10 +850,18 @@
                 const { usage } = statsResponse;
                 const { analytics } = analyticsResponse;
 
-                // Update weekly usage
-                document.getElementById('weekly-used').textContent = formatNumber(usage.weekly.used);
-                document.getElementById('weekly-limit').textContent = formatNumber(usage.weekly.limit);
-                document.getElementById('weekly-remaining').textContent = formatNumber(usage.weekly.remaining);
+                // Plan and extra kredit
+                document.getElementById('plan-name').textContent = usage.plan.name;
+                document.getElementById('plan-expiry').textContent = usage.plan.expires_at
+                    ? 'sampai ' + new Date(usage.plan.expires_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })
+                    : '';
+                document.getElementById('extra-remaining').textContent = formatKredit(usage.extra.remaining);
+                document.getElementById('total-remaining').textContent = formatKredit(usage.total_remaining);
+
+                // Weekly allowance
+                document.getElementById('weekly-used').textContent = formatKredit(usage.weekly.used);
+                document.getElementById('weekly-limit').textContent = formatKredit(usage.weekly.limit);
+                document.getElementById('weekly-remaining').textContent = formatKredit(usage.weekly.remaining);
                 document.getElementById('weekly-percentage').textContent = usage.weekly.percentage.toFixed(1) + '%';
                 document.getElementById('weekly-progress').style.width = Math.min(usage.weekly.percentage, 100) + '%';
                 document.getElementById('weekly-reset-time').textContent = formatResetDate(usage.weekly.resets_at);
@@ -865,35 +878,15 @@
                     weeklyBar.className = 'h-2.5 rounded-full transition-all duration-500 bg-gradient-to-r from-blue-500 to-blue-600';
                 }
 
-                // Update session usage
-                document.getElementById('session-used').textContent = formatNumber(usage.session.used);
-                document.getElementById('session-limit').textContent = formatNumber(usage.session.limit);
-                document.getElementById('session-remaining').textContent = formatNumber(usage.session.remaining);
-                document.getElementById('session-percentage').textContent = usage.session.percentage.toFixed(1) + '%';
-                document.getElementById('session-progress').style.width = Math.min(usage.session.percentage, 100) + '%';
-
-                const timeRemaining = usage.session.time_remaining_minutes;
-                if (timeRemaining !== null) {
-                    const hours = Math.floor(timeRemaining / 60);
-                    const minutes = timeRemaining % 60;
-                    document.getElementById('session-time-remaining').textContent = `${hours}h ${minutes}m`;
-                } else {
-                    document.getElementById('session-time-remaining').textContent = '-';
-                }
-
-                // Update monthly usage
-                document.getElementById('monthly-used').textContent = formatNumber(usage.monthly.used);
-                document.getElementById('monthly-limit').textContent = formatNumber(usage.monthly.limit);
-                document.getElementById('monthly-remaining').textContent = formatNumber(usage.monthly.remaining);
-                document.getElementById('monthly-percentage').textContent = usage.monthly.percentage.toFixed(1) + '%';
-                document.getElementById('monthly-progress').style.width = Math.min(usage.monthly.percentage, 100) + '%';
+                // Monthly kredit used
+                document.getElementById('monthly-used').textContent = formatKredit(usage.monthly.used);
                 document.getElementById('monthly-reset-time').textContent = formatResetDate(usage.monthly.resets_at);
 
-                // Update quick stats
-                document.getElementById('usage-today').textContent = formatNumber(analytics.today);
-                document.getElementById('usage-week').textContent = formatNumber(analytics.this_week);
-                document.getElementById('usage-month').textContent = formatNumber(analytics.this_month);
-                document.getElementById('usage-total').textContent = formatNumber(analytics.total_all_time);
+                // Quick stats (kredit)
+                document.getElementById('usage-today').textContent = formatKredit(analytics.today);
+                document.getElementById('usage-week').textContent = formatKredit(analytics.this_week);
+                document.getElementById('usage-month').textContent = formatKredit(analytics.this_month);
+                document.getElementById('usage-total').textContent = formatKredit(analytics.total_all_time);
 
                 // Show warning if needed
                 const warningBanner = document.getElementById('usage-warning-banner');
@@ -905,24 +898,24 @@
                     warningBanner.classList.remove('hidden');
                     usageBadge.classList.remove('hidden');
 
-                    if (usage.weekly.percentage >= 100) {
+                    if (usage.total_remaining <= 0) {
                         warningBanner.className = 'p-4 rounded-lg mb-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-800 dark:text-red-200';
-                        warningTitle.textContent = 'Weekly Limit Reached';
-                        warningMessage.textContent = `You've reached your weekly token limit. Usage will resume when the limit resets on ${formatResetDate(usage.weekly.resets_at)}.`;
+                        warningTitle.textContent = 'Kredit habis';
+                        warningMessage.textContent = `Kredit belajarmu sudah habis. Kredit mingguan terisi lagi ${formatResetDate(usage.weekly.resets_at)}.`;
                         usageBadge.className = 'px-3 py-1 rounded-full text-xs font-semibold bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200';
-                        usageBadge.textContent = 'At Limit';
+                        usageBadge.textContent = 'Habis';
                     } else if (usage.weekly.percentage >= 90) {
                         warningBanner.className = 'p-4 rounded-lg mb-4 bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 text-orange-800 dark:text-orange-200';
-                        warningTitle.textContent = 'Critical Usage Level';
-                        warningMessage.textContent = `You've used ${usage.weekly.percentage.toFixed(1)}% of your weekly limit. Only ${formatNumber(usage.weekly.remaining)} tokens remaining.`;
+                        warningTitle.textContent = 'Kredit hampir habis';
+                        warningMessage.textContent = `Sisa kredit belajarmu ${formatKredit(usage.total_remaining)}.`;
                         usageBadge.className = 'px-3 py-1 rounded-full text-xs font-semibold bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200';
-                        usageBadge.textContent = 'Critical';
+                        usageBadge.textContent = 'Hampir habis';
                     } else {
                         warningBanner.className = 'p-4 rounded-lg mb-4 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 text-yellow-800 dark:text-yellow-200';
-                        warningTitle.textContent = 'High Usage Warning';
-                        warningMessage.textContent = `You've used ${usage.weekly.percentage.toFixed(1)}% of your weekly token limit.`;
+                        warningTitle.textContent = 'Pemakaian tinggi';
+                        warningMessage.textContent = `Kamu sudah memakai ${usage.weekly.percentage.toFixed(1)}% kredit minggu ini.`;
                         usageBadge.className = 'px-3 py-1 rounded-full text-xs font-semibold bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200';
-                        usageBadge.textContent = 'High Usage';
+                        usageBadge.textContent = 'Pemakaian tinggi';
                     }
                 } else {
                     warningBanner.classList.add('hidden');
@@ -944,6 +937,11 @@
         // Format number with commas
         function formatNumber(num) {
             return new Intl.NumberFormat().format(num);
+        }
+
+        // Kredit are fractional internally; students see whole numbers
+        function formatKredit(num) {
+            return new Intl.NumberFormat('id-ID', { maximumFractionDigits: 0 }).format(Math.max(0, num || 0));
         }
 
         // Format reset date
@@ -1054,6 +1052,97 @@
             }
         }
 
+        // ---------------------------------------------------------------
+        // Buying kredit and plans (redirects to Midtrans' hosted page)
+        // ---------------------------------------------------------------
+        const PAYMENT_STATUS_LABELS = {
+            pending: ['Menunggu pembayaran', 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/40 dark:text-yellow-200'],
+            paid: ['Berhasil', 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-200'],
+            failed: ['Gagal', 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-200'],
+            expired: ['Kedaluwarsa', 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-200'],
+            refunded: ['Dikembalikan', 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-200'],
+        };
+
+        function formatRupiah(n) {
+            return 'Rp' + Number(n).toLocaleString('id-ID');
+        }
+
+        function el(tag, className, text) {
+            const node = document.createElement(tag);
+            if (className) node.className = className;
+            if (text !== undefined) node.textContent = text;
+            return node;
+        }
+
+        function showUpgradeMessage(message, kind) {
+            const box = document.getElementById('upgrade-message');
+            box.textContent = message;
+            box.className = 'mb-4 text-sm rounded-md p-3 ' + (kind === 'error'
+                ? 'bg-red-50 text-red-700 dark:bg-red-900/20 dark:text-red-300'
+                : 'bg-blue-50 text-blue-700 dark:bg-blue-900/20 dark:text-blue-300');
+        }
+
+        function renderProduct(product, enabled) {
+            const item = el('li', 'flex flex-col rounded-lg border border-gray-200 dark:border-gray-700 p-4');
+            item.append(
+                el('span', 'text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400', product.kind === 'plan' ? 'Paket' : 'Kredit'),
+                el('span', 'mt-1 text-base font-semibold text-gray-900 dark:text-white', product.name),
+                el('span', 'mt-1 text-2xl font-bold text-gray-900 dark:text-white', formatRupiah(product.price_idr)),
+                el('span', 'mt-2 flex-1 text-sm text-gray-600 dark:text-gray-400', product.description)
+            );
+            const button = el('button', 'mt-4 w-full rounded-md bg-primary px-4 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50', 'Beli');
+            button.type = 'button';
+            button.setAttribute('aria-label', `Beli ${product.name} seharga ${formatRupiah(product.price_idr)}`);
+            button.disabled = !enabled;
+            button.addEventListener('click', () => buyProduct(product.code));
+            item.append(button);
+            return item;
+        }
+
+        // Payment happens on our checkout page (Midtrans popup), so the student stays on ILMATRIX
+        function buyProduct(code) {
+            window.location.assign('/checkout.html?product=' + encodeURIComponent(code));
+        }
+
+        function renderPaymentHistory(payments) {
+            const wrapper = document.getElementById('payment-history');
+            const list = document.getElementById('payment-history-list');
+            if (!payments.length) return;
+            list.replaceChildren(...payments.slice(0, 10).map((payment) => {
+                const [label, badge] = PAYMENT_STATUS_LABELS[payment.status] || [payment.status, ''];
+                const row = el('li', 'flex flex-wrap items-center justify-between gap-2 py-2 text-sm');
+                const left = el('div', 'min-w-0');
+                left.append(
+                    el('p', 'font-medium text-gray-900 dark:text-white', `${payment.product_name} · ${formatRupiah(payment.amount_idr)}`),
+                    el('p', 'text-xs text-gray-500 dark:text-gray-400', new Date(payment.created_at).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' }))
+                );
+                const right = el('div', 'flex items-center gap-3');
+                right.append(el('span', `rounded-full px-2 py-0.5 text-xs font-semibold ${badge}`, label));
+                if (payment.status === 'pending') {
+                    const link = el('a', 'text-xs font-medium text-primary underline', 'Lihat status');
+                    link.href = `/payment.html?order_id=${encodeURIComponent(payment.order_id)}`;
+                    right.append(link);
+                }
+                row.append(left, right);
+                return row;
+            }));
+            wrapper.classList.remove('hidden');
+        }
+
+        async function loadPayments() {
+            try {
+                const { enabled, products } = await apiCall('/payments/products');
+                document.getElementById('upgrade-products').replaceChildren(...products.map((p) => renderProduct(p, enabled)));
+                if (!enabled) showUpgradeMessage('Pembayaran online belum tersedia. Hubungi admin untuk membeli paket.', 'info');
+                document.getElementById('upgrade').classList.remove('hidden');
+                const { payments } = await apiCall('/payments');
+                renderPaymentHistory(payments);
+                if (window.location.hash === '#upgrade') document.getElementById('upgrade').scrollIntoView();
+            } catch (error) {
+                console.warn('Payments unavailable:', error);
+            }
+        }
+
         // Utility functions
         function escapeHtml(text) {
             const div = document.createElement('div');
@@ -1094,6 +1183,7 @@
             if (await checkAuth()) {
                 await loadDashboard();
                 await loadTokenUsage(); // Load token usage stats
+                await loadPayments();
             }
 
             // User menu - only add if element exists

@@ -1,37 +1,30 @@
-import JSZip from "jszip";
+import { BoundedZipReader, OfficeFileTooLargeError, decodeXmlEntities } from "./zip.js";
 
 function xmlToText(xml: string): string {
-  // Replace XML tags with spaces and decode a few entities
   const noTags = xml
-    .replace(/</g, "<")
-    .replace(/>/g, ">")
-    .replace(/&/g, "&")
     .replace(/<w:p[^>]*>/g, "\n") // paragraphs
     .replace(/<[^>]+>/g, " "); // any other tags
-  // Collapse whitespace
-  return noTags.replace(/\s+/g, " ").replace(/\n\s+/g, "\n").trim();
+  // Collapse whitespace, then decode entities (after tags are gone, so &lt; stays text)
+  return decodeXmlEntities(noTags.replace(/\s+/g, " ").replace(/\n\s+/g, "\n").trim());
 }
 
 export async function extractDocxText(buffer: Buffer): Promise<string> {
-  const zip = await JSZip.loadAsync(buffer);
+  const zip = await BoundedZipReader.open(buffer);
   // Main document
-  const main = zip.file("word/document.xml");
-  if (!main) return "";
-  const mainXml = await main.async("string");
+  const mainXml = await zip.readText("word/document.xml");
+  if (mainXml === null) return "";
 
   // Headers and footers if present
   const parts: string[] = [mainXml];
-  const headerFiles = Object.keys(zip.files).filter((k) =>
-    /^word\/header\d+\.xml$/.test(k)
-  );
-  const footerFiles = Object.keys(zip.files).filter((k) =>
-    /^word\/footer\d+\.xml$/.test(k)
-  );
-  for (const f of [...headerFiles, ...footerFiles]) {
+  const headerFooterFiles = zip.names().filter((k) => /^word\/(header|footer)\d+\.xml$/.test(k));
+  for (const f of headerFooterFiles) {
     try {
-      const s = await zip.file(f)!.async("string");
-      parts.push(s);
-    } catch {}
+      const s = await zip.readText(f);
+      if (s) parts.push(s);
+    } catch (error) {
+      if (error instanceof OfficeFileTooLargeError) throw error;
+      // ignore a broken header/footer
+    }
   }
 
   const combined = parts.join("\n");

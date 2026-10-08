@@ -29,6 +29,7 @@ export interface CreateSessionInput {
 
 export interface CreateMessageInput {
   sessionId: string;
+  userId: string;
   role: 'user' | 'assistant';
   content: string;
   materialId?: string;
@@ -161,10 +162,10 @@ export async function deleteSession(sessionId: string, userId: string): Promise<
  * Add a message to a chat session
  */
 export async function addMessage(input: CreateMessageInput): Promise<ChatMessage> {
-  // Verify session exists and get user permission
+  // Verify the session exists and belongs to this user
   const sessionCheck = await dbQuery(
-    'SELECT user_id FROM chat_sessions WHERE id = $1',
-    [input.sessionId]
+    'SELECT user_id FROM chat_sessions WHERE id = $1 AND user_id = $2',
+    [input.sessionId, input.userId]
   );
 
   if (sessionCheck.rows.length === 0) {

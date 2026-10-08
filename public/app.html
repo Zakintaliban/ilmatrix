@@ -6,7 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob:; connect-src 'self' https://cdn.jsdelivr.net; font-src 'self' data: https://fonts.gstatic.com; object-src 'none'; base-uri 'self'"
+      content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://cdn.jsdelivr.net https://challenges.cloudflare.com; frame-src https://challenges.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob:; connect-src 'self' https://cdn.jsdelivr.net; font-src 'self' data: https://fonts.gstatic.com; object-src 'none'; base-uri 'self'"
     />
     <title>ILMATRIX — App</title>
 
@@ -138,13 +138,28 @@
         "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" }
       }
     </script>
-    <!-- Markdown renderer + sanitizer -->
-    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js"></script>
+    <!-- Markdown renderer + sanitizer, pinned with Subresource Integrity (unpinned marked/marked.min.js no longer exists since marked 16) -->
+    <script src="https://cdn.jsdelivr.net/npm/marked@18.0.14/lib/marked.umd.js" integrity="sha384-2vpGtuKqJvFlwJqYnf/wUMuzUfhUnYBt9oay0e2yaFcq0Dh6/aEbQ8YAOeKGzlYo" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js" integrity="sha384-+VfUPEb0PdtChMwmBcBmykRMDd+v6D/oFmB3rZM/puCMDYcIvF968OimRh4KQY9a" crossorigin="anonymous"></script>
+    <!-- Guest bot check (Turnstile); retries /api calls after verification -->
+    <script src="/js/guest-verify.js"></script>
+    <!-- Math: KaTeX (self-hosted from the katex npm package) + LaTeX extraction for Markdown -->
+    <link rel="stylesheet" href="/vendor/katex/katex.min.css" />
+    <script src="/vendor/katex/katex.min.js"></script>
+    <script src="/js/markdown-math.js"></script>
 
     <style>
       * {
         font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      }
+      /* Math keeps KaTeX's fonts (some symbols, e.g. \neq, need KaTeX_Main glyphs) */
+      .katex * {
+        font-family: inherit;
+      }
+      .markdown .math-display {
+        display: block;
+        overflow-x: auto;
+        overflow-y: hidden;
       }
       html {
         scroll-behavior: smooth;
@@ -2574,16 +2589,21 @@
         }));
       }
 
-      // Render Markdown safely using marked + DOMPurify (fallback to escaping)
+      // Render Markdown safely using marked + DOMPurify (fallback to escaping).
+      // LaTeX math ($…$, $$…$$) is kept away from marked and rendered with KaTeX.
       function renderMarkdown(s) {
         try {
           const src = String(s ?? "");
+          const math = window.MarkdownMath ? window.MarkdownMath.protectMath(src) : null;
+          const text = math ? math.text : src;
           const parsed = window.marked
-            ? window.marked.parse(src)
-            : escapeHtml(src);
-          const safe = window.DOMPurify
-            ? window.DOMPurify.sanitize(parsed)
-            : parsed;
+            ? window.marked.parse(text)
+            : escapeHtml(text);
+          const sanitize = (html) => (window.DOMPurify ? window.DOMPurify.sanitize(html) : html);
+          let safe = sanitize(parsed);
+          if (math && math.blocks.length) {
+            safe = window.MarkdownMath.renderMath(safe, math, window.katex, sanitize);
+          }
           return "<div class='markdown'>" + safe + "</div>";
         } catch (e) {
           return (
@@ -2622,6 +2642,132 @@
           });
           pre.appendChild(btn);
         });
+      }
+
+      // ---------------------------------------------------------------
+      // Streaming answers (Server-Sent Events from /api/chat, /api/explain, ...)
+      // ---------------------------------------------------------------
+
+      /**
+       * POST with stream: true. Calls onText(fullTextSoFar) as text arrives.
+       * Returns { response } when the server answered with JSON instead
+       * (validation, limits, guest checks), otherwise
+       * { text, final, error, headers } once the stream ends.
+       */
+      async function streamAI(endpoint, payload, onText) {
+        const res = await fetch(endpoint, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Accept: "text/event-stream" },
+          body: JSON.stringify({ ...payload, stream: true }),
+        });
+        if (!(res.headers.get("content-type") || "").includes("text/event-stream") || !res.body) {
+          return { response: res };
+        }
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
+        let text = "";
+        let final = null;
+        let error = null;
+        const handle = (block) => {
+          let event = "message";
+          const data = [];
+          for (const line of block.split("\n")) {
+            if (line.startsWith("event: ")) event = line.slice(7);
+            else if (line.startsWith("data: ")) data.push(line.slice(6));
+          }
+          if (!data.length) return; // keep-alive comments
+          let payload;
+          try {
+            payload = JSON.parse(data.join("\n"));
+          } catch {
+            return;
+          }
+          if (event === "delta" && typeof payload.text === "string") {
+            text += payload.text;
+            onText(text);
+          } else if (event === "done") {
+            final = payload;
+          } else if (event === "error") {
+            error = payload;
+          }
+        };
+        while (true) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          let cut;
+          while ((cut = buffer.indexOf("\n\n")) !== -1) {
+            handle(buffer.slice(0, cut));
+            buffer = buffer.slice(cut + 2);
+          }
+        }
+        if (buffer.trim()) handle(buffer);
+        if (!final && !error) error = { error: "Koneksi terputus sebelum jawaban selesai." };
+        return { text: final && typeof final.answer === "string" ? final.answer : text, final, error, headers: res.headers };
+      }
+
+      /** Re-render Markdown at most once per frame while text streams in. */
+      function throttledMarkdown(el, onRender) {
+        let latest = "";
+        let scheduled = false;
+        return (text) => {
+          latest = text;
+          if (scheduled) return;
+          scheduled = true;
+          requestAnimationFrame(() => {
+            scheduled = false;
+            el.innerHTML = renderMarkdown(latest);
+            if (onRender) onRender();
+          });
+        };
+      }
+
+      /** Final answer text for the stream result (partial text + error note if it broke off). */
+      function streamedAnswer(result) {
+        if (!result.error) return result.text;
+        const message = result.error.error || "Jawaban terputus.";
+        return result.text ? result.text + "\n\n_(" + message + ")_" : message;
+      }
+
+      /**
+       * Stream an answer into a temporary bubble at the end of the chat, then
+       * return the answer text (or null if a guest limit took over). The chat
+       * log is aria-busy while streaming, so screen readers read the finished
+       * answer once instead of every fragment.
+       */
+      async function streamIntoChat(endpoint, payload) {
+        const log = $("chat");
+        const row = document.createElement("div");
+        row.className = "my-2 flex justify-start items-start gap-2";
+        row.innerHTML =
+          '<div class="avatar shrink-0" aria-hidden="true">A</div>' +
+          '<div class="bubble-in rounded-2xl px-3 py-2 shadow-sm max-w-[80%] sm:max-w-[70%] transition-all duration-200 ease-out"><div class="skeleton p-3"><span class="sr-only">Menulis jawaban…</span></div></div>';
+        const bubble = row.lastElementChild;
+        log.setAttribute("aria-busy", "true");
+        log.appendChild(row);
+        log.scrollTop = log.scrollHeight;
+        try {
+          const result = await streamAI(endpoint, payload, throttledMarkdown(bubble, () => (log.scrollTop = log.scrollHeight)));
+          if (result.response) {
+            const res = result.response;
+            if (res.status === 401) {
+              const errorData = await res.clone().json().catch(() => ({}));
+              if (errorData.requiresAuth) {
+                handleGuestLimitReached(errorData);
+                return null;
+              }
+            }
+            updateGuestUsageDisplay(res.headers);
+            const data = await res.json().catch(() => ({}));
+            return data.answer || data.error || JSON.stringify(data);
+          }
+          updateGuestUsageDisplay(result.headers);
+          return streamedAnswer(result);
+        } finally {
+          row.remove();
+          log.removeAttribute("aria-busy");
+        }
       }
 
       // Standardized loading and error helpers
@@ -3344,12 +3490,16 @@
         const el = $(targetId);
         if (!el) return;
         setLoading(el, "Processing...");
+        el.setAttribute("aria-busy", "true");
         try {
-          const res = await fetch(endpoint, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payload),
-          });
+          const result = await streamAI(endpoint, payload, throttledMarkdown(el));
+          if (!result.response) {
+            updateGuestUsageDisplay(result.headers);
+            el.innerHTML = renderMarkdown(streamedAnswer(result));
+            addCopyButtons(el);
+            return;
+          }
+          const res = result.response;
           
           // Handle guest usage limits
           if (res.status === 401) {
@@ -3375,6 +3525,8 @@
           addCopyButtons(el);
         } catch (e) {
           renderError(el, e.message);
+        } finally {
+          el.removeAttribute("aria-busy");
         }
       }
 
@@ -3483,6 +3635,7 @@
               body: JSON.stringify({ materialId, numQuestions: 5 }),
             });
             const data = await res.json();
+            if (!res.ok) throw new Error(data.error || "Permintaan gagal (" + res.status + ")");
             mcqQuestions = Array.isArray(data.questions) ? data.questions : [];
             const md = "Berikut MCQ:\n\n" + mcqToMarkdown(mcqQuestions);
             addChatMessage("assistant", md, "quiz");
@@ -3553,6 +3706,7 @@
               body: JSON.stringify({ materialId, numQuestions: n }),
             });
             const data = await res.json();
+            if (!res.ok) throw new Error(data.error || "Permintaan gagal (" + res.status + ")");
             mcqQuestions = Array.isArray(data.questions) ? data.questions : [];
             const md = `Berikut ${n} MCQ:\n\n` + mcqToMarkdown(mcqQuestions);
             chat.push({ role: "assistant", content: md });
@@ -3577,6 +3731,7 @@
               body: JSON.stringify({ materialId, numQuestions: n }),
             });
             const data = await res.json();
+            if (!res.ok) throw new Error(data.error || "Permintaan gagal (" + res.status + ")");
             mcqQuestions = Array.isArray(data.questions) ? data.questions : [];
             const md = `Berikut ${n} MCQ:\n\n` + mcqToMarkdown(mcqQuestions);
             chat.push({ role: "assistant", content: md });
@@ -3638,6 +3793,7 @@
             body: JSON.stringify({ materialId, numQuestions: n }),
           });
           const data = await res.json();
+          if (!res.ok) throw new Error(data.error || "Permintaan gagal (" + res.status + ")");
           mcqQuestions = Array.isArray(data.questions) ? data.questions : [];
           renderMCQ(mcqQuestions, containerId);
         } catch (e) {
@@ -3735,6 +3891,7 @@
             body: JSON.stringify({ materialId, numCards: n }),
           });
           const data = await res.json();
+          if (!res.ok) throw new Error(data.error || "Permintaan gagal (" + res.status + ")");
           const cards = Array.isArray(data.cards) ? data.cards : [];
           renderFlashcards(cards);
         } catch (e) {
@@ -3868,26 +4025,8 @@
           renderChat();
           try {
             const route = TOOL_ROUTES[activeTool];
-            const res = await fetch(route.endpoint, {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify(route.makePayload(defaultPrompt)),
-            });
-            
-            // Handle guest usage limits
-            if (res.status === 401) {
-              const errorData = await res.json();
-              if (errorData.requiresAuth) {
-                handleGuestLimitReached(errorData);
-                return;
-              }
-            }
-            
-            // Update guest usage counter from headers
-            updateGuestUsageDisplay(res.headers);
-            
-            const data = await res.json();
-            const answer = data.answer || JSON.stringify(data);
+            const answer = await streamIntoChat(route.endpoint, route.makePayload(defaultPrompt));
+            if (answer === null) return;
             chat.push({ role: "assistant", content: answer });
             renderChat();
           } catch (e) {
@@ -3938,28 +4077,9 @@
               return;
             }
             const route = TOOL_ROUTES[activeTool];
-            const body = route.makePayload(trimmed);
-            const res = await fetch(route.endpoint, {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify(body),
-            });
-
-            // Handle guest usage limits
-            if (res.status === 401) {
-              const errorData = await res.json();
-              if (errorData.requiresAuth) {
-                handleGuestLimitReached(errorData);
-                return;
-              }
-            }
-
-            // Update guest usage counter from headers
-            updateGuestUsageDisplay(res.headers);
-
-            const data = await res.json();
-            const answer = data.answer || JSON.stringify(data);
-            await addChatMessage("assistant", answer, activeTool);
+            const tool = activeTool;
+            const answer = await streamIntoChat(route.endpoint, route.makePayload(trimmed));
+            if (answer !== null) await addChatMessage("assistant", answer, tool);
             return;
           }
 
@@ -3968,27 +4088,8 @@
             materialId: materialId || undefined,
             messages: cleanMessagesForAPI(chat),  // CRITICAL FIX: Clean messages before sending
           };
-          const res = await fetch("/api/chat", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payload),
-          });
-
-          // Handle guest usage limits
-          if (res.status === 401) {
-            const errorData = await res.json();
-            if (errorData.requiresAuth) {
-              handleGuestLimitReached(errorData);
-              return;
-            }
-          }
-
-          // Update guest usage counter from headers
-          updateGuestUsageDisplay(res.headers);
-
-          const data = await res.json();
-          const answer = data.answer || JSON.stringify(data);
-          await addChatMessage("assistant", answer, "chat");
+          const answer = await streamIntoChat("/api/chat", payload);
+          if (answer !== null) await addChatMessage("assistant", answer, "chat");
         } catch (e) {
           addChatMessage("system", "Chat error: " + e.message);
         }
@@ -4815,6 +4916,7 @@
               body: JSON.stringify({ materialId }),
             });
             const data = await res.json();
+            if (!res.ok) throw new Error(data.error || "Permintaan gagal (" + res.status + ")");
             dialogueSessionId = data.sessionId || null;
             dialogueTopics = Array.isArray(data.topics) ? data.topics : [];
             dialogueLanguage = data.language || null;
@@ -4871,6 +4973,7 @@
             body: JSON.stringify(payload),
           });
           const data = await res.json();
+          if (!res.ok) throw new Error(data.error || "Permintaan gagal (" + res.status + ")");
           const coachMsg = data.coachMessage || JSON.stringify(data);
           renderDialogueStreamAppend("coach", coachMsg);
 
@@ -4969,6 +5072,7 @@
               }),
             });
             const data = await res.json();
+            if (!res.ok) throw new Error(data.error || "Permintaan gagal (" + res.status + ")");
             const hint = data.hint || JSON.stringify(data);
             renderDialogueStreamAppend(
               "coach",
@@ -5601,7 +5705,7 @@
                 </svg>
               </div>
               <h3 class="text-lg font-bold mb-2">Trial Limit Reached! 🚀</h3>
-              <p class="mb-4">You've used all 5 free AI features. Create a free account to continue using ILMATRIX!</p>
+              <p class="mb-4">${escapeHtml(errorData.error || "You've used all 5 free AI features. Create a free account to continue using ILMATRIX!")}</p>
               <div class="space-y-2">
                 <a href="/login" class="inline-block bg-white text-red-600 font-bold py-2 px-6 rounded-lg hover:bg-gray-100 transition-colors">
                   Login / Sign Up
@@ -5629,7 +5733,7 @@
                 </svg>
               </div>
               <h2 class="text-xl font-bold text-gray-900 dark:text-white mb-2">Trial Limit Reached!</h2>
-              <p class="text-gray-600 dark:text-gray-300 mb-6">${errorData.error || 'You\'ve used all 5 free AI features. Create a free account to continue!'}</p>
+              <p class="text-gray-600 dark:text-gray-300 mb-6">${escapeHtml(errorData.error || 'You\'ve used all 5 free AI features. Create a free account to continue!')}</p>
             </div>
             
             <div class="space-y-3">

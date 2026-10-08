@@ -50,8 +50,10 @@ export interface MaterialSearchOptions {
  * Save a material to user's collection with metadata
  */
 export async function saveUserMaterial(input: CreateUserMaterialInput): Promise<UserMaterial> {
-  // Get material content to generate preview and word count
-  const content = await materialService.readMaterial(input.materialId);
+  // Get material content to generate preview and word count (claims a guest upload)
+  const content = await materialService.readMaterial(input.materialId, undefined, input.userId);
+  // Saved materials are kept until the user deletes them
+  await materialService.pinMaterial(input.materialId, input.userId);
   const contentPreview = content.substring(0, 500).trim();
   const wordCount = content.split(/\s+/).filter((word: string) => word.length > 0).length;
 
@@ -240,6 +242,10 @@ export async function deleteUserMaterial(materialId: string, userId: string): Pr
   `;
 
   const result = await dbQuery(queryText, [materialId, userId]);
+  if (result.rowCount > 0) {
+    // No longer saved: the material returns to normal retention
+    await materialService.unpinMaterial(materialId, userId);
+  }
   return result.rowCount > 0;
 }
 

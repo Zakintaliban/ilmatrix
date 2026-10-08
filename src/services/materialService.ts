@@ -1,11 +1,8 @@
 import { promises as fs } from "fs";
-import { join } from "path";
 import { randomUUID } from "crypto";
 import config from "../config/env.js";
-import {
-  resolveMaterialPathSafe,
-  isValidMaterialId,
-} from "../utils/security.js";
+import { isValidMaterialId } from "../utils/security.js";
+import { getMaterialStore } from "./materialStore.js";
 
 export interface MaterialInfo {
   materialId: string;
@@ -25,11 +22,13 @@ export interface FileSegment {
 }
 
 /**
- * Service for managing material files and content
+ * Service for managing material content. Storage (Postgres or local files)
+ * lives in materialStore.ts; `userId` is the signed-in user making the
+ * request, or null/undefined for guests.
  */
 export class MaterialService {
   /**
-   * Ensure uploads directory exists
+   * Ensure uploads directory exists (used by the local-file store)
    */
   async ensureUploadsDirectory(): Promise<void> {
     await fs.mkdir(config.uploadsDir, { recursive: true });
@@ -40,7 +39,8 @@ export class MaterialService {
    */
   async readMaterial(
     materialId?: string,
-    materialText?: string
+    materialText?: string,
+    userId?: string | null
   ): Promise<string> {
     if (materialText?.trim()) {
       return materialText;
@@ -50,61 +50,30 @@ export class MaterialService {
       throw new Error("materialId or materialText is required");
     }
 
-    const pathResult = resolveMaterialPathSafe(materialId);
-    if (!pathResult.ok) {
-      throw new Error(pathResult.error || "Invalid material path");
-    }
-
-    try {
-      return await fs.readFile(pathResult.path, "utf8");
-    } catch (error) {
-      if ((error as any)?.code === "ENOENT") {
-        throw new Error("Material not found");
-      }
-      throw error;
-    }
+    const store = await getMaterialStore();
+    return store.read(materialId, userId);
   }
 
   /**
    * Create new material with content
    */
-  async createMaterial(content: string): Promise<string> {
-    await this.ensureUploadsDirectory();
-
+  async createMaterial(content: string, userId?: string | null): Promise<string> {
     const materialId = randomUUID();
-    const pathResult = resolveMaterialPathSafe(materialId);
-
-    if (!pathResult.ok) {
-      throw new Error("Failed to create material path");
-    }
-
-    await fs.writeFile(pathResult.path, content.trim(), "utf8");
+    const store = await getMaterialStore();
+    await store.create(materialId, content.trim(), userId);
     return materialId;
   }
 
   /**
    * Append content to existing material
    */
-  async appendToMaterial(materialId: string, content: string): Promise<void> {
-    const pathResult = resolveMaterialPathSafe(materialId);
-    if (!pathResult.ok) {
-      throw new Error(pathResult.error || "Invalid material path");
-    }
-
-    let existingContent = "";
-    try {
-      existingContent = await fs.readFile(pathResult.path, "utf8");
-    } catch (error) {
-      if ((error as any)?.code === "ENOENT") {
-        // File doesn't exist, create it
-        existingContent = "";
-      } else {
-        throw error;
-      }
-    }
-
-    const combinedContent = (existingContent + "\n" + content).trim();
-    await fs.writeFile(pathResult.path, combinedContent, "utf8");
+  async appendToMaterial(
+    materialId: string,
+    content: string,
+    userId?: string | null
+  ): Promise<void> {
+    const store = await getMaterialStore();
+    await store.append(materialId, content, userId);
   }
 
   /**
@@ -147,12 +116,12 @@ export class MaterialService {
   /**
    * Get material information including file list
    */
-  async getMaterialInfo(materialId: string): Promise<MaterialInfo> {
+  async getMaterialInfo(materialId: string, userId?: string | null): Promise<MaterialInfo> {
     if (!isValidMaterialId(materialId)) {
       throw new Error("Invalid material ID");
     }
 
-    const content = await this.readMaterial(materialId);
+    const content = await this.readMaterial(materialId, undefined, userId);
     const segments = this.parseFileSegments(content);
 
     // Group segments by filename and calculate stats
@@ -191,18 +160,15 @@ export class MaterialService {
    */
   async removeFileFromMaterial(
     materialId: string,
-    fileName: string
+    fileName: string,
+    userId?: string | null
   ): Promise<MaterialInfo> {
     if (!isValidMaterialId(materialId)) {
       throw new Error("Invalid material ID");
     }
 
-    const pathResult = resolveMaterialPathSafe(materialId);
-    if (!pathResult.ok) {
-      throw new Error(pathResult.error || "Invalid material path");
-    }
-
-    const content = await fs.readFile(pathResult.path, "utf8");
+    const store = await getMaterialStore();
+    const content = await store.read(materialId, userId);
     const segments = this.parseFileSegments(content);
 
     // Find segments to remove
@@ -231,68 +197,48 @@ export class MaterialService {
     }
 
     const updatedContent = parts.join("").trim();
-    await fs.writeFile(pathResult.path, updatedContent, "utf8");
+    await store.replace(materialId, updatedContent, userId);
 
-    return this.getMaterialInfo(materialId);
+    return this.getMaterialInfo(materialId, userId);
   }
 
   /**
    * Delete entire material
    */
-  async deleteMaterial(materialId: string): Promise<void> {
+  async deleteMaterial(materialId: string, userId?: string | null): Promise<void> {
     if (!isValidMaterialId(materialId)) {
       throw new Error("Invalid material ID");
     }
 
-    const pathResult = resolveMaterialPathSafe(materialId);
-    if (!pathResult.ok) {
-      throw new Error(pathResult.error || "Invalid material path");
-    }
-
-    try {
-      await fs.unlink(pathResult.path);
-    } catch (error) {
-      if ((error as any)?.code !== "ENOENT") {
-        throw error;
-      }
-      // File doesn't exist, that's fine
-    }
+    const store = await getMaterialStore();
+    await store.delete(materialId, userId);
   }
 
   /**
-   * Cleanup old materials based on TTL
+   * Keep a material indefinitely (saved to the user's library)
+   */
+  async pinMaterial(materialId: string, userId: string): Promise<void> {
+    const store = await getMaterialStore();
+    await store.pin(materialId, userId);
+  }
+
+  /**
+   * Return a material to normal retention (removed from the library)
+   */
+  async unpinMaterial(materialId: string, userId: string): Promise<void> {
+    const store = await getMaterialStore();
+    await store.unpin(materialId, userId);
+  }
+
+  /**
+   * Delete materials whose retention has expired
    */
   async cleanupOldMaterials(): Promise<number> {
     try {
-      await this.ensureUploadsDirectory();
-
-      const ttlMs = config.materialTtlMinutes * 60_000;
-      const cutoffTime = Date.now() - ttlMs;
-
-      const files = await fs.readdir(config.uploadsDir).catch(() => []);
-      let cleanedCount = 0;
-
-      for (const fileName of files) {
-        if (!fileName.endsWith(".txt")) continue;
-
-        const filePath = join(config.uploadsDir, fileName);
-
-        try {
-          const stats = await fs.stat(filePath);
-          const mtime = stats.mtime instanceof Date ? stats.mtime.getTime() : 0;
-
-          if (mtime > 0 && mtime < cutoffTime) {
-            await fs.unlink(filePath);
-            cleanedCount++;
-          }
-        } catch {
-          // Ignore individual file errors
-        }
-      }
-
-      return cleanedCount;
-    } catch {
-      // Ignore cleanup errors
+      const store = await getMaterialStore();
+      return await store.cleanupExpired();
+    } catch (error) {
+      console.error("[MATERIALS] Cleanup failed:", error);
       return 0;
     }
   }

@@ -175,6 +175,9 @@
             <!-- Messages -->
             <div id="error-message" class="hidden rounded-md bg-red-50 dark:bg-red-900/20 p-4 border border-red-200 dark:border-red-800">
                 <div class="text-sm text-red-700 dark:text-red-400"></div>
+                <button type="button" id="resend-verification-btn" class="hidden mt-2 text-sm font-medium text-red-700 dark:text-red-300 underline">
+                    Resend verification email
+                </button>
             </div>
             <div id="success-message" class="hidden rounded-md bg-green-50 dark:bg-green-900/20 p-4 border border-green-200 dark:border-green-800">
                 <div class="text-sm text-green-700 dark:text-green-400"></div>
@@ -246,6 +249,12 @@
             <span class="font-medium" style="color: #0f0e85;">🐬 Resistance Blue</span> ·
             <span class="font-medium" style="color: #e44c99;">🦩 Brave Pink</span> ·
             <span class="font-medium" style="color: #1b612f;">🦖 Hero Green</span>
+            <div class="mt-1">
+                <a href="/harga.html" class="hover:underline">Harga</a> ·
+                <a href="/syarat-ketentuan.html" class="hover:underline">Syarat &amp; Ketentuan</a> ·
+                <a href="/kebijakan-pengembalian.html" class="hover:underline">Kebijakan Pengembalian Dana</a> ·
+                <a href="mailto:hasbizakin0804@gmail.com" class="hover:underline">hasbizakin0804@gmail.com</a>
+            </div>
         </div>
     </footer>
 
@@ -264,16 +273,41 @@
                 this.loginLoading = document.getElementById('login-loading');
                 this.googleLoginBtn = document.getElementById('google-login-btn');
                 this.googleLoading = document.getElementById('google-loading');
+                this.resendBtn = document.getElementById('resend-verification-btn');
             }
 
             attachEventListeners() {
                 this.loginForm.addEventListener('submit', (e) => this.handleLogin(e));
                 this.googleLoginBtn.addEventListener('click', () => this.handleGoogleLogin());
+                this.resendBtn.addEventListener('click', () => this.resendVerification());
             }
 
             clearMessages() {
                 this.errorMessage.classList.add('hidden');
                 this.successMessage.classList.add('hidden');
+                this.resendBtn.classList.add('hidden');
+            }
+
+            async resendVerification() {
+                const email = document.getElementById('login-email').value.trim();
+                this.resendBtn.disabled = true;
+                try {
+                    const response = await fetch('/api/auth/resend-verification', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ email }),
+                    });
+                    const data = await response.json();
+                    if (response.ok) {
+                        this.showSuccess(data.message || 'Verification email sent.');
+                    } else {
+                        this.showError(data.error || 'Could not send the verification email');
+                    }
+                } catch (error) {
+                    this.showError('Network error. Please check your connection and try again.');
+                } finally {
+                    this.resendBtn.disabled = false;
+                }
             }
 
             showError(message) {
@@ -337,12 +371,21 @@
 
                     if (response.ok) {
                         this.showSuccess('Login successful! Redirecting...');
-                        // Redirect to main app after successful login
+                        // Back to where the student came from (same-site paths only), else the app
+                        // (resolved by the URL parser, so "/\t/evil.com" or "/\\evil.com" can't leave the site)
+                        let target = '/app';
+                        try {
+                            const next = new URL(new URLSearchParams(window.location.search).get('next') || '/app', window.location.origin);
+                            if (next.origin === window.location.origin) target = next.pathname + next.search + next.hash;
+                        } catch {}
                         setTimeout(() => {
-                            window.location.href = '/app';
+                            window.location.href = target;
                         }, 1500);
                     } else {
                         this.showError(data.error || 'Login failed');
+                        if (data.code === 'EMAIL_NOT_VERIFIED') {
+                            this.resendBtn.classList.remove('hidden');
+                        }
                     }
                 } catch (error) {
                     console.error('Login error:', error);
@@ -491,10 +534,22 @@
 
         // Initialize the login manager when page loads
         document.addEventListener('DOMContentLoaded', () => {
-            new LoginManager();
+            const loginManager = new LoginManager();
             
             // Auto-fill email if passed from URL params
             const urlParams = new URLSearchParams(window.location.search);
+
+            // Google sign-in errors come back as fixed codes
+            const oauthErrors = {
+                oauth_cancelled: 'Google sign-in was cancelled.',
+                oauth_state: 'Google sign-in expired or was not started from this browser. Please try again.',
+                oauth_unverified_email: 'Your Google account email is not verified.',
+                oauth_failed: 'Google sign-in failed. Please try again.',
+            };
+            const oauthError = oauthErrors[urlParams.get('error')];
+            if (oauthError) {
+                loginManager.showError(oauthError);
+            }
             const email = urlParams.get('email');
             if (email) {
                 document.getElementById('login-email').value = email;

@@ -1,5 +1,16 @@
 import { config } from './env.js';
 
+/**
+ * SSL defaults to on in production. DATABASE_SSL=true|false overrides it:
+ * npm runs every script with NODE_ENV=production because .npmrc sets
+ * omit=dev, so a local Postgres without SSL is otherwise unreachable.
+ */
+function resolveSsl(): false | { rejectUnauthorized: boolean } {
+  const override = process.env.DATABASE_SSL;
+  const enabled = override ? /^(true|1|yes|on|require)$/i.test(override) : config.isProduction;
+  return enabled ? { rejectUnauthorized: false } : false;
+}
+
 export const databaseConfig = {
   connectionString: config.databaseUrl || config.databasePublicUrl,
   
@@ -11,7 +22,7 @@ export const databaseConfig = {
   password: config.pgPassword,
   
   // Connection pool settings
-  ssl: config.isProduction ? { rejectUnauthorized: false } : false,
+  ssl: resolveSsl(),
   max: 20, // max number of clients in the pool
   idleTimeoutMillis: 30000,
   connectionTimeoutMillis: 2000,

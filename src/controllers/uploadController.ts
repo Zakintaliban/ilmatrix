@@ -2,6 +2,10 @@ import type { Context } from "hono";
 import { materialService } from "../services/materialService.js";
 import { extractionService } from "../services/extractionService.js";
 import { validateContentLength } from "../utils/security.js";
+import { MaterialQuotaError } from "../services/materialStore.js";
+import { groqService } from "../services/groqService.js";
+import * as kreditService from "../services/kreditService.js";
+import { updateTokenUsageAfterRequest } from "../middleware/tokenUsageMiddleware.js";
 import config from "../config/env.js";
 
 export class UploadController {
@@ -23,7 +27,8 @@ export class UploadController {
         return c.json({ error: validation.error }, 413);
       }
 
-      const body = await c.req.parseBody();
+      // all: true keeps every value of repeated fields (the UI sends several "file" parts)
+      const body = await c.req.parseBody({ all: true });
       const files = this.extractFilesFromBody(body);
 
       if (!files.length) {
@@ -39,8 +44,33 @@ export class UploadController {
       // Parse flags for append/merge behavior
       const { doAppend, targetId } = this.parseUploadFlags(body);
 
+      const userId: string | null = c.get("user")?.id ?? null;
+
+      // Image OCR uses the paid vision model: signed-in users pay kredit for it,
+      // and without kredit their images are kept as images instead
+      let ocr = true;
+      if (userId) {
+        try {
+          ocr = kreditService.canUseAI(await kreditService.getKreditStatus(userId));
+        } catch (error) {
+          console.error("[KREDIT] Balance check failed before OCR:", error);
+        }
+      }
+
       // Extract text from all files
-      const extractionResult = await extractionService.extractFromFiles(files);
+      const { result: extractionResult, usage, model, kredit } = await groqService.track(() =>
+        extractionService.extractFromFiles(files, { ocr })
+      );
+
+      if (userId && usage) {
+        await updateTokenUsageAfterRequest(c, usage.total_tokens, {
+          model,
+          kredit,
+          prompt_tokens: usage.prompt_tokens,
+          completion_tokens: usage.completion_tokens,
+          task: "ocr",
+        });
+      }
 
       // Handle material creation or appending
       let materialId: string;
@@ -50,26 +80,30 @@ export class UploadController {
         try {
           await materialService.appendToMaterial(
             targetId,
-            extractionResult.combinedContent
+            extractionResult.combinedContent,
+            userId
           );
           materialId = targetId;
           wasAppended = true;
         } catch (error) {
+          if (error instanceof MaterialQuotaError) throw error;
           // If append fails, create new material
           materialId = await materialService.createMaterial(
-            extractionResult.combinedContent
+            extractionResult.combinedContent,
+            userId
           );
           wasAppended = false;
         }
       } else {
         materialId = await materialService.createMaterial(
-          extractionResult.combinedContent
+          extractionResult.combinedContent,
+          userId
         );
         wasAppended = false;
       }
 
       // Get final material info
-      const materialInfo = await materialService.getMaterialInfo(materialId);
+      const materialInfo = await materialService.getMaterialInfo(materialId, userId);
 
       return c.json({
         materialId,
@@ -86,7 +120,7 @@ export class UploadController {
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      return c.json({ error: message }, 400);
+      return c.json({ error: message }, error instanceof MaterialQuotaError ? 413 : 400);
     }
   }
 

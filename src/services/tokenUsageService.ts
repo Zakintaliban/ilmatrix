@@ -11,6 +11,7 @@
  */
 
 import { query, transaction } from './databaseService.js';
+import * as kreditService from './kreditService.js';
 import type { PoolClient } from 'pg';
 
 // ============================================================================
@@ -364,6 +365,7 @@ export async function logTokenUsage(params: {
   userId: string;
   sessionId: string | null;
   tokensUsed: number;
+  kreditUsed?: number;
   endpoint: string;
   modelUsed?: string;
   requestType: string;
@@ -376,6 +378,7 @@ export async function logTokenUsage(params: {
     userId,
     sessionId,
     tokensUsed,
+    kreditUsed = 0,
     endpoint,
     modelUsed = null,
     requestType,
@@ -396,8 +399,9 @@ export async function logTokenUsage(params: {
       material_id,
       prompt_tokens,
       completion_tokens,
-      metadata
-    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+      metadata,
+      kredit_used
+    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
     RETURNING *`,
     [
       userId,
@@ -410,6 +414,7 @@ export async function logTokenUsage(params: {
       promptTokens,
       completionTokens,
       JSON.stringify(metadata),
+      kreditUsed,
     ]
   );
 
@@ -443,9 +448,11 @@ export async function getUserUsageHistory(
  * Get aggregated usage statistics for a user
  */
 export async function getUsageStats(userId: string): Promise<UsageStats> {
+  // All figures are in kredit
+
   // Today's usage
   const todayResult = await query<{ total: string }>(
-    `SELECT COALESCE(SUM(tokens_used), 0) as total
+    `SELECT COALESCE(SUM(kredit_used), 0) as total
      FROM token_usage_logs
      WHERE user_id = $1
      AND created_at >= CURRENT_DATE`,
@@ -454,7 +461,7 @@ export async function getUsageStats(userId: string): Promise<UsageStats> {
 
   // This week's usage
   const weekResult = await query<{ total: string }>(
-    `SELECT COALESCE(SUM(tokens_used), 0) as total
+    `SELECT COALESCE(SUM(kredit_used), 0) as total
      FROM token_usage_logs
      WHERE user_id = $1
      AND created_at >= DATE_TRUNC('week', CURRENT_DATE)`,
@@ -463,7 +470,7 @@ export async function getUsageStats(userId: string): Promise<UsageStats> {
 
   // This month's usage
   const monthResult = await query<{ total: string }>(
-    `SELECT COALESCE(SUM(tokens_used), 0) as total
+    `SELECT COALESCE(SUM(kredit_used), 0) as total
      FROM token_usage_logs
      WHERE user_id = $1
      AND created_at >= DATE_TRUNC('month', CURRENT_DATE)`,
@@ -472,7 +479,7 @@ export async function getUsageStats(userId: string): Promise<UsageStats> {
 
   // Total usage
   const totalResult = await query<{ total: string }>(
-    `SELECT COALESCE(SUM(tokens_used), 0) as total
+    `SELECT COALESCE(SUM(kredit_used), 0) as total
      FROM token_usage_logs
      WHERE user_id = $1`,
     [userId]
@@ -480,7 +487,7 @@ export async function getUsageStats(userId: string): Promise<UsageStats> {
 
   // By endpoint
   const endpointResult = await query<{ endpoint: string; total: string }>(
-    `SELECT endpoint, COALESCE(SUM(tokens_used), 0) as total
+    `SELECT endpoint, COALESCE(SUM(kredit_used), 0) as total
      FROM token_usage_logs
      WHERE user_id = $1
      GROUP BY endpoint
@@ -490,7 +497,7 @@ export async function getUsageStats(userId: string): Promise<UsageStats> {
 
   // By model
   const modelResult = await query<{ model_used: string; total: string }>(
-    `SELECT model_used, COALESCE(SUM(tokens_used), 0) as total
+    `SELECT model_used, COALESCE(SUM(kredit_used), 0) as total
      FROM token_usage_logs
      WHERE user_id = $1
      AND model_used IS NOT NULL
@@ -501,19 +508,19 @@ export async function getUsageStats(userId: string): Promise<UsageStats> {
 
   const byEndpoint: Record<string, number> = {};
   for (const row of endpointResult.rows) {
-    byEndpoint[row.endpoint] = parseInt(row.total, 10);
+    byEndpoint[row.endpoint] = Number(row.total);
   }
 
   const byModel: Record<string, number> = {};
   for (const row of modelResult.rows) {
-    byModel[row.model_used] = parseInt(row.total, 10);
+    byModel[row.model_used] = Number(row.total);
   }
 
   return {
-    today: parseInt(todayResult.rows[0]?.total || '0', 10),
-    this_week: parseInt(weekResult.rows[0]?.total || '0', 10),
-    this_month: parseInt(monthResult.rows[0]?.total || '0', 10),
-    total: parseInt(totalResult.rows[0]?.total || '0', 10),
+    today: Number(todayResult.rows[0]?.total || '0'),
+    this_week: Number(weekResult.rows[0]?.total || '0'),
+    this_month: Number(monthResult.rows[0]?.total || '0'),
+    total: Number(totalResult.rows[0]?.total || '0'),
     by_endpoint: byEndpoint,
     by_model: byModel,
   };
@@ -552,116 +559,80 @@ export async function resetMonthlyUsage(): Promise<string[]> {
  * This is called lazily when user makes a request
  */
 export async function checkAndResetUserUsage(userId: string): Promise<void> {
-  await query(
-    `DO $$
-     BEGIN
-       -- Reset weekly if needed
-       IF EXISTS (
-         SELECT 1 FROM users
-         WHERE id = $1
-         AND weekly_usage_reset_at <= NOW()
-       ) THEN
-         PERFORM reset_weekly_tokens();
-       END IF;
-
-       -- Reset monthly if needed
-       IF EXISTS (
-         SELECT 1 FROM users
-         WHERE id = $1
-         AND monthly_usage_reset_at <= NOW()
-       ) THEN
-         PERFORM reset_monthly_tokens();
-       END IF;
-     END $$`,
-    [userId]
-  );
+  // The previous implementation passed $1 into a DO block, which Postgres
+  // rejects, so this threw on every request and quotas were never checked.
+  await kreditService.resetUsageIfDue(userId);
 }
 
 // ============================================================================
 // Admin Functions
 // ============================================================================
 
+export interface AdminUserUsage {
+  user_id: string;
+  email: string;
+  name: string;
+  plan: string;
+  plan_name: string;
+  plan_expires_at: Date | null;
+  weekly_kredit_used: number;
+  weekly_kredit_limit: number;
+  weekly_percentage: number;
+  extra_kredit: number;
+  monthly_kredit_used: number;
+  weekly_tokens_used: number;
+  monthly_tokens_used: number;
+  is_admin: boolean;
+  token_access_enabled: boolean;
+}
+
 /**
- * Get all users' token usage (admin only)
+ * Get all users' kredit usage (admin only). Counters whose reset time has
+ * passed are reported as 0 even before the user's next request resets them.
  */
 export async function getAllUsersUsage(
   limit: number = 100,
   offset: number = 0
-): Promise<UserTokenUsage[]> {
+): Promise<AdminUserUsage[]> {
   const result = await query<any>(
     `SELECT
-      u.id as user_id,
-      u.email,
-      u.name,
-      u.monthly_token_limit,
-      u.monthly_tokens_used,
-      u.monthly_usage_reset_at,
-      u.weekly_token_limit,
-      u.weekly_tokens_used,
-      u.weekly_usage_reset_at,
-      u.is_admin,
-      u.token_access_enabled,
-      s.id as session_id,
-      COALESCE(s.session_tokens_used, 0) as session_tokens_used,
-      COALESCE(s.session_token_limit, 25000) as session_token_limit,
-      s.session_expires_at
+      u.id AS user_id, u.email, u.name, u.plan, u.plan_expires_at, u.weekly_kredit_override,
+      CASE WHEN u.weekly_usage_reset_at <= NOW() THEN 0 ELSE u.weekly_kredit_used END AS weekly_kredit_used,
+      CASE WHEN u.monthly_usage_reset_at <= NOW() THEN 0 ELSE u.monthly_kredit_used END AS monthly_kredit_used,
+      CASE WHEN u.weekly_usage_reset_at <= NOW() THEN 0 ELSE u.weekly_tokens_used END AS weekly_tokens_used,
+      CASE WHEN u.monthly_usage_reset_at <= NOW() THEN 0 ELSE u.monthly_tokens_used END AS monthly_tokens_used,
+      u.weekly_usage_reset_at, u.monthly_usage_reset_at, u.is_admin, u.token_access_enabled,
+      COALESCE(g.remaining, 0) AS extra_kredit
      FROM users u
      LEFT JOIN LATERAL (
-       SELECT * FROM token_usage_sessions
-       WHERE user_id = u.id
-       AND is_active = TRUE
-       AND session_expires_at > NOW()
-       ORDER BY session_started_at DESC
-       LIMIT 1
-     ) s ON true
-     ORDER BY u.weekly_tokens_used DESC
+       SELECT SUM(kredit_total - kredit_used) AS remaining
+       FROM kredit_grants
+       WHERE user_id = u.id AND kredit_used < kredit_total AND (expires_at IS NULL OR expires_at > NOW())
+     ) g ON true
+     ORDER BY weekly_kredit_used DESC, u.created_at DESC
      LIMIT $1 OFFSET $2`,
     [limit, offset]
   );
 
-  return result.rows.map(row => {
-    const monthlyRemaining = row.monthly_token_limit - row.monthly_tokens_used;
-    const weeklyRemaining = row.weekly_token_limit - row.weekly_tokens_used;
-    const sessionRemaining = row.session_token_limit - row.session_tokens_used;
-
-    const monthlyPercentage = (row.monthly_tokens_used / row.monthly_token_limit) * 100;
-    const weeklyPercentage = (row.weekly_tokens_used / row.weekly_token_limit) * 100;
-    const sessionPercentage = (row.session_tokens_used / row.session_token_limit) * 100;
-
-    let sessionTimeRemaining: number | null = null;
-    if (row.session_expires_at) {
-      const expiresAt = new Date(row.session_expires_at);
-      const now = new Date();
-      sessionTimeRemaining = Math.max(0, Math.floor((expiresAt.getTime() - now.getTime()) / (1000 * 60)));
-    }
-
+  return result.rows.map((row) => {
+    const status = kreditService.buildStatus(row, [{ remaining: row.extra_kredit }]);
     return {
       user_id: row.user_id,
       email: row.email,
       name: row.name,
-
-      monthly_token_limit: row.monthly_token_limit,
-      monthly_tokens_used: row.monthly_tokens_used,
-      monthly_usage_reset_at: row.monthly_usage_reset_at,
-      monthly_remaining: monthlyRemaining,
-      monthly_percentage: Math.round(monthlyPercentage * 100) / 100,
-
-      weekly_token_limit: row.weekly_token_limit,
-      weekly_tokens_used: row.weekly_tokens_used,
-      weekly_usage_reset_at: row.weekly_usage_reset_at,
-      weekly_remaining: weeklyRemaining,
-      weekly_percentage: Math.round(weeklyPercentage * 100) / 100,
-
-      session_id: row.session_id,
-      session_tokens_used: row.session_tokens_used,
-      session_token_limit: row.session_token_limit,
-      session_remaining: sessionRemaining,
-      session_percentage: Math.round(sessionPercentage * 100) / 100,
-      session_expires_at: row.session_expires_at,
-      session_time_remaining_minutes: sessionTimeRemaining,
-
-      is_admin: row.is_admin,
-      token_access_enabled: row.token_access_enabled,
+      plan: status.plan,
+      plan_name: status.planName,
+      plan_expires_at: status.planExpiresAt,
+      weekly_kredit_used: status.weeklyUsed,
+      weekly_kredit_limit: status.weeklyLimit,
+      weekly_percentage:
+        status.weeklyLimit > 0 ? Math.round((status.weeklyUsed / status.weeklyLimit) * 10000) / 100 : 0,
+      extra_kredit: status.extraRemaining,
+      monthly_kredit_used: status.monthlyUsed,
+      weekly_tokens_used: Number(row.weekly_tokens_used),
+      monthly_tokens_used: Number(row.monthly_tokens_used),
+      is_admin: status.isAdmin,
+      token_access_enabled: status.accessEnabled,
     };
   });
 }
