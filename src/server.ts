@@ -7,6 +7,7 @@ import api, { stopBackgroundTasks } from "./routes.js";
 import config from "./config/env.js";
 import { initializeDatabase, testConnection, closeDatabase } from "./services/databaseService.js";
 import { validateDatabaseConfig } from "./config/database.js";
+import { securityHeadersMiddleware } from "./middleware/securityHeaders.js";
 
 /**
  * ILMATRIX server bootstrap with improved error handling and configuration
@@ -25,6 +26,9 @@ class IlmatrixServer {
    * Setup application routes and middleware
    */
   private setupRoutes(): void {
+    // Security headers (CSP, framing, HSTS, ...) on every response
+    this.app.use("*", securityHeadersMiddleware);
+
     // Health check at root level
     this.app.get("/api/health", async (c) => {
       const { behaviorAnalysisService } = await import(
