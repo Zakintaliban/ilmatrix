@@ -30,7 +30,7 @@
    weak topics, and a learning-first tutor that doesn't hand out answers, sold at exam time for the price of a snack.
 5. **The economics work. AI tokens are not the problem.** A typical grounded answer on gpt-oss-120b costs **≈ Rp35**,
    and a typical paying student costs **Rp3–6k/month** in Groq usage. The risks are **conversion** and **free/guest abuse**
-   (the guest limit can currently be bypassed without limit by not sending a cookie).
+   (the guest limit could be bypassed without limit by not sending a cookie; ✅ closed by P1-2 with Turnstile and per-IP caps).
 6. **Recommended pricing:** Free (capped) · **Pass 7 Hari Rp9.900** · **Semester Rp99.000** (the hero offer, priced under
    the Rp100k QRIS 0%-MDR threshold) · Bulanan Rp29.000 · top-ups. All are metered in cost-weighted *kredit*, which caps
    the worst-case COGS for every plan.
@@ -57,10 +57,10 @@
 
 ```
 Browser (app.html) ──fetch JSON──▶ Hono /api/*
-   │                                 ├─ rateLimitMiddleware (in-memory, per "IP" = first X-Forwarded-For entry)
+   │                                 ├─ rateLimitMiddleware (in-memory, per IP; was the spoofable first X-Forwarded-For entry, now CLIENT_IP_HEADER)
    │                                 ├─ optionalAuthMiddleware (cookie → user_sessions → users)
    │                                 ├─ tokenUsageMiddleware (registered users: weekly/session quota check in Postgres)
-   │                                 ├─ guestLimitMiddleware (guests: 5 uses per device_id cookie, in-memory)
+   │                                 ├─ guestLimitMiddleware (guests: 5 uses per device_id cookie, in-memory; + Turnstile and per-IP daily caps since P1-2)
    │                                 ├─ aiRateLimitMiddleware + abuseDetectionMiddleware (only on 5 of the 9 AI routes)
    │                                 └─ aiController → materialService.readMaterial(uploads/<id>.txt)
    │                                                 → groqService.<tool>() → Groq chat.completions (one shot)
@@ -96,7 +96,7 @@ Browser (app.html) ──fetch JSON──▶ Hono /api/*
 | Dialogue Coach (start/step/hint/feedback) | Yes | 4 JSON prompts + deterministic "How am I doing?" | ❌ model | Yes | Strict schema (done) |
 | Session titles | Yes | substring of first message (no AI) | ✅ | Yes | — |
 | Token quotas (5h session / weekly / monthly) | Yes | Postgres functions + middleware | ❌ was **never enforced and never recorded** (§5). ✅ **Replaced by kredit plans (P1-6)**: weekly allowance per plan, passes/top-ups, per-model pricing, metering verified on Postgres | Yes, it's the billing foundation | Payments (P1-5) |
-| Guest trial (5 uses) | Yes | in-memory, keyed on `device_id` cookie | ⚠️ bypass: omit the cookie → unlimited | Yes | Turnstile + IP cap (P1) |
+| Guest trial (5 uses) | Yes | in-memory, keyed on `device_id` cookie | ⚠️ bypass: omit the cookie → unlimited. ✅ **Fixed (P1-2)**: Turnstile per new device + per-IP daily caps | Yes | Guests on gpt-oss-20b (not done) |
 | Function calling / tools | **No** | — | — | — | Chat-agent registry (P2) |
 | Structured outputs | **No** | regex JSON extraction | — | — | Done (§19.1) |
 | Streaming | **No** | — | — | — | P1 |
@@ -204,8 +204,8 @@ Ranked by impact for a student-facing, pay-per-token product. ✅ means fixed on
 
 | # | Issue | Impact | Status |
 |---|---|---|---|
-| S1 | **Guest-limit bypass**: the limit is keyed on a `device_id` cookie, and a client that omits it gets a fresh 5 uses each time. Combined with S2, this means **unlimited anonymous Groq spend** and the ability to exhaust the org-wide TPM for everyone | Denial of wallet / DoS | P1 (needs a product decision: Turnstile / login wall) |
-| S2 | Client IP = **first** `X-Forwarded-For` entry, which the client controls. Every per-IP limit can be bypassed | Limit bypass | P1 (needs proxy-hop config verified on Railway) |
+| S1 | **Guest-limit bypass**: the limit is keyed on a `device_id` cookie, and a client that omits it gets a fresh 5 uses each time. Combined with S2, this means **unlimited anonymous Groq spend** and the ability to exhaust the org-wide TPM for everyone | Denial of wallet / DoS | ✅ (P1-2: a new device must pass Turnstile; per-IP caps of 100 guest requests and 20 verifications per day; a failed session lookup no longer skips all limits) |
+| S2 | Client IP = **first** `X-Forwarded-For` entry, which the client controls. Every per-IP limit can be bypassed | Limit bypass | ✅ (`CLIENT_IP_HEADER`, default `x-real-ip`, which Railway's edge overwrites; verify after deploy with `GET /api/admin/client-ip`) |
 | S3 | Token usage attributed across concurrent users; failed calls billed | Billing integrity | ✅ |
 | S4 | Client-supplied `system` messages and unbounded chat history passed to the model | Prompt injection, cost amplification | ✅ (system dropped; 30 msgs / 8k chars each / 60k total) |
 | S5 | OAuth callback **logs session tokens and cookies** in plaintext | Session hijack via logs | ✅ |
@@ -479,7 +479,7 @@ ceiling**.
 
 | Plan | Price | Allowance | Max AI COGS | Gross margin (typical / worst) | Abuse risk |
 |---|---|---|---|---|---|
-| **Gratis** (verified email) | Rp0 | 150 kredit/week (~16 grounded answers), 3 photos/week, no web/audio | Rp2.6k/mo (exp. ~Rp0.4k) | n/a | **High** until S1/S2 are fixed; one account per verified email |
+| **Gratis** (verified email) | Rp0 | 150 kredit/week (~16 grounded answers), 3 photos/week, no web/audio | Rp2.6k/mo (exp. ~Rp0.4k) | n/a | Medium now that S1/S2 are fixed; one account per verified email |
 | **Pass 7 Hari** | **Rp9.900** | 1.000 kredit for 7 days | Rp4.0k | **82% / 58%** | Low (prepaid, short) |
 | **Semester** (hero) | **Rp99.000** (≈Rp16.5k/mo) | 700 kredit/week for 26 weeks | Rp12.1k/mo | **80% / 26%** | Medium: account sharing → cap 2 concurrent sessions |
 | **Bulanan** | Rp29.000 | 900 kredit/week | Rp15.6k/mo | **80% / 45%** | Medium (same) |
@@ -540,7 +540,7 @@ Effort is for one developer, in days.
 | ID | Problem → Solution | Files | Cx | Days | User impact | Business impact |
 |---|---|---|---|---|---|---|
 | P1-1 ✅ | Materials vanish after 60 min → **done**: Postgres `materials` table (migration 011). Guests 60 min, signed-in 180 days after last use, library-saved kept until deleted; owner-only access; 200 MB/user quota; file fallback without a DB | `materialStore.ts`, `materialService`, controllers, routes, migration 011 | M/L | — | Library that persists | Prerequisite for everything paid |
-| P1-2 | Guest denial-of-wallet → Cloudflare Turnstile + trusted-proxy IP (`TRUST_PROXY_HOPS`) + per-IP daily cap + guests on gpt-oss-20b | `guestLimit`, `security.ts`, frontend | M | 1–2 | — | Caps free spend |
+| P1-2 ✅ | Guest denial-of-wallet → **done**: Cloudflare Turnstile once per new guest device (invisible for most visitors; the app runs it and retries automatically), trusted client IP via `CLIENT_IP_HEADER` (replaces the proposed `TRUST_PROXY_HOPS`: Railway overwrites `X-Real-IP`, so no hop counting), per-IP daily caps (100 guest AI requests, 20 verifications; generous for campus Wi-Fi/CGNAT, hitting one asks for free sign-up), image upload (paid OCR) also needs a verified device, session-lookup errors no longer bypass limits. **Not done:** guests on gpt-oss-20b; counters are in memory (per instance, reset on restart) | `guestLimit`, `security.ts`, `turnstileService`, `guestIpLimiter`, `guestVerifyController`, `public/js/guest-verify.js` | M | — | Invisible for most | Caps free spend |
 | P1-3 | AI rate limiter inert/buggy → record usage, sliding-window burst, sane limits | `aiRateLimit.ts`, `aiController.ts` | S | 0.5 | — | Abuse control |
 | P1-4 | Remaining security: OAuth `state`, verified-email login + safe Google linking, email HTML escape, CSP/headers, SRI-pinned CDNs, JSON body limit, zip-bomb cap, hashed session tokens | auth/oauth/email/server/extract | M | 2–3 | — | Trust |
 | P1-5 | No payments → Midtrans or Xendit (QRIS + e-wallets), plans/passes/entitlements → quotas | new `billing*`, migration, UI | L | 4–6 | Can buy | Revenue |

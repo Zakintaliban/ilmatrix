@@ -58,11 +58,33 @@ in [src/config/plans.ts](src/config/plans.ts)). A grounded answer costs ~9 kredi
   `POST /api/admin/usage/user/:id/set-plan {"plan":"semester"}` and
   `POST /api/admin/usage/user/:id/grant-kredit {"product":"pass_7d","reference":"QRIS-..."}`
 
+### Guest access & bot protection
+
+Guests (no account) get 5 AI uses per device. Because a device is just a cookie, three more checks bound what a script
+can take without signing up ([guestLimit](src/middleware/guestLimit.ts)):
+
+- **Turnstile** (when `TURNSTILE_SITE_KEY` and `TURNSTILE_SECRET_KEY` are set): a new guest device must pass a
+  Cloudflare Turnstile check before its first AI request or image upload. The app does this automatically
+  ([public/js/guest-verify.js](public/js/guest-verify.js)): the API answers `401` with
+  `code: "GUEST_VERIFICATION_REQUIRED"`, the browser runs the (usually invisible) challenge, posts the token to
+  `POST /api/guest/verify` and retries. Tokens are validated server-side and never trusted from the client
+- **Per-IP daily caps**: `GUEST_IP_DAILY_REQUESTS` AI requests (default 100) and `GUEST_IP_DAILY_VERIFICATIONS`
+  device verifications (default 20) per IP per 24 hours, across all devices. Hitting a cap asks the student to sign up
+  (`code: "GUEST_IP_LIMIT"`)
+- **Trusted client IP**: the IP comes from the header named by `CLIENT_IP_HEADER`, never from the client-controlled
+  first `X-Forwarded-For` entry
+- Signed-in users skip all of this and are limited by kredit. Counters are in memory, so they reset on restart and are
+  per instance
+
 ### Deployment
 
 - Run `npm run migrate run` after deploying so the `materials` table exists (PostgreSQL 12+). Until then the app logs a
   warning and falls back to local files, which do not survive a redeploy
 - Without a database (local development), materials use `uploads/<id>.txt` files with the guest TTL
+- After deploying, open `GET /api/admin/client-ip` as an admin and check that `detected_ip` is your real IP. If it is
+  a proxy address, set `CLIENT_IP_HEADER` (`cf-connecting-ip` when the domain is proxied through Cloudflare; the server
+  logs a `[CLIENT_IP]` warning when it sees Cloudflare headers without that setting)
+- Create a Turnstile widget for your domain (Managed mode) and set `TURNSTILE_SITE_KEY` / `TURNSTILE_SECRET_KEY`
 
 Students upload their materials and get help:
   - **Explain** material (concise + short citations)
@@ -126,7 +148,7 @@ client and cannot detect a model being retired or rejecting a parameter.
 Test files:
 
 - `tests/services/` - Service layer unit tests
-- `tests/ai/` - AI provider unit tests and the study-tool regression suite
+- `tests/ai/` - AI provider unit tests, the study-tool regression suite and guest protection (Turnstile, IP caps, client IP)
 - `tests/db/` - Tests against a real Postgres (`TEST_DATABASE_URL=postgresql://... npm run test:db`; the database is migrated and receives test rows)
 - `tests/smoke.test.ts` - API integration tests
 
@@ -220,6 +242,10 @@ Server (default): <http://localhost:8787>
 - GROQ_CONCURRENCY: Concurrent LLM requests per process, including image OCR (default 4). See [groqProvider](src/services/groqProvider.ts).
 - GROQ_TIMEOUT_MS: Per-request LLM timeout in ms, enforced by the Groq SDK (default 45000). See [groqProvider](src/services/groqProvider.ts).
 - EXTRACTION_CONCURRENCY: Max concurrent file extraction operations (default 2). See [extractionService](src/services/extractionService.ts).
+- CLIENT_IP_HEADER: Header holding the real client IP: `x-real-ip` (default, Railway), `cf-connecting-ip` (behind Cloudflare), `x-forwarded-for` (rightmost entry) or `none` (socket address). Used by every per-IP limit.
+- TURNSTILE_SITE_KEY / TURNSTILE_SECRET_KEY: Cloudflare Turnstile keys for the guest bot check. Both must be set to enable it.
+- GUEST_IP_DAILY_REQUESTS: Guest AI requests per IP per 24 hours (default 100).
+- GUEST_IP_DAILY_VERIFICATIONS: Guest device verifications per IP per 24 hours (default 20).
 
 ## Storage & retention
 
@@ -237,7 +263,8 @@ Server (default): <http://localhost:8787>
 - Security hardening:
   - Path traversal protection for materials I/O; only UUID v4-like ids are accepted and paths are validated inside uploads/ (see [security utils](src/utils/security.ts)).
   - Global per-IP rate limiting (default 120 req/min) via a lightweight token bucket (see [rate limit middleware](src/middleware/rateLimit.ts)). Tune with RATE_LIMIT_MAX.
-  - CSP applied to static pages to restrict sources (see [app](public/app.html), [index](public/index.html), [about](public/about.html)).
+  - CSP applied to static pages to restrict sources (see [app](public/app.html), [index](public/index.html), [about](public/about.html)). The app page also allows `https://challenges.cloudflare.com` (script + frame) for Turnstile.
+  - Guest bot protection: Turnstile device verification and per-IP daily caps (see [Guest access & bot protection](#guest-access--bot-protection)).
   - Best-effort Content-Length guard on uploads to quickly reject oversized requests (see [upload controller](src/controllers/uploadController.ts)).
 - Accessibility:
   - Live regions announce new chat and dialogue messages for screen readers (see [app live regions](public/app.html)).
@@ -250,6 +277,13 @@ Note on SRI (Subresource Integrity): in production, pin CDN versions and add int
 Base: /api
 
 - GET /api/health → { "ok": true, "uptime": number }
+
+- POST /api/guest/verify (application/json)
+
+  - Body: { token: string } // Turnstile widget token
+  - Response: { "ok": true } and the device is verified; 403 `TURNSTILE_FAILED`; 429 `GUEST_IP_LIMIT`; { "ok": true, "verification": "disabled" } when Turnstile is not configured
+
+- GET /api/admin/client-ip (admin) → { detected_ip, client_ip_header, headers } // check CLIENT_IP_HEADER after deploying
 
 - POST /api/upload (multipart/form-data)
 
