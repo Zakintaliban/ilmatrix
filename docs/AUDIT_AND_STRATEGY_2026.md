@@ -95,7 +95,7 @@ Browser (app.html) ──fetch JSON──▶ Hono /api/*
 | Flashcards | Yes | JSON via prompt | ❌ model | Yes | Strict schema (done). Persist + spaced repetition (P2) |
 | Dialogue Coach (start/step/hint/feedback) | Yes | 4 JSON prompts + deterministic "How am I doing?" | ❌ model | Yes | Strict schema (done) |
 | Session titles | Yes | substring of first message (no AI) | ✅ | Yes | — |
-| Token quotas (5h session / weekly / monthly) | Yes | Postgres functions + middleware | ⚠️ works, but **usage is attributed to the wrong request under concurrency** | Yes, it's the billing foundation | Fixed in §19.1. Cost-weighted kredit (P1) |
+| Token quotas (5h session / weekly / monthly) | Yes | Postgres functions + middleware | ❌ **never enforced and never recorded** for signed-in users (see §5, found by testing on a real Postgres). Attribution under concurrency was also wrong (fixed in §19.1) | Yes, it's the billing foundation | Fix together with cost-weighted kredit (P1-6) |
 | Guest trial (5 uses) | Yes | in-memory, keyed on `device_id` cookie | ⚠️ bypass: omit the cookie → unlimited | Yes | Turnstile + IP cap (P1) |
 | Function calling / tools | **No** | — | — | — | Chat-agent registry (P2) |
 | Structured outputs | **No** | regex JSON extraction | — | — | Done (§19.1) |
@@ -174,6 +174,8 @@ to the correct request.
 | Timeout | `withTimeout` rejects but **doesn't abort** the HTTP call, and the SDK's own retries stack on top (up to ~3×45s) | P0 |
 | Multi-file upload | The UI sends several `file` parts but `parseBody()` keeps only the last repeated key, so **only one file per upload was ever extracted** (found by the new regression suite) | P0 (fixed) |
 | Deployment | `.npmrc omit=dev` + `"start": "tsx …"` (tsx is a devDependency) → clean install has no `tsx` → **process fails to start** | P0 |
+| Token quota middleware | `checkAndResetUserUsage()` passes `$1` into a `DO $$ … $$` block, which Postgres rejects ("bind message supplies 1 parameters"). It throws on **every** signed-in AI request; the middleware fails open, so weekly/session limits are never checked and `updateTokenUsageAfterRequest` never records usage (no session in context). The 3-line fix would immediately enforce the current DB defaults (25k tokens per 5-hour session ≈ 2–3 grounded answers on gpt-oss), so it is **not** applied until limits are decided (P1-6) | P1 (needs a pricing decision) |
+| npm scripts | `.npmrc omit=dev` makes npm run **every** script (including `npm run dev` and `npm test`) with `NODE_ENV=production`, even when NODE_ENV is set explicitly. Locally that forces DB SSL (a local Postgres is unreachable) and Secure cookies. `DATABASE_SSL=false` override added; `.npmrc` left as is because production may rely on the implicit NODE_ENV | P2 |
 | `aiRateLimit` | `recordAITokenUsage` is **never called**, so hourly limits never trigger. The burst check is also wrong (it only looks at the timestamp of the last request) | P1 |
 | `abuseDetection` | Inspects `message`/`materialText`/`question`, but the UI sends `messages`/`prompt`/`materialId`, so the check is **effectively inert**. (A suspected ReDoS in its regex was benchmarked and is *not* exploitable in V8: 2 ms at 20k chars) | P1 |
 | "Saved materials" | Metadata points at a file that the TTL deletes after 60 min | P1 (product) |
@@ -535,7 +537,7 @@ Effort is for one developer, in days.
 
 | ID | Problem → Solution | Files | Cx | Days | User impact | Business impact |
 |---|---|---|---|---|---|---|
-| P1-1 | Materials vanish after 60 min → store extracted text in Postgres (or R2) per user, keep TTL for guests | `materialService`, new migration, dashboard | M/L | 3–5 | Library that persists | Prerequisite for everything paid |
+| P1-1 ✅ | Materials vanish after 60 min → **done**: Postgres `materials` table (migration 011). Guests 60 min, signed-in 180 days after last use, library-saved kept until deleted; owner-only access; 200 MB/user quota; file fallback without a DB | `materialStore.ts`, `materialService`, controllers, routes, migration 011 | M/L | — | Library that persists | Prerequisite for everything paid |
 | P1-2 | Guest denial-of-wallet → Cloudflare Turnstile + trusted-proxy IP (`TRUST_PROXY_HOPS`) + per-IP daily cap + guests on gpt-oss-20b | `guestLimit`, `security.ts`, frontend | M | 1–2 | — | Caps free spend |
 | P1-3 | AI rate limiter inert/buggy → record usage, sliding-window burst, sane limits | `aiRateLimit.ts`, `aiController.ts` | S | 0.5 | — | Abuse control |
 | P1-4 | Remaining security: OAuth `state`, verified-email login + safe Google linking, email HTML escape, CSP/headers, SRI-pinned CDNs, JSON body limit, zip-bomb cap, hashed session tokens | auth/oauth/email/server/extract | M | 2–3 | — | Trust |
@@ -584,8 +586,10 @@ vision parameters, and real latency and cost. The provider downgrades rejected p
 4. **Guest policy:** keep anonymous trial (with Turnstile + IP cap) **or** require Google sign-in before the first AI call
    (simplest and cheapest).
 5. **Forum tool repositioning** (keep the endpoint, change the prompt to outline/critique).
-6. **Persistent storage choice:** Postgres `TEXT` (simplest) vs Cloudflare R2.
-7. Then build in order: P1-1 → P1-2/3/4 → P1-6 → P1-5 → P1-7/8/9 → P2-1 Exam Mode.
+6. ~~**Persistent storage choice:** Postgres `TEXT` (simplest) vs Cloudflare R2.~~ **Decided: Postgres. Implemented (P1-1).**
+7. **Token quotas:** the quota system has never been enforced (§5). Decide the free and paid limits (P1-6) before the
+   fix is switched on, otherwise signed-in users are blocked after ~3 answers per 5 hours.
+8. Then build in order: P1-2/3/4 → P1-6 → P1-5 → P1-7/8/9 → P2-1 Exam Mode.
 
 ## 20. Risks
 
