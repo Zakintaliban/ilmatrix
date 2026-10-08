@@ -58,6 +58,23 @@ in [src/config/plans.ts](src/config/plans.ts)). A grounded answer costs ~9 kredi
   `POST /api/admin/usage/user/:id/set-plan {"plan":"semester"}` and
   `POST /api/admin/usage/user/:id/grant-kredit {"product":"pass_7d","reference":"QRIS-..."}`
 
+### Streaming
+
+Chat and the Explain/Quiz/Forum/Exam answers stream token by token (Server-Sent Events,
+[aiController](src/controllers/aiController.ts), [GroqProvider.stream](src/services/groqProvider.ts)):
+
+- The fallback model is used only if the primary fails before any text was sent; after that a failure ends the stream
+  with an `error` event (the app keeps the partial answer and notes that it broke off)
+- Reasoning is never streamed (`include_reasoning: false`, and only `delta.content` is forwarded)
+- Kredit is charged when the stream ends, from the usage Groq sends in its final chunk (`x_groq.usage`). If the student
+  closes the page, the Groq request is aborted and the tokens used are estimated (~4 characters per token); a stream
+  that ends without usage is estimated too (a warning is logged). `npm run groq:check` verifies against the live API
+  that usage arrives in the stream
+- The AI rate-limit slot and the Groq concurrency slot are held until the stream ends. A stream that sends nothing
+  for `GROQ_TIMEOUT_MS` times out
+- Proxies: responses carry `Cache-Control: no-cache` and `X-Accel-Buffering: no`, and a keep-alive comment is sent
+  every 15 s while the model is thinking
+
 ### Payments (Midtrans)
 
 Students buy passes, top-ups and plans from the dashboard (**Tambah Kredit**) with Midtrans Snap: QRIS, e-wallets,
@@ -187,7 +204,7 @@ client and cannot detect a model being retired or rejecting a parameter.
 Test files:
 
 - `tests/services/` - Service layer unit tests
-- `tests/ai/` - AI provider unit tests, the study-tool regression suite, guest protection (Turnstile, IP caps, client IP) and the AI rate limiter
+- `tests/ai/` - AI provider unit tests, the study-tool regression suite, streaming (SSE), guest protection (Turnstile, IP caps, client IP) and the AI rate limiter
 - `tests/db/` - Tests against a real Postgres (`TEST_DATABASE_URL=postgresql://... npm run test:db`; the database is migrated and receives test rows)
 - `tests/smoke.test.ts` - API integration tests
 
@@ -350,8 +367,21 @@ Base: /api
 
 - POST /api/explain (application/json)
 
-  - Body: { materialId?: string, materialText?: string, prompt?: string }
-  - Response: { "answer": string }
+  - Body: { materialId?: string, materialText?: string, prompt?: string, stream?: boolean }
+  - Response: { "answer": string }, or with `"stream": true` a Server-Sent Events stream (see [Streaming](#streaming))
+
+- Streaming: `/api/explain`, `/api/quiz`, `/api/forum`, `/api/exam` and `/api/chat` accept `"stream": true` and answer
+  as `text/event-stream`:
+
+  ```
+  event: start   data: {}
+  event: delta   data: {"text": "..."}                                   (repeated)
+  event: done    data: {"answer": "...", "token_usage": {...}, "usage_warning": "..."}
+  event: error   data: {"error": "...", "code": "timeout|unavailable|..."}   (instead of done)
+  ```
+
+  Validation, auth, kredit and rate limits answer with normal JSON errors before the stream opens. The app uses
+  streaming for chat and the Explain/Forum/Exam panels
 
 - POST /api/quiz (application/json)
 
@@ -502,11 +532,8 @@ curl -H "Content-Type: application/json" \
 
 - Current MVP uses upload-only materials (no LMS integration yet)
 - Consider:
-  - Authentication + per-user storage/history
   - Vector search for large materials
-  - Rate limiting and quotas
-  - More UI polish (markdown rendering, persistence)
-  - SSE streaming for faster perceived latency
+  - Streaming for the JSON tools (quiz trainer, flashcards, dialogue) once the UI can show partial results
 
 ## Troubleshooting
 
