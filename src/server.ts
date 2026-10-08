@@ -74,6 +74,12 @@ class IlmatrixServer {
       this.app.get(path, serveStatic({ path: `${path}.html`, root: "./public" }));
     });
 
+    // KaTeX (math rendering) straight from the pinned npm package: no CDN
+    this.app.use(
+      "/vendor/katex/*",
+      serveStatic({ root: "./node_modules/katex/dist", rewriteRequestPath: (p) => p.replace(/^\/vendor\/katex/, "") })
+    );
+
     // Serve static files from public directory
     this.app.use("/*", serveStatic({ root: "./public" }));
 

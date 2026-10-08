@@ -223,7 +223,7 @@ Core rules:
 - When uncertain, say so and suggest what information is missing.
 - Output must be safe and respectful.
 - Reply in the same language as the student's latest message; if unclear, use Bahasa Indonesia.
-- Format with Markdown. Do not use LaTeX; write math in plain text or Unicode (e.g., x², √x, ∫, ≤).`;
+- Format with Markdown. Write math in LaTeX: $...$ inline and $$...$$ on its own line for equations (it is rendered). Keep simple numbers and units as plain text, and never use $ for currency (write Rp or USD).`;
 
   constructor(opts: { client?: ChatClient; config?: Partial<ProviderConfig> } = {}) {
     this.provider = new GroqProvider(opts);
@@ -608,7 +608,7 @@ Rules:
           {
             role: "system",
             content:
-              "You are an expert educator creating assessment materials. Respond only with valid JSON.",
+              "You are an expert educator creating assessment materials. Respond only with valid JSON. Questions and options are shown as plain text: write math in plain text or Unicode (x², √x, ≤), not LaTeX.",
           },
           { role: "user", content },
         ],
@@ -689,7 +689,7 @@ Rules:
           {
             role: "system",
             content:
-              "Create educational flashcards. Respond only with valid JSON.",
+              "Create educational flashcards. Respond only with valid JSON. Cards are rendered as Markdown: write math in LaTeX with $...$ (inline) or $$...$$.",
           },
           { role: "user", content },
         ],

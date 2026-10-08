@@ -143,10 +143,23 @@
     <script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js" integrity="sha384-+VfUPEb0PdtChMwmBcBmykRMDd+v6D/oFmB3rZM/puCMDYcIvF968OimRh4KQY9a" crossorigin="anonymous"></script>
     <!-- Guest bot check (Turnstile); retries /api calls after verification -->
     <script src="/js/guest-verify.js"></script>
+    <!-- Math: KaTeX (self-hosted from the katex npm package) + LaTeX extraction for Markdown -->
+    <link rel="stylesheet" href="/vendor/katex/katex.min.css" />
+    <script src="/vendor/katex/katex.min.js"></script>
+    <script src="/js/markdown-math.js"></script>
 
     <style>
       * {
         font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      }
+      /* Math keeps KaTeX's fonts (some symbols, e.g. \neq, need KaTeX_Main glyphs) */
+      .katex * {
+        font-family: inherit;
+      }
+      .markdown .math-display {
+        display: block;
+        overflow-x: auto;
+        overflow-y: hidden;
       }
       html {
         scroll-behavior: smooth;
@@ -2576,16 +2589,21 @@
         }));
       }
 
-      // Render Markdown safely using marked + DOMPurify (fallback to escaping)
+      // Render Markdown safely using marked + DOMPurify (fallback to escaping).
+      // LaTeX math ($…$, $$…$$) is kept away from marked and rendered with KaTeX.
       function renderMarkdown(s) {
         try {
           const src = String(s ?? "");
+          const math = window.MarkdownMath ? window.MarkdownMath.protectMath(src) : null;
+          const text = math ? math.text : src;
           const parsed = window.marked
-            ? window.marked.parse(src)
-            : escapeHtml(src);
-          const safe = window.DOMPurify
-            ? window.DOMPurify.sanitize(parsed)
-            : parsed;
+            ? window.marked.parse(text)
+            : escapeHtml(text);
+          const sanitize = (html) => (window.DOMPurify ? window.DOMPurify.sanitize(html) : html);
+          let safe = sanitize(parsed);
+          if (math && math.blocks.length) {
+            safe = window.MarkdownMath.renderMath(safe, math, window.katex, sanitize);
+          }
           return "<div class='markdown'>" + safe + "</div>";
         } catch (e) {
           return (
