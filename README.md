@@ -81,6 +81,8 @@ can take without signing up ([guestLimit](src/middleware/guestLimit.ts)):
 - Run `npm run migrate run` after deploying so the `materials` table exists (PostgreSQL 12+). Until then the app logs a
   warning and falls back to local files, which do not survive a redeploy
 - Without a database (local development), materials use `uploads/<id>.txt` files with the guest TTL
+- Migration 013 hashes existing session tokens in place, so users stay signed in. When an email service is configured,
+  accounts that never verified their email must verify before their next password sign-in
 - After deploying, open `GET /api/admin/client-ip` as an admin and check that `detected_ip` is your real IP. If it is
   a proxy address, set `CLIENT_IP_HEADER` (`cf-connecting-ip` when the domain is proxied through Cloudflare; the server
   logs a `[CLIENT_IP]` warning when it sees Cloudflare headers without that setting)
@@ -266,14 +268,21 @@ Server (default): <http://localhost:8787>
   - Path traversal protection for materials I/O; only UUID v4-like ids are accepted and paths are validated inside uploads/ (see [security utils](src/utils/security.ts)).
   - Global per-IP rate limiting (default 120 req/min) via a lightweight token bucket (see [rate limit middleware](src/middleware/rateLimit.ts)). Tune with RATE_LIMIT_MAX.
   - AI rate limiting per user or guest device on every AI endpoint: 12/min and 150/hour (sliding windows), at most 2 in flight. Rejected requests return `429` with `code: "AI_RATE_LIMITED"` or `"AI_CONCURRENCY_LIMIT"`, a message in `error`/`answer` and `Retry-After`; they are not charged kredit and do not use a guest trial (see [aiRateLimit](src/middleware/aiRateLimit.ts)). In memory, per instance.
-  - CSP applied to static pages to restrict sources (see [app](public/app.html), [index](public/index.html), [about](public/about.html)). The app page also allows `https://challenges.cloudflare.com` (script + frame) for Turnstile.
+  - Security headers on every response ([securityHeaders](src/middleware/securityHeaders.ts)): a site-wide Content-Security-Policy (script origins pinned, no plugins, no `<base>` hijacking, forms only to this site, `frame-ancestors 'none'`), `X-Frame-Options: DENY`, HSTS, `nosniff`, a strict referrer policy and a Permissions-Policy. Pages with a `<meta>` CSP ([app](public/app.html), [index](public/index.html), [about](public/about.html)) narrow it further. `'unsafe-inline'` remains until inline scripts move to files.
+  - CDN scripts are pinned to exact versions with Subresource Integrity (`integrity` + `crossorigin`), checked by a test. Exception: the Tailwind Play CDN, which generates its script per request (replace with compiled CSS, P1-13).
   - Guest bot protection: Turnstile device verification and per-IP daily caps (see [Guest access & bot protection](#guest-access--bot-protection)).
-  - Best-effort Content-Length guard on uploads to quickly reject oversized requests (see [upload controller](src/controllers/uploadController.ts)).
+  - Request body limits while streaming: 2 MB for JSON, the upload limit (+1 MB) for `/upload`; `413 BODY_TOO_LARGE`.
+  - DOCX/PPTX are read with a decompression budget (50 MB of XML per document), so a zip bomb fails the upload instead of exhausting memory ([zip](src/extract/zip.ts)).
+- Accounts:
+  - Password sign-in requires a verified email whenever verification emails can be sent (`RESEND_API_KEY` set); the login page offers to resend the link. Without an email service nobody could verify, so the check is off.
+  - Google sign-in into an existing **unverified** account takes it over: its password and sessions are removed (stops account pre-hijacking). The profile API can't change the email.
+  - Google OAuth uses a `state` parameter bound to an HttpOnly cookie (login CSRF).
+  - Failed sign-ins: 10 per email or 30 per IP within 15 minutes, then `429 LOGIN_THROTTLED` (Google sign-in still works). Changing the password signs out other sessions.
+  - Session tokens are stored as SHA-256 hashes (migration 013); the cookie value never reaches the database.
+  - User-supplied names are HTML-escaped in emails.
 - Accessibility:
   - Live regions announce new chat and dialogue messages for screen readers (see [app live regions](public/app.html)).
   - Tool trigger buttons include aria-label/controls/expanded for improved navigation.
-
-Note on SRI (Subresource Integrity): in production, pin CDN versions and add integrity/crossorigin attributes for Tailwind, marked, and DOMPurify.
 
 ## API
 
