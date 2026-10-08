@@ -58,6 +58,29 @@ in [src/config/plans.ts](src/config/plans.ts)). A grounded answer costs ~9 kredi
   `POST /api/admin/usage/user/:id/set-plan {"plan":"semester"}` and
   `POST /api/admin/usage/user/:id/grant-kredit {"product":"pass_7d","reference":"QRIS-..."}`
 
+### Pages for Midtrans' merchant review
+
+Midtrans checks the website before activating a merchant. What it asks for and where it is:
+
+| Requirement | Where |
+|---|---|
+| Accessible, describes the products, can be ordered | [`/harga`](src/controllers/pricingPage.ts) (server-rendered from the catalogue, visible without JavaScript) → `/checkout.html` |
+| Terms & conditions and refund policy | [`/syarat-ketentuan.html`](public/syarat-ketentuan.html) (from Midtrans' digital-goods template, adapted), [`/kebijakan-pengembalian.html`](public/kebijakan-pengembalian.html); linked from the footer of public pages, the checkout page and sign-up |
+| Business contact | hasbizakin0804@gmail.com on the pricing, checkout, terms and refund pages and public footers (`CONTACT_EMAIL` in [pricingPage](src/controllers/pricingPage.ts)) |
+| Prices in Rupiah | All prices are IDR; the landing page's structured data uses `IDR`. A test fails on `$` prices or non-IDR offers |
+| Payment page not redirected to another website | Snap popup on `/checkout.html` |
+
+`tests/services/merchantPages.test.ts` keeps these in place. The terms and refund policy are a starting point:
+have them reviewed, and add the business's legal name and address if Midtrans asks for them.
+
+### Math
+
+Answers can contain LaTeX math (`$…$` inline, `$$…$$` display), rendered with KaTeX (served from the pinned `katex`
+package at `/vendor/katex`, no CDN). [markdown-math.js](public/js/markdown-math.js) takes math out before Markdown
+parsing and renders it after sanitizing, only in text (never in attributes); `$5 and $10` stays text; KaTeX runs with
+`trust: false` and expansion limits. The study prompt asks for LaTeX and never `$` for money; MCQ (plain text) keeps
+Unicode math.
+
 ### Streaming
 
 Chat and the Explain/Quiz/Forum/Exam answers stream token by token (Server-Sent Events,
@@ -77,14 +100,19 @@ Chat and the Explain/Quiz/Forum/Exam answers stream token by token (Server-Sent 
 
 ### Payments (Midtrans)
 
-Students buy passes, top-ups and plans from the dashboard (**Tambah Kredit**) with Midtrans Snap: QRIS, e-wallets,
-bank transfer, whatever is active on the merchant account (narrow it with `MIDTRANS_ENABLED_PAYMENTS`). Snap runs in
-redirect mode: the student is sent to Midtrans' hosted page and back to `/payment.html`, so no Midtrans script runs on
-our pages. Code: [paymentService](src/services/paymentService.ts), [midtransClient](src/services/midtransClient.ts).
+Students buy passes, top-ups and plans from the public pricing page (`/harga`) or the dashboard (**Tambah Kredit**)
+with Midtrans Snap: QRIS, e-wallets, whatever is active on the merchant account (narrow it with
+`MIDTRANS_ENABLED_PAYMENTS`). Payment happens on our own checkout page (`/checkout.html?product=…`) in the **Snap
+popup**, so the student never leaves the site (a Midtrans merchant requirement), then `/payment.html` shows the result.
+Snap.js is loaded only on the checkout page, which is the only page whose CSP allows Midtrans' hosts. If the popup
+can't load (no `MIDTRANS_CLIENT_KEY`, script blocked), the page offers Midtrans' hosted page as an explicit link.
+Code: [paymentService](src/services/paymentService.ts), [midtransClient](src/services/midtransClient.ts),
+[checkout page](public/checkout.html).
 
 - **Checkout** `POST /api/payments/checkout {"product":"pass_7d"}` (signed in) creates a pending payment with the
-  catalogue price and returns Midtrans' `redirect_url`. A pending checkout of the same product from the last hour is
-  reused; at most 5 checkouts per user per hour
+  catalogue price and returns the Snap token (popup), the Snap.js URL and client key, and `redirect_url` (fallback). A
+  pending checkout of the same product from the last hour is reused, with the same token; at most 5 checkouts per user
+  per hour
 - **Webhook** `POST /api/payments/midtrans/notification`: the SHA-512 `signature_key` is checked, then the real status
   is fetched from Midtrans' Get Status API (the signature doesn't cover `transaction_status`). If Midtrans can't be
   reached the webhook answers `503`, so Midtrans retries
@@ -101,9 +129,9 @@ our pages. Code: [paymentService](src/services/paymentService.ts), [midtransClie
 
 Setup:
 
-1. Run `npm run migrate run` (migration 014 creates `payments` and `payment_events`)
-2. Set `MIDTRANS_SERVER_KEY` (sandbox key first) and `MIDTRANS_IS_PRODUCTION=false`; the server warns if the key and
-   the environment don't match
+1. Run `npm run migrate run` (migrations 014 and 015 create `payments`, `payment_events` and the Snap token column)
+2. Set `MIDTRANS_SERVER_KEY` and `MIDTRANS_CLIENT_KEY` (sandbox keys first) and `MIDTRANS_IS_PRODUCTION=false`; the
+   server warns if the server key and the environment don't match
 3. Webhook: with an `https://` `BASE_URL`, each transaction tells Midtrans to notify
    `${BASE_URL}/api/payments/midtrans/notification`. Otherwise set that URL as the Notification URL in the Midtrans
    dashboard (Settings > Payment). For local testing a tunnel is needed; without one the return page still completes
@@ -305,6 +333,7 @@ Server (default): <http://localhost:8787>
 - GUEST_IP_DAILY_REQUESTS: Guest AI requests per IP per 24 hours (default 100).
 - GUEST_IP_DAILY_VERIFICATIONS: Guest device verifications per IP per 24 hours (default 20).
 - MIDTRANS_SERVER_KEY: Midtrans server key; payments are off without it. Never sent to the browser.
+- MIDTRANS_CLIENT_KEY: Midtrans client key for the Snap popup on the checkout page (public by design). Without it, checkout offers Midtrans' hosted page instead.
 - MIDTRANS_IS_PRODUCTION: `true` for real payments (default `false`, sandbox).
 - MIDTRANS_ENABLED_PAYMENTS: Comma-separated Snap payment methods to offer (default: all active on the account).
 - MIDTRANS_NOTIFICATION_URL: Webhook URL sent per transaction (default: `${BASE_URL}/api/payments/midtrans/notification` when BASE_URL is https).
