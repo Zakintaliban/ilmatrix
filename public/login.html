@@ -249,6 +249,12 @@
             <span class="font-medium" style="color: #0f0e85;">🐬 Resistance Blue</span> ·
             <span class="font-medium" style="color: #e44c99;">🦩 Brave Pink</span> ·
             <span class="font-medium" style="color: #1b612f;">🦖 Hero Green</span>
+            <div class="mt-1">
+                <a href="/harga.html" class="hover:underline">Harga</a> ·
+                <a href="/syarat-ketentuan.html" class="hover:underline">Syarat &amp; Ketentuan</a> ·
+                <a href="/kebijakan-pengembalian.html" class="hover:underline">Kebijakan Pengembalian Dana</a> ·
+                <a href="mailto:hasbizakin0804@gmail.com" class="hover:underline">hasbizakin0804@gmail.com</a>
+            </div>
         </div>
     </footer>
 
@@ -365,9 +371,15 @@
 
                     if (response.ok) {
                         this.showSuccess('Login successful! Redirecting...');
-                        // Redirect to main app after successful login
+                        // Back to where the student came from (same-site paths only), else the app
+                        // (resolved by the URL parser, so "/\t/evil.com" or "/\\evil.com" can't leave the site)
+                        let target = '/app';
+                        try {
+                            const next = new URL(new URLSearchParams(window.location.search).get('next') || '/app', window.location.origin);
+                            if (next.origin === window.location.origin) target = next.pathname + next.search + next.hash;
+                        } catch {}
                         setTimeout(() => {
-                            window.location.href = '/app';
+                            window.location.href = target;
                         }, 1500);
                     } else {
                         this.showError(data.error || 'Login failed');

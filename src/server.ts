@@ -8,6 +8,7 @@ import config from "./config/env.js";
 import { initializeDatabase, testConnection, closeDatabase } from "./services/databaseService.js";
 import { validateDatabaseConfig } from "./config/database.js";
 import { securityHeadersMiddleware } from "./middleware/securityHeaders.js";
+import { pricingPage } from "./controllers/pricingPage.js";
 
 /**
  * ILMATRIX server bootstrap with improved error handling and configuration
@@ -68,7 +69,14 @@ class IlmatrixServer {
       "/verify-email",
       "/email-verified",
       "/payment",
+      "/checkout",
+      "/syarat-ketentuan",
+      "/kebijakan-pengembalian",
     ];
+
+    // Public pricing, rendered from the product catalogue (no JavaScript needed)
+    this.app.get("/harga", pricingPage);
+    this.app.get("/harga.html", pricingPage);
 
     cleanUrls.forEach((path) => {
       this.app.get(path, serveStatic({ path: `${path}.html`, root: "./public" }));
