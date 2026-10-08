@@ -1,3 +1,4 @@
+import type { MiddlewareHandler } from "hono";
 import { secureHeaders } from "hono/secure-headers";
 
 /**
@@ -30,14 +31,57 @@ export const CONTENT_SECURITY_POLICY = {
   frameAncestors: ["'none'"],
 };
 
-export const securityHeadersMiddleware = secureHeaders({
-  contentSecurityPolicy: CONTENT_SECURITY_POLICY,
+/**
+ * Midtrans Snap.js (payment popup) needs these hosts, per Midtrans' CSP
+ * guidance (*.midtrans.com, *.veritrans.co.id, cloudfront, and its analytics).
+ * They are allowed only on the checkout page, which is the only page that
+ * loads Snap.js, so the rest of the site keeps the strict policy.
+ * https://docs.midtrans.com/docs/snap-advanced-feature
+ */
+const MIDTRANS_HOSTS = [
+  "https://app.midtrans.com",
+  "https://app.sandbox.midtrans.com",
+  "https://*.midtrans.com",
+  "https://*.veritrans.co.id",
+  "https://*.cloudfront.net",
+];
+const MIDTRANS_ANALYTICS = ["https://*.mixpanel.com", "https://*.google-analytics.com"];
+
+export const CHECKOUT_CONTENT_SECURITY_POLICY = {
+  ...CONTENT_SECURITY_POLICY,
+  scriptSrc: [...CONTENT_SECURITY_POLICY.scriptSrc, ...MIDTRANS_HOSTS, ...MIDTRANS_ANALYTICS],
+  styleSrc: [...CONTENT_SECURITY_POLICY.styleSrc, ...MIDTRANS_HOSTS],
+  imgSrc: [...CONTENT_SECURITY_POLICY.imgSrc, ...MIDTRANS_HOSTS, ...MIDTRANS_ANALYTICS],
+  connectSrc: [...CONTENT_SECURITY_POLICY.connectSrc, ...MIDTRANS_HOSTS, ...MIDTRANS_ANALYTICS],
+  frameSrc: [...CONTENT_SECURITY_POLICY.frameSrc, ...MIDTRANS_HOSTS],
+};
+
+const COMMON_HEADERS = {
   xFrameOptions: "DENY",
   // Browsers ignore it over plain HTTP; no includeSubDomains (other subdomains may not be HTTPS)
   strictTransportSecurity: "max-age=15552000",
   referrerPolicy: "strict-origin-when-cross-origin",
+  crossOriginResourcePolicy: "same-origin",
+  permissionsPolicy: { camera: [] as string[], microphone: [] as string[], geolocation: [] as string[] },
+};
+
+const siteHeaders = secureHeaders({
+  ...COMMON_HEADERS,
+  contentSecurityPolicy: CONTENT_SECURITY_POLICY,
   // Google sign-in uses full-page redirects, Turnstile an iframe: neither needs a cross-origin opener
   crossOriginOpenerPolicy: "same-origin",
-  crossOriginResourcePolicy: "same-origin",
-  permissionsPolicy: { camera: [], microphone: [], geolocation: [] },
 });
+
+const checkoutHeaders = secureHeaders({
+  ...COMMON_HEADERS,
+  contentSecurityPolicy: CHECKOUT_CONTENT_SECURITY_POLICY,
+  // Some payment methods (e.g. 3DS, e-wallet deeplinks) open windows that talk back to the popup
+  crossOriginOpenerPolicy: "same-origin-allow-popups",
+});
+
+export function isCheckoutPath(path: string): boolean {
+  return path === "/checkout" || path === "/checkout.html";
+}
+
+export const securityHeadersMiddleware: MiddlewareHandler = (c, next) =>
+  isCheckoutPath(c.req.path) ? checkoutHeaders(c, next) : siteHeaders(c, next);

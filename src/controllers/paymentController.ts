@@ -9,6 +9,7 @@ import {
   listPaymentsForUser,
   listRecentPayments,
   recordNotification,
+  snapJsConfig,
   syncPayment,
 } from "../services/paymentService.js";
 import { verifyNotificationSignature } from "../services/midtransClient.js";
@@ -43,9 +44,14 @@ export async function checkout(c: Context) {
   const body = await c.req.json().catch(() => ({}));
   try {
     const result = await createCheckout(user, body?.product);
+    const snap = snapJsConfig();
     return c.json(
       {
         order_id: result.orderId,
+        // Popup on our checkout page when Snap.js is configured; redirect_url is the fallback
+        snap_token: result.snapToken,
+        snap_js_url: snap && result.snapToken ? snap.url : null,
+        client_key: snap && result.snapToken ? snap.clientKey : null,
         redirect_url: result.redirectUrl,
         amount_idr: result.amountIdr,
         product: result.product.code,

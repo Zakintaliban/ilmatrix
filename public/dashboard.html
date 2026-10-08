@@ -481,7 +481,7 @@
                 <div class="bg-white dark:bg-gray-800 shadow rounded-lg overflow-hidden">
                     <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
                         <h3 id="upgrade-title" class="text-lg font-semibold text-gray-900 dark:text-white">Tambah Kredit</h3>
-                        <p class="text-sm text-gray-600 dark:text-gray-400 mt-1">Bayar dengan QRIS, e-wallet, atau transfer bank lewat Midtrans</p>
+                        <p class="text-sm text-gray-600 dark:text-gray-400 mt-1">Bayar dengan QRIS, e-wallet, atau metode lain lewat Midtrans. <a href="/harga.html" class="underline">Detail harga</a> · <a href="/syarat-ketentuan.html" class="underline">Syarat &amp; Ketentuan</a> · <a href="/kebijakan-pengembalian.html" class="underline">Pengembalian dana</a></p>
                     </div>
                     <div class="p-6">
                         <p id="upgrade-message" class="hidden mb-4 text-sm rounded-md p-3" role="status"></p>
@@ -1055,7 +1055,6 @@
         // ---------------------------------------------------------------
         // Buying kredit and plans (redirects to Midtrans' hosted page)
         // ---------------------------------------------------------------
-        const MIDTRANS_HOSTS = ['app.midtrans.com', 'app.sandbox.midtrans.com'];
         const PAYMENT_STATUS_LABELS = {
             pending: ['Menunggu pembayaran', 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/40 dark:text-yellow-200'],
             paid: ['Berhasil', 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-200'],
@@ -1095,34 +1094,14 @@
             button.type = 'button';
             button.setAttribute('aria-label', `Beli ${product.name} seharga ${formatRupiah(product.price_idr)}`);
             button.disabled = !enabled;
-            button.addEventListener('click', () => buyProduct(product.code, button));
+            button.addEventListener('click', () => buyProduct(product.code));
             item.append(button);
             return item;
         }
 
-        async function buyProduct(code, button) {
-            const label = button.textContent;
-            document.querySelectorAll('#upgrade-products button').forEach((b) => (b.disabled = true));
-            button.textContent = 'Membuka pembayaran…';
-            try {
-                const response = await fetch('/api/payments/checkout', {
-                    method: 'POST',
-                    credentials: 'include',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ product: code }),
-                });
-                const data = await response.json().catch(() => ({}));
-                if (!response.ok) throw new Error(data.error || 'Pembayaran gagal dibuka. Coba lagi.');
-                const url = new URL(data.redirect_url);
-                if (url.protocol !== 'https:' || !MIDTRANS_HOSTS.includes(url.hostname)) {
-                    throw new Error('Alamat pembayaran tidak valid.');
-                }
-                window.location.assign(url.href);
-            } catch (error) {
-                showUpgradeMessage(error.message, 'error');
-                document.querySelectorAll('#upgrade-products button').forEach((b) => (b.disabled = false));
-                button.textContent = label;
-            }
+        // Payment happens on our checkout page (Midtrans popup), so the student stays on ILMATRIX
+        function buyProduct(code) {
+            window.location.assign('/checkout.html?product=' + encodeURIComponent(code));
         }
 
         function renderPaymentHistory(payments) {

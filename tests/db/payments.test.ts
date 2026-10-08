@@ -84,6 +84,7 @@ before(async () => {
 beforeEach(() => {
   if (skip) return;
   config.midtransServerKey = SERVER_KEY;
+  config.midtransClientKey = "";
   config.midtransIsProduction = false;
   config.midtransNotificationUrl = NOTIFY_URL;
   config.midtransEnabledPayments = [];
@@ -516,4 +517,34 @@ test("when kredit runs out the message links to buying more (only if payments ar
   const off = await explain();
   assert.equal(off.body.upgrade_url, undefined);
   assert.doesNotMatch(off.body.answer, /Tambah kredit/);
+});
+
+test("with a client key, checkout returns the Snap token for the popup on our checkout page", { skip }, async () => {
+  config.midtransClientKey = "SB-Mid-client-TESTKEY";
+  const u = await createUser();
+  const first = await checkout(u.cookie, "pass_7d");
+  assert.equal(first.status, 201);
+  assert.match(first.body.snap_token, /^[0-9a-f-]{36}$/);
+  assert.equal(first.body.snap_js_url, "https://app.sandbox.midtrans.com/snap/snap.js");
+  assert.equal(first.body.client_key, "SB-Mid-client-TESTKEY");
+  assert.ok(first.body.redirect_url.endsWith(first.body.snap_token), "redirect_url stays as the fallback");
+  assert.equal((await paymentRow(first.body.order_id)).snap_token, first.body.snap_token);
+
+  // Reopening the same pending order gives the same token (the popup can be reopened)
+  const again = await checkout(u.cookie, "pass_7d");
+  assert.equal(again.body.reused, true);
+  assert.equal(again.body.snap_token, first.body.snap_token);
+
+  config.midtransIsProduction = true;
+  const prod = await checkout(u.cookie, "pass_7d");
+  assert.equal(prod.body.snap_js_url, "https://app.midtrans.com/snap/snap.js");
+});
+
+test("without a client key there is no popup, only the Midtrans page", { skip }, async () => {
+  const u = await createUser();
+  const res = await checkout(u.cookie, "topup");
+  assert.equal(res.status, 201);
+  assert.equal(res.body.snap_js_url, null);
+  assert.equal(res.body.client_key, null);
+  assert.match(res.body.redirect_url, /^https:\/\/app\.sandbox\.midtrans\.com\//);
 });

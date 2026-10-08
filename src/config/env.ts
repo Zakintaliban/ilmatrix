@@ -77,6 +77,8 @@ export interface AppConfig {
 
   // Payments (Midtrans Snap)
   midtransServerKey: string;
+  /** Public key for Snap.js (the payment popup); without it checkout falls back to Midtrans' page. */
+  midtransClientKey: string;
   midtransIsProduction: boolean;
   /** Snap payment methods to offer (empty = everything active on the merchant account). */
   midtransEnabledPayments: string[];
@@ -230,6 +232,7 @@ export const config: AppConfig = {
 
   // Payments (Midtrans Snap). Disabled until MIDTRANS_SERVER_KEY is set.
   midtransServerKey: getEnvString("MIDTRANS_SERVER_KEY", "").trim(),
+  midtransClientKey: getEnvString("MIDTRANS_CLIENT_KEY", "").trim(),
   midtransIsProduction: getEnvBoolean("MIDTRANS_IS_PRODUCTION", false),
   midtransEnabledPayments: getEnvString("MIDTRANS_ENABLED_PAYMENTS", "")
     .split(",")

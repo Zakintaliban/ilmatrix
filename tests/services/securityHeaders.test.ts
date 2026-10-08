@@ -49,3 +49,21 @@ test("the CSP allows every script origin the pages use", () => {
     }
   }
 });
+
+test("only the checkout page allows Midtrans (Snap.js popup)", async () => {
+  const app = new Hono();
+  app.use("*", securityHeadersMiddleware);
+  for (const path of ["/checkout.html", "/checkout", "/dashboard.html", "/app.html", "/api/payments/checkout"]) {
+    app.get(path, (c) => c.html("<p>x</p>"));
+  }
+  for (const path of ["/checkout.html", "/checkout"]) {
+    const csp = (await app.request(path)).headers.get("content-security-policy") ?? "";
+    assert.match(csp, /script-src [^;]*https:\/\/app\.sandbox\.midtrans\.com/, path);
+    assert.match(csp, /frame-src [^;]*https:\/\/app\.midtrans\.com/, path);
+    assert.match(csp, /frame-ancestors 'none'/, path);
+  }
+  for (const path of ["/dashboard.html", "/app.html", "/api/payments/checkout"]) {
+    const csp = (await app.request(path)).headers.get("content-security-policy") ?? "";
+    assert.doesNotMatch(csp, /midtrans/, path);
+  }
+});

@@ -75,6 +75,15 @@ export function isPaymentsEnabled(): boolean {
   return !!config.midtransServerKey;
 }
 
+/** Snap.js for the payment popup on our checkout page (null: use Midtrans' hosted page). */
+export function snapJsConfig(): { url: string; clientKey: string } | null {
+  if (!config.midtransClientKey) return null;
+  return {
+    url: config.midtransIsProduction ? "https://app.midtrans.com/snap/snap.js" : "https://app.sandbox.midtrans.com/snap/snap.js",
+    clientKey: config.midtransClientKey,
+  };
+}
+
 /** Midtrans transaction_status (+ fraud_status) -> our payment status. */
 export function mapMidtransStatus(transactionStatus?: string, fraudStatus?: string): PaymentStatus {
   switch (transactionStatus) {
@@ -116,7 +125,7 @@ interface CheckoutUser {
 export async function createCheckout(
   user: CheckoutUser,
   productCode: unknown
-): Promise<{ orderId: string; redirectUrl: string; amountIdr: number; product: CatalogItem; reused: boolean }> {
+): Promise<{ orderId: string; redirectUrl: string; snapToken: string | null; amountIdr: number; product: CatalogItem; reused: boolean }> {
   const product = catalogItem(productCode);
   if (!product) throw new PaymentError("UNKNOWN_PRODUCT", 400, "Produk tidak dikenal.");
   if (!isPaymentsEnabled()) {
@@ -140,7 +149,7 @@ export async function createCheckout(
 
   // Reuse a recent pending checkout of the same product (e.g. the student went back)
   const existing = await query(
-    `SELECT order_id, redirect_url, amount_idr FROM payments
+    `SELECT order_id, redirect_url, snap_token, amount_idr FROM payments
      WHERE user_id = $1 AND product = $2 AND status = 'pending' AND redirect_url IS NOT NULL
        AND amount_idr = $3 AND created_at > NOW() - make_interval(secs => $4)
      ORDER BY created_at DESC LIMIT 1`,
@@ -148,7 +157,14 @@ export async function createCheckout(
   );
   if (existing.rows[0]) {
     const row = existing.rows[0];
-    return { orderId: row.order_id, redirectUrl: row.redirect_url, amountIdr: row.amount_idr, product, reused: true };
+    return {
+      orderId: row.order_id,
+      redirectUrl: row.redirect_url,
+      snapToken: row.snap_token ?? null,
+      amountIdr: row.amount_idr,
+      product,
+      reused: true,
+    };
   }
 
   const recent = await query(
@@ -192,9 +208,13 @@ export async function createCheckout(
     throw new PaymentError("PROVIDER_ERROR", 502, "Halaman pembayaran tidak bisa dibuka. Coba lagi sebentar lagi.");
   }
 
-  await query(`UPDATE payments SET redirect_url = $2, updated_at = NOW() WHERE order_id = $1`, [orderId, snap.redirect_url]);
+  await query(`UPDATE payments SET redirect_url = $2, snap_token = $3, updated_at = NOW() WHERE order_id = $1`, [
+    orderId,
+    snap.redirect_url,
+    snap.token,
+  ]);
   await recordEvent(orderId, "checkout", undefined, { redirect_url: snap.redirect_url });
-  return { orderId, redirectUrl: snap.redirect_url, amountIdr: product.priceIdr, product, reused: false };
+  return { orderId, redirectUrl: snap.redirect_url, snapToken: snap.token, amountIdr: product.priceIdr, product, reused: false };
 }
 
 async function recordEvent(orderId: string, source: string, transactionStatus: string | undefined, payload: unknown, db: { query: typeof query } = { query }) {
