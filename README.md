@@ -36,6 +36,28 @@ An AI study companion for university students with **multimodal AI capabilities*
 - A background cleaner deletes expired materials ([backgroundTaskService](src/services/backgroundTaskService.ts)); deleting
   an account deletes its materials
 
+### Kredit & plans
+
+AI usage by signed-in users is metered in **kredit**, a cost-weighted unit (1 kredit ≈ Rp4 of AI cost, priced per model
+in [src/config/plans.ts](src/config/plans.ts)). A grounded answer costs ~9 kredit, a 10-question quiz ~17, a photo ~36.
+
+| Plan / product | Price | Kredit |
+|---|---|---|
+| Gratis | Rp0 | 150 per week (`KREDIT_FREE_WEEKLY`) |
+| Bulanan | Rp29.000 / 30 days | 900 per week |
+| Semester | Rp99.000 / 182 days | 700 per week |
+| Pass 7 Hari | Rp9.900 | 1.000, valid 7 days |
+| Top-up | Rp5.000 | 600, valid 90 days |
+
+- Weekly kredit refill every Monday 00:00 UTC (07:00 WIB); passes and top-ups are used after the weekly allowance,
+  soonest-expiring first. A request is allowed while any kredit remains (the last one may overshoot slightly)
+- When kredit runs out, AI endpoints return `429` with `code: "KREDIT_EXHAUSTED"` and a message students see in the app;
+  image uploads still work but skip OCR
+- Admins are metered but never blocked. Until payments are integrated, apply a sale from the admin page
+  (`/admin-usage.html` → user → Set Plan / Grant Pass 7 Hari / Grant Top-up) or the API:
+  `POST /api/admin/usage/user/:id/set-plan {"plan":"semester"}` and
+  `POST /api/admin/usage/user/:id/grant-kredit {"product":"pass_7d","reference":"QRIS-..."}`
+
 ### Deployment
 
 - Run `npm run migrate run` after deploying so the `materials` table exists (PostgreSQL 12+). Until then the app logs a
@@ -191,6 +213,7 @@ Server (default): <http://localhost:8787>
 - MATERIAL_TTL_MINUTES: Minutes to keep guest materials after their last use (default 60). Also the TTL of file-based storage when no database is configured.
 - MATERIAL_USER_RETENTION_DAYS: Days to keep signed-in users' materials after their last use (default 180). Materials saved to the library are kept until deleted.
 - MATERIAL_USER_QUOTA_MB: Maximum extracted text stored per signed-in user (default 200).
+- KREDIT_FREE_WEEKLY: Weekly kredit on the free plan (default 150). Paid plans and products are defined in [src/config/plans.ts](src/config/plans.ts).
 - DATABASE_SSL: `true`/`false` to override database SSL (default: on when NODE_ENV=production). Note that npm runs every script with NODE_ENV=production because `.npmrc` sets `omit=dev`, so set `DATABASE_SSL=false` for a local Postgres without SSL.
 - RATE_LIMIT_MAX: Requests per minute per IP (default 120). Lightweight token bucket applied to all /api routes. See [middleware](src/routes.ts:70).
 - PDF_MAX_PAGES: Max PDF pages extracted per file (default 200). See [extractPdfTextImpl()](src/extract/pdf.ts:50).

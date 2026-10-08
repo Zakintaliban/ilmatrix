@@ -2,6 +2,7 @@ import Groq from "groq-sdk";
 import { AsyncLocalStorage } from "node:async_hooks";
 import { createLimiter, type Limiter } from "../utils/concurrency.js";
 import config from "../config/env.js";
+import { kreditForUsage } from "../config/plans.js";
 
 /**
  * Single place that knows how to talk to Groq: model routing, reasoning
@@ -136,6 +137,8 @@ class GroqCircuitBreaker {
 interface UsageStore {
   usage: TokenUsage | null;
   model: string | null;
+  /** Cost-weighted kredit, priced per call by the model that served it. */
+  kredit: number;
 }
 
 const usageStorage = new AsyncLocalStorage<UsageStore>();
@@ -147,16 +150,17 @@ const usageStorage = new AsyncLocalStorage<UsageStore>();
  */
 export async function trackUsage<T>(
   fn: () => Promise<T>
-): Promise<{ result: T; usage: TokenUsage | null; model: string | null }> {
-  const store: UsageStore = { usage: null, model: null };
+): Promise<{ result: T; usage: TokenUsage | null; model: string | null; kredit: number }> {
+  const store: UsageStore = { usage: null, model: null, kredit: 0 };
   const result = await usageStorage.run(store, fn);
-  return { result, usage: store.usage, model: store.model };
+  return { result, usage: store.usage, model: store.model, kredit: Math.round(store.kredit * 100) / 100 };
 }
 
 function recordUsage(store: UsageStore | undefined, result: CompletionResult): void {
   if (!store) return;
   store.model = result.model;
   if (!result.usage) return;
+  store.kredit += kreditForUsage(result.model, result.usage.prompt_tokens, result.usage.completion_tokens);
   const prev = store.usage;
   store.usage = {
     prompt_tokens: (prev?.prompt_tokens || 0) + result.usage.prompt_tokens,
@@ -416,7 +420,8 @@ export class GroqProvider {
             `[GROQ] ${model} tokens: ${usage.total_tokens} (prompt: ${usage.prompt_tokens}, completion: ${usage.completion_tokens})`
           );
         }
-        return { content, model: completion?.model || model, usage };
+        // Report (and price) the model we requested; response IDs may be spelled differently
+        return { content, model, usage };
       } catch (err) {
         if (statusOf(err) === 400 && attempt < 3 && downgradeParams(params, err)) {
           console.warn(`[GROQ] ${model} rejected an optional parameter; retrying with a simpler request`);

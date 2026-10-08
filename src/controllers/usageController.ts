@@ -1,10 +1,28 @@
 /**
  * Usage Controller
- * Handles token usage statistics and admin management endpoints
+ * Kredit balances, usage statistics and admin management endpoints
  */
 
 import type { Context } from 'hono';
 import * as tokenUsageService from '../services/tokenUsageService.js';
+import * as kreditService from '../services/kreditService.js';
+import { kreditSummary } from '../middleware/tokenUsageMiddleware.js';
+import { KREDIT_PRODUCTS, isKreditProductCode, isPlanCode } from '../config/plans.js';
+
+/** Usage block shared by the user and admin endpoints (all figures in kredit). */
+function usagePayload(status: kreditService.KreditStatus) {
+  const pct = (used: number, limit: number) => (limit > 0 ? Math.round((used / limit) * 10000) / 100 : 0);
+  const summary = kreditSummary(status);
+  return {
+    ...summary,
+    weekly: { ...summary.weekly, percentage: pct(status.weeklyUsed, status.weeklyLimit) },
+    extra: {
+      remaining: status.extraRemaining,
+      grants: status.grants.map((g) => ({ source: g.source, remaining: g.remaining, expires_at: g.expiresAt })),
+    },
+    monthly: { used: status.monthlyUsed, resets_at: status.monthlyResetsAt },
+  };
+}
 
 // ============================================================================
 // User Endpoints (Authenticated Users)
@@ -22,40 +40,16 @@ export async function getUserStats(c: Context) {
       return c.json({ error: 'Not authenticated' }, 401);
     }
 
-    const stats = await tokenUsageService.getUserUsageStats(user.id);
+    const status = await kreditService.getKreditStatus(user.id);
 
     return c.json({
-      usage: {
-        monthly: {
-          used: stats.monthly_tokens_used,
-          limit: stats.monthly_token_limit,
-          remaining: stats.monthly_remaining,
-          percentage: stats.monthly_percentage,
-          resets_at: stats.monthly_usage_reset_at,
-        },
-        weekly: {
-          used: stats.weekly_tokens_used,
-          limit: stats.weekly_token_limit,
-          remaining: stats.weekly_remaining,
-          percentage: stats.weekly_percentage,
-          resets_at: stats.weekly_usage_reset_at,
-        },
-        session: {
-          id: stats.session_id,
-          used: stats.session_tokens_used,
-          limit: stats.session_token_limit,
-          remaining: stats.session_remaining,
-          percentage: stats.session_percentage,
-          expires_at: stats.session_expires_at,
-          time_remaining_minutes: stats.session_time_remaining_minutes,
-        },
-      },
+      usage: usagePayload(status),
       user: {
-        id: stats.user_id,
-        email: stats.email,
-        name: stats.name,
-        is_admin: stats.is_admin,
-        token_access_enabled: stats.token_access_enabled,
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        is_admin: status.isAdmin,
+        token_access_enabled: status.accessEnabled,
       },
     });
   } catch (error) {
@@ -143,10 +137,8 @@ export async function requireAdmin(c: Context, next: () => Promise<void>) {
     return c.json({ error: 'Not authenticated' }, 401);
   }
 
-  // Check if user is admin in database
-  const stats = await tokenUsageService.getUserUsageStats(user.id);
-
-  if (!stats.is_admin) {
+  // The user is loaded from the database on every request (getUserBySessionToken)
+  if (!user.is_admin) {
     return c.json({ error: 'Forbidden: Admin access required' }, 403);
   }
 
@@ -170,6 +162,8 @@ export async function getAdminDashboard(c: Context) {
 
     // Calculate aggregate statistics
     const totalUsers = users.length;
+    const totalKreditUsedWeekly = users.reduce((sum, u) => sum + u.weekly_kredit_used, 0);
+    const totalKreditUsedMonthly = users.reduce((sum, u) => sum + u.monthly_kredit_used, 0);
     const totalTokensUsedWeekly = users.reduce((sum, u) => sum + u.weekly_tokens_used, 0);
     const totalTokensUsedMonthly = users.reduce((sum, u) => sum + u.monthly_tokens_used, 0);
     const usersAtWeeklyLimit = users.filter(u => u.weekly_percentage >= 100).length;
@@ -179,6 +173,8 @@ export async function getAdminDashboard(c: Context) {
       users,
       aggregate: {
         total_users: totalUsers,
+        total_kredit_used_weekly: Math.round(totalKreditUsedWeekly * 100) / 100,
+        total_kredit_used_monthly: Math.round(totalKreditUsedMonthly * 100) / 100,
         total_tokens_used_weekly: totalTokensUsedWeekly,
         total_tokens_used_monthly: totalTokensUsedMonthly,
         users_at_weekly_limit: usersAtWeeklyLimit,
@@ -209,6 +205,7 @@ export async function getAdminUserDetail(c: Context) {
     }
 
     const stats = await tokenUsageService.getUserUsageStats(userId);
+    const status = await kreditService.getKreditStatus(userId);
     const history = await tokenUsageService.getUserUsageHistory(userId, 100);
     const analytics = await tokenUsageService.getUsageStats(userId);
 
@@ -217,34 +214,10 @@ export async function getAdminUserDetail(c: Context) {
         id: stats.user_id,
         email: stats.email,
         name: stats.name,
-        is_admin: stats.is_admin,
-        token_access_enabled: stats.token_access_enabled,
+        is_admin: status.isAdmin,
+        token_access_enabled: status.accessEnabled,
       },
-      usage: {
-        monthly: {
-          used: stats.monthly_tokens_used,
-          limit: stats.monthly_token_limit,
-          remaining: stats.monthly_remaining,
-          percentage: stats.monthly_percentage,
-          resets_at: stats.monthly_usage_reset_at,
-        },
-        weekly: {
-          used: stats.weekly_tokens_used,
-          limit: stats.weekly_token_limit,
-          remaining: stats.weekly_remaining,
-          percentage: stats.weekly_percentage,
-          resets_at: stats.weekly_usage_reset_at,
-        },
-        session: {
-          id: stats.session_id,
-          used: stats.session_tokens_used,
-          limit: stats.session_token_limit,
-          remaining: stats.session_remaining,
-          percentage: stats.session_percentage,
-          expires_at: stats.session_expires_at,
-          time_remaining_minutes: stats.session_time_remaining_minutes,
-        },
-      },
+      usage: usagePayload(status),
       analytics,
       recent_history: history.slice(0, 20),
     });
@@ -332,37 +305,93 @@ export async function updateUserLimits(c: Context) {
   try {
     const userId = c.req.param('userId');
     const body = await c.req.json();
-    const { weekly_limit, monthly_limit } = body;
+    const { weekly_limit } = body;
 
     if (!userId) {
       return c.json({ error: 'User ID is required' }, 400);
     }
 
-    if (weekly_limit !== undefined && (typeof weekly_limit !== 'number' || weekly_limit < 0)) {
-      return c.json({ error: 'weekly_limit must be a positive number' }, 400);
+    if (weekly_limit !== null && (typeof weekly_limit !== 'number' || weekly_limit < 0)) {
+      return c.json({ error: 'weekly_limit must be a non-negative number of kredit, or null to use the plan allowance' }, 400);
     }
 
-    if (monthly_limit !== undefined && (typeof monthly_limit !== 'number' || monthly_limit < 0)) {
-      return c.json({ error: 'monthly_limit must be a positive number' }, 400);
-    }
-
-    await tokenUsageService.updateUserLimits({
-      userId,
-      weeklyLimit: weekly_limit,
-      monthlyLimit: monthly_limit,
-    });
+    await kreditService.setWeeklyOverride(userId, weekly_limit);
 
     return c.json({
       success: true,
       message: 'User limits updated successfully',
-      limits: {
-        weekly_limit: weekly_limit || 'unchanged',
-        monthly_limit: monthly_limit || 'unchanged',
-      },
+      limits: { weekly_kredit: weekly_limit ?? 'plan default' },
     });
   } catch (error) {
     console.error('Error updating user limits:', error);
     return c.json({ error: 'Failed to update user limits' }, 500);
+  }
+}
+
+/**
+ * POST /api/admin/usage/user/:userId/set-plan
+ * Put a user on a plan (until payments exist, this is how a sale is applied)
+ *
+ * Body:
+ * - plan: 'free' | 'bulanan' | 'semester'
+ * - days?: number (default: the plan's duration; extends an active period)
+ */
+export async function setUserPlan(c: Context) {
+  try {
+    const userId = c.req.param('userId')!;
+    const { plan, days } = await c.req.json();
+
+    if (!isPlanCode(plan)) {
+      return c.json({ error: 'plan must be one of: free, bulanan, semester' }, 400);
+    }
+    if (days !== undefined && (!Number.isInteger(days) || days < 1 || days > 400)) {
+      return c.json({ error: 'days must be an integer between 1 and 400' }, 400);
+    }
+
+    await kreditService.setPlan(userId, plan, days);
+    const status = await kreditService.getKreditStatus(userId);
+    return c.json({ success: true, usage: usagePayload(status) });
+  } catch (error) {
+    console.error('Error setting user plan:', error);
+    return c.json({ error: 'Failed to set plan' }, 500);
+  }
+}
+
+/**
+ * POST /api/admin/usage/user/:userId/grant-kredit
+ * Grant a product (pass_7d, topup) or a custom amount of kredit
+ *
+ * Body:
+ * - product?: 'pass_7d' | 'topup'
+ * - kredit?: number and valid_days?: number | null (custom grant)
+ * - reference?: string (e.g. payment reference)
+ */
+export async function grantUserKredit(c: Context) {
+  try {
+    const userId = c.req.param('userId')!;
+    const { product, kredit, valid_days, reference } = await c.req.json();
+    const ref = typeof reference === 'string' ? reference.slice(0, 100) : undefined;
+
+    if (product !== undefined) {
+      if (!isKreditProductCode(product)) {
+        return c.json({ error: `product must be one of: ${Object.keys(KREDIT_PRODUCTS).join(', ')}` }, 400);
+      }
+      await kreditService.grantProduct(userId, product, ref);
+    } else {
+      if (typeof kredit !== 'number' || !(kredit > 0) || kredit > 100_000) {
+        return c.json({ error: 'kredit must be a number between 0 and 100000' }, 400);
+      }
+      if (valid_days !== undefined && valid_days !== null && (!Number.isInteger(valid_days) || valid_days < 1)) {
+        return c.json({ error: 'valid_days must be a positive integer or null' }, 400);
+      }
+      await kreditService.grantKredit(userId, { source: 'admin', kredit, validDays: valid_days ?? null, reference: ref });
+    }
+
+    const status = await kreditService.getKreditStatus(userId);
+    return c.json({ success: true, usage: usagePayload(status) });
+  } catch (error) {
+    console.error('Error granting kredit:', error);
+    return c.json({ error: 'Failed to grant kredit' }, 500);
   }
 }
 
@@ -452,23 +481,31 @@ export async function exportUsageData(c: Context) {
   try {
     const users = await tokenUsageService.getAllUsersUsage(10000, 0); // Get up to 10k users
 
-    // Generate CSV
-    const csvHeader = 'User ID,Email,Name,Weekly Used,Weekly Limit,Weekly %,Monthly Used,Monthly Limit,Monthly %,Is Admin,Access Enabled\n';
+    // Generate CSV (quoted; formula-like cells are neutralised for spreadsheets)
+    const cell = (value: unknown) => {
+      let text = value === null || value === undefined ? '' : String(value);
+      if (/^[=+\-@\t\r]/.test(text)) text = `'${text}`;
+      return `"${text.replace(/"/g, '""')}"`;
+    };
+    const csvHeader = 'User ID,Email,Name,Plan,Plan Expires,Weekly Kredit Used,Weekly Kredit Limit,Weekly %,Extra Kredit,Monthly Kredit Used,Weekly Tokens,Monthly Tokens,Is Admin,Access Enabled\n';
 
     const csvRows = users.map(user => {
       return [
         user.user_id,
         user.email,
         user.name,
-        user.weekly_tokens_used,
-        user.weekly_token_limit,
+        user.plan,
+        user.plan_expires_at ? new Date(user.plan_expires_at).toISOString() : '',
+        user.weekly_kredit_used,
+        user.weekly_kredit_limit,
         user.weekly_percentage.toFixed(2),
+        user.extra_kredit,
+        user.monthly_kredit_used,
+        user.weekly_tokens_used,
         user.monthly_tokens_used,
-        user.monthly_token_limit,
-        user.monthly_percentage.toFixed(2),
         user.is_admin,
         user.token_access_enabled,
-      ].join(',');
+      ].map(cell).join(',');
     }).join('\n');
 
     const csv = csvHeader + csvRows;

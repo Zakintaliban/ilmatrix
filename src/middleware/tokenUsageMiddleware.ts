@@ -1,31 +1,21 @@
 /**
- * Token Usage Middleware
- * Enforces Claude Code-style token limits for registered users
+ * Kredit metering for registered users.
  *
  * Flow:
- * 1. Pre-request: Check if user has tokens available (weekly + session limits)
- * 2. Create/get active session
- * 3. Store session ID in context for controllers to use
- * 4. After request: Controllers are responsible for updating usage via tokenUsageService
+ * 1. Pre-request: block the request when the user has no kredit left
+ *    (weekly allowance + passes/top-ups), or AI access is disabled
+ * 2. Controllers run the AI call inside groqService.track(), which prices
+ *    each completion in kredit by the model that served it
+ * 3. Post-request: controllers call updateTokenUsageAfterRequest() to charge
+ *    the kredit and log the request
+ *
+ * Guests are limited separately by guestLimitMiddleware.
  */
 
 import type { Context, Next } from 'hono';
 import * as tokenUsageService from '../services/tokenUsageService.js';
-
-/**
- * Estimated tokens needed for different request types
- * Used for pre-flight checks before knowing actual usage
- */
-const ESTIMATED_TOKENS = {
-  explain: 3000,
-  quiz: 5000,
-  chat: 2000,
-  flashcards: 4000,
-  dialogue: 3000,
-  exam: 5000,
-  forum: 3000,
-  default: 2000,
-};
+import * as kreditService from '../services/kreditService.js';
+import { kreditForUsage } from '../config/plans.js';
 
 /**
  * Extract request type from endpoint path
@@ -38,124 +28,92 @@ function getRequestType(path: string): string {
   if (path.includes('/dialogue')) return 'dialogue';
   if (path.includes('/exam')) return 'exam';
   if (path.includes('/forum')) return 'forum';
+  if (path.includes('/upload')) return 'upload';
   return 'default';
 }
 
-/**
- * Get estimated tokens for a request type
- */
-function getEstimatedTokens(requestType: string): number {
-  return ESTIMATED_TOKENS[requestType as keyof typeof ESTIMATED_TOKENS] || ESTIMATED_TOKENS.default;
+/** "Senin, 12 Oktober pukul 07.00 WIB" */
+export function formatResetTime(date: Date): string {
+  const text = date.toLocaleString('id-ID', {
+    timeZone: 'Asia/Jakarta',
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+  return `${text} WIB`;
+}
+
+export function kreditSummary(status: kreditService.KreditStatus) {
+  return {
+    unit: 'kredit',
+    plan: { code: status.plan, name: status.planName, expires_at: status.planExpiresAt },
+    weekly: {
+      used: status.weeklyUsed,
+      limit: status.weeklyLimit,
+      remaining: status.weeklyRemaining,
+      resets_at: status.weeklyResetsAt,
+    },
+    extra: { remaining: status.extraRemaining },
+    total_remaining: status.totalRemaining,
+  };
 }
 
 /**
- * Main token usage middleware for AI endpoints
+ * Main kredit middleware for AI endpoints
  * Only applies to authenticated users (registered users)
  */
 export async function tokenUsageMiddleware(c: Context, next: Next) {
-  try {
-    // Get user from context (set by authMiddleware or optionalAuthMiddleware)
-    const user = c.get('user');
+  const user = c.get('user');
 
-    // Skip token check for unauthenticated users (guest users)
-    // Guest users are handled separately by guestLimitMiddleware
-    if (!user) {
-      await next();
-      return;
-    }
-
-    const userId = user.id;
-    const requestPath = c.req.path;
-    const requestType = getRequestType(requestPath);
-    const estimatedTokens = getEstimatedTokens(requestType);
-
-    // Check and reset usage if needed (lazy reset on request)
-    await tokenUsageService.checkAndResetUserUsage(userId);
-
-    // Check token availability
-    const availability = await tokenUsageService.checkTokenAvailability(userId, estimatedTokens);
-
-    if (!availability.allowed) {
-      // Get full stats for detailed error message
-      const stats = await tokenUsageService.getUserUsageStats(userId);
-
-      // Determine which limit was hit
-      let errorMessage = 'Token limit exceeded';
-      let resetTime: Date | null = null;
-
-      if (availability.reason.includes('Weekly')) {
-        errorMessage = `Weekly token limit reached. You've used ${stats.weekly_tokens_used.toLocaleString()} of ${stats.weekly_token_limit.toLocaleString()} tokens this week.`;
-        resetTime = stats.weekly_usage_reset_at;
-      } else if (availability.reason.includes('Session')) {
-        errorMessage = `Session token limit reached. You've used ${stats.session_tokens_used.toLocaleString()} of ${stats.session_token_limit.toLocaleString()} tokens in this session.`;
-        resetTime = stats.session_expires_at;
-      } else if (availability.reason.includes('disabled')) {
-        errorMessage = 'Token access has been disabled for your account. Please contact support.';
-      }
-
-      return c.json(
-        {
-          error: errorMessage,
-          reason: availability.reason,
-          usage: {
-            weekly: {
-              used: stats.weekly_tokens_used,
-              limit: stats.weekly_token_limit,
-              remaining: stats.weekly_remaining,
-              percentage: stats.weekly_percentage,
-              resets_at: stats.weekly_usage_reset_at,
-            },
-            session: {
-              used: stats.session_tokens_used,
-              limit: stats.session_token_limit,
-              remaining: stats.session_remaining,
-              percentage: stats.session_percentage,
-              expires_at: stats.session_expires_at,
-              time_remaining_minutes: stats.session_time_remaining_minutes,
-            },
-            monthly: {
-              used: stats.monthly_tokens_used,
-              limit: stats.monthly_token_limit,
-              remaining: stats.monthly_remaining,
-              percentage: stats.monthly_percentage,
-            },
-          },
-          reset_time: resetTime,
-        },
-        429 // Too Many Requests
-      );
-    }
-
-    // Get or create active session
-    const session = await tokenUsageService.getOrCreateSession(userId);
-
-    // Store session and user info in context for controllers to use
-    c.set('tokenUsageSession', session);
-    c.set('tokenUsageEstimate', estimatedTokens);
-    c.set('requestType', requestType);
-
-    // Proceed with request
+  // Guest users are handled separately by guestLimitMiddleware
+  if (!user) {
     await next();
-
-    // Note: Token usage update happens in the controller/service after getting actual usage from Groq
-    // This is because we don't know exact token count until Groq responds
-
-  } catch (error) {
-    console.error('Token usage middleware error:', error);
-    // Don't block request on middleware error - fail open for better UX
-    // Admin users also bypass on error
-    await next();
+    return;
   }
+
+  let status: kreditService.KreditStatus;
+  try {
+    status = await kreditService.getKreditStatus(user.id);
+  } catch (error) {
+    // Fail open so a metering outage doesn't take the product down, but loudly
+    console.error('[KREDIT] Balance check failed; allowing request unmetered:', error);
+    await next();
+    return;
+  }
+
+  if (!kreditService.canUseAI(status)) {
+    const message = !status.accessEnabled
+      ? 'Akses AI untuk akunmu sedang dinonaktifkan. Hubungi dukungan ILMATRIX.'
+      : `Kredit belajarmu sudah habis. Kredit paket ${status.planName} terisi lagi ${formatResetTime(status.weeklyResetsAt)}.`;
+
+    return c.json(
+      {
+        error: message,
+        // Text tools render `answer`, so the student sees the reason in the chat
+        answer: message,
+        code: status.accessEnabled ? 'KREDIT_EXHAUSTED' : 'AI_ACCESS_DISABLED',
+        kredit: kreditSummary(status),
+        reset_time: status.weeklyResetsAt,
+      },
+      429
+    );
+  }
+
+  c.set('kreditStatus', status);
+  c.set('requestType', getRequestType(c.req.path));
+  await next();
 }
 
 /**
- * Helper function to update token usage after AI request
- * Call this from controllers after getting Groq response
+ * Charge kredit and log usage after an AI request.
+ * Call this from controllers after getting the Groq response.
  *
  * @param c - Hono context
- * @param tokensUsed - Actual tokens consumed (from Groq response)
- * @param metadata - Additional metadata to log (optional)
- * @returns Updated usage stats with warnings if needed
+ * @param tokensUsed - Total tokens consumed (from Groq usage)
+ * @param metadata - model, prompt_tokens, completion_tokens, kredit (from
+ *   groqService.track) and any extra context to log
  */
 export async function updateTokenUsageAfterRequest(
   c: Context,
@@ -163,114 +121,68 @@ export async function updateTokenUsageAfterRequest(
   metadata: Record<string, any> = {}
 ): Promise<{
   success: boolean;
-  usage: tokenUsageService.TokenUpdateResult;
+  kredit?: ReturnType<typeof kreditSummary>;
   warning?: string;
   notification?: 'low' | 'critical' | 'exceeded';
 }> {
+  const user = c.get('user');
+  if (!user) {
+    // Guest user: not metered in kredit
+    return { success: false };
+  }
+
   try {
-    const user = c.get('user');
-    if (!user) {
-      // No user, skip tracking (guest user)
-      return {
-        success: false,
-        usage: {
-          success: false,
-          new_weekly_used: 0,
-          new_monthly_used: 0,
-          new_session_used: 0,
-          weekly_remaining: 0,
-          session_remaining: 0,
-        },
-      };
-    }
+    const kredit =
+      typeof metadata.kredit === 'number'
+        ? metadata.kredit
+        : kreditForUsage(String(metadata.model || ''), Number(metadata.prompt_tokens) || 0, Number(metadata.completion_tokens) || 0);
 
-    const session = c.get('tokenUsageSession');
-    const requestType = c.get('requestType') || 'unknown';
-    const endpoint = c.req.path;
+    const status = await kreditService.chargeKredit(user.id, kredit, tokensUsed);
 
-    if (!session) {
-      console.error('No token usage session found in context');
-      return {
-        success: false,
-        usage: {
-          success: false,
-          new_weekly_used: 0,
-          new_monthly_used: 0,
-          new_session_used: 0,
-          weekly_remaining: 0,
-          session_remaining: 0,
-        },
-      };
-    }
-
-    // Update usage in database
-    const usage = await tokenUsageService.updateTokenUsage(user.id, session.id, tokensUsed);
-
-    // Log detailed usage
     await tokenUsageService.logTokenUsage({
       userId: user.id,
-      sessionId: session.id,
-      tokensUsed,
-      endpoint,
-      requestType,
+      sessionId: null,
+      tokensUsed: Math.max(1, Math.round(tokensUsed)),
+      kreditUsed: kredit,
+      endpoint: c.req.path,
+      modelUsed: metadata.model,
+      requestType: c.get('requestType') || getRequestType(c.req.path),
+      promptTokens: metadata.prompt_tokens,
+      completionTokens: metadata.completion_tokens,
       metadata,
     });
 
-    // Calculate usage percentage to determine warnings
-    const stats = await tokenUsageService.getUserUsageStats(user.id);
-    const weeklyPercentage = stats.weekly_percentage;
-
     let warning: string | undefined;
     let notification: 'low' | 'critical' | 'exceeded' | undefined;
+    const remainingRatio = status.weeklyLimit > 0 ? status.totalRemaining / status.weeklyLimit : 0;
 
-    if (weeklyPercentage >= 100) {
-      warning = 'Weekly token limit reached. Please wait for reset.';
-      notification = 'exceeded';
-    } else if (weeklyPercentage >= 90) {
-      warning = `You've used ${weeklyPercentage.toFixed(1)}% of your weekly token limit. Only ${stats.weekly_remaining.toLocaleString()} tokens remaining.`;
-      notification = 'critical';
-    } else if (weeklyPercentage >= 80) {
-      warning = `You've used ${weeklyPercentage.toFixed(1)}% of your weekly token limit.`;
-      notification = 'low';
+    if (!status.isAdmin) {
+      if (status.totalRemaining <= 0) {
+        warning = `Kredit belajarmu sudah habis. Terisi lagi ${formatResetTime(status.weeklyResetsAt)}.`;
+        notification = 'exceeded';
+      } else if (remainingRatio <= 0.1) {
+        warning = `Sisa kredit belajarmu tinggal ${Math.floor(status.totalRemaining)}.`;
+        notification = 'critical';
+      } else if (remainingRatio <= 0.2) {
+        warning = `Kamu sudah memakai sebagian besar kredit minggu ini (sisa ${Math.floor(status.totalRemaining)}).`;
+        notification = 'low';
+      }
     }
 
-    // Add usage headers to response
-    c.header('X-Token-Usage', tokensUsed.toString());
-    c.header('X-Token-Weekly-Used', stats.weekly_tokens_used.toString());
-    c.header('X-Token-Weekly-Remaining', stats.weekly_remaining.toString());
-    c.header('X-Token-Session-Used', stats.session_tokens_used.toString());
-    c.header('X-Token-Session-Remaining', stats.session_remaining.toString());
-    c.header('X-Token-Weekly-Percentage', weeklyPercentage.toFixed(2));
+    c.header('X-Kredit-Used', kredit.toFixed(2));
+    c.header('X-Kredit-Remaining', status.totalRemaining.toFixed(2));
+    c.header('X-Kredit-Weekly-Limit', String(status.weeklyLimit));
+    if (notification) c.header('X-Kredit-Warning', notification);
 
-    if (notification) {
-      c.header('X-Token-Warning', notification);
-    }
-
-    return {
-      success: true,
-      usage,
-      warning,
-      notification,
-    };
+    return { success: true, kredit: kreditSummary(status), warning, notification };
   } catch (error) {
-    console.error('Error updating token usage:', error);
-    return {
-      success: false,
-      usage: {
-        success: false,
-        new_weekly_used: 0,
-        new_monthly_used: 0,
-        new_session_used: 0,
-        weekly_remaining: 0,
-        session_remaining: 0,
-      },
-    };
+    console.error('[KREDIT] Failed to charge kredit:', error);
+    return { success: false };
   }
 }
 
 /**
- * Middleware that adds token usage stats to response for authenticated users
- * Use this on any endpoint to include usage stats in response
+ * Middleware that adds kredit balance headers for authenticated users
  */
 export async function injectUsageStatsMiddleware(c: Context, next: Next) {
   await next();
@@ -279,14 +191,9 @@ export async function injectUsageStatsMiddleware(c: Context, next: Next) {
     const user = c.get('user');
     if (!user) return;
 
-    const stats = await tokenUsageService.getUserUsageStats(user.id);
-
-    // Add usage stats to response headers
-    c.header('X-Token-Weekly-Used', stats.weekly_tokens_used.toString());
-    c.header('X-Token-Weekly-Remaining', stats.weekly_remaining.toString());
-    c.header('X-Token-Weekly-Percentage', stats.weekly_percentage.toFixed(2));
-    c.header('X-Token-Session-Remaining', stats.session_remaining.toString());
-    c.header('X-Token-Session-Expires-In', (stats.session_time_remaining_minutes || 0).toString());
+    const status = await kreditService.getKreditStatus(user.id);
+    c.header('X-Kredit-Remaining', status.totalRemaining.toFixed(2));
+    c.header('X-Kredit-Weekly-Limit', String(status.weeklyLimit));
   } catch (error) {
     console.error('Error injecting usage stats:', error);
     // Don't fail the request

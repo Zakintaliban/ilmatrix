@@ -68,7 +68,7 @@ export class AIController {
         return c.json({ error: "No material content found" }, 400);
       }
 
-      const { result: answer, usage: tokenUsage, model } = await groqService.track(() =>
+      const { result: answer, usage: tokenUsage, model, kredit } = await groqService.track(() =>
         groqService.generateAnswer({
           materialText: material,
           task,
@@ -80,6 +80,7 @@ export class AIController {
       if (tokenUsage) {
         const trackingResult = await updateTokenUsageAfterRequest(c, tokenUsage.total_tokens, {
           model: model || groqService.getModelName(),
+          kredit,
           prompt_tokens: tokenUsage.prompt_tokens,
           completion_tokens: tokenUsage.completion_tokens,
           task,
@@ -122,7 +123,7 @@ export class AIController {
           ? await materialService.readMaterial(materialId, materialText, requestUserId(c))
           : "";
 
-      const { result: answer, usage: tokenUsage, model } = await groqService.track(() =>
+      const { result: answer, usage: tokenUsage, model, kredit } = await groqService.track(() =>
         groqService.generateChat({
           materialText: material,
           messages: chatMessages,
@@ -133,6 +134,7 @@ export class AIController {
       if (tokenUsage) {
         const trackingResult = await updateTokenUsageAfterRequest(c, tokenUsage.total_tokens, {
           model: model || groqService.getModelName(),
+          kredit,
           prompt_tokens: tokenUsage.prompt_tokens,
           completion_tokens: tokenUsage.completion_tokens,
           task: 'chat',
@@ -175,7 +177,7 @@ export class AIController {
         return c.json({ error: "No material content found" }, 400);
       }
 
-      const { result: questions, usage: tokenUsage, model } = await groqService.track(() =>
+      const { result: questions, usage: tokenUsage, model, kredit } = await groqService.track(() =>
         groqService.generateQuizTrainerMCQ({
           materialText: material,
           numQuestions, // Limited to 1-50 questions
@@ -186,6 +188,7 @@ export class AIController {
       if (tokenUsage) {
         const trackingResult = await updateTokenUsageAfterRequest(c, tokenUsage.total_tokens, {
           model: model || groqService.getModelName(),
+          kredit,
           prompt_tokens: tokenUsage.prompt_tokens,
           completion_tokens: tokenUsage.completion_tokens,
           task: 'quiz',
@@ -253,7 +256,7 @@ export class AIController {
         return c.json({ error: "No material content found" }, 400);
       }
 
-      const { result: cards, usage: tokenUsage, model } = await groqService.track(() =>
+      const { result: cards, usage: tokenUsage, model, kredit } = await groqService.track(() =>
         groqService.generateFlashcards({
           materialText: material,
           numCards, // Limited to 1-50 cards
@@ -264,6 +267,7 @@ export class AIController {
       if (tokenUsage) {
         const trackingResult = await updateTokenUsageAfterRequest(c, tokenUsage.total_tokens, {
           model: model || groqService.getModelName(),
+          kredit,
           prompt_tokens: tokenUsage.prompt_tokens,
           completion_tokens: tokenUsage.completion_tokens,
           task: 'flashcards',
@@ -293,7 +297,7 @@ export class AIController {
       }
       const text = await materialService.readMaterial(materialId, materialText, requestUserId(c));
 
-      const { result, usage: tokenUsage, model } = await groqService.track(() =>
+      const { result, usage: tokenUsage, model, kredit } = await groqService.track(() =>
         groqService.dialogueStart({ materialText: text })
       );
 
@@ -301,6 +305,7 @@ export class AIController {
       if (tokenUsage) {
         await updateTokenUsageAfterRequest(c, tokenUsage.total_tokens, {
           model: model || groqService.getModelName(),
+          kredit,
           prompt_tokens: tokenUsage.prompt_tokens,
           completion_tokens: tokenUsage.completion_tokens,
           task: 'dialogue_start',
@@ -403,7 +408,7 @@ export class AIController {
         }
       }
 
-      const { result, usage: tokenUsage, model } = await groqService.track(() =>
+      const { result, usage: tokenUsage, model, kredit } = await groqService.track(() =>
         groqService.dialogueStep({
           materialText: text,
           topics,
@@ -418,6 +423,7 @@ export class AIController {
       if (tokenUsage) {
         await updateTokenUsageAfterRequest(c, tokenUsage.total_tokens, {
           model: model || groqService.getModelName(),
+          kredit,
           prompt_tokens: tokenUsage.prompt_tokens,
           completion_tokens: tokenUsage.completion_tokens,
           task: 'dialogue_step',
@@ -451,7 +457,7 @@ export class AIController {
 
       const text = await materialService.readMaterial(materialId, materialText, requestUserId(c));
 
-      const { result, usage: tokenUsage, model } = await groqService.track(() =>
+      const { result, usage: tokenUsage, model, kredit } = await groqService.track(() =>
         groqService.dialogueHint({
           materialText: text,
           currentTopicTitle,
@@ -463,6 +469,7 @@ export class AIController {
       if (tokenUsage) {
         await updateTokenUsageAfterRequest(c, tokenUsage.total_tokens, {
           model: model || groqService.getModelName(),
+          kredit,
           prompt_tokens: tokenUsage.prompt_tokens,
           completion_tokens: tokenUsage.completion_tokens,
           task: 'dialogue_hint',
@@ -496,7 +503,7 @@ export class AIController {
 
       const text = await materialService.readMaterial(materialId, materialText, requestUserId(c));
 
-      const { result, usage: tokenUsage, model } = await groqService.track(() =>
+      const { result, usage: tokenUsage, model, kredit } = await groqService.track(() =>
         groqService.dialogueFeedback({
           materialText: text,
           topics,
@@ -509,6 +516,7 @@ export class AIController {
       if (tokenUsage) {
         await updateTokenUsageAfterRequest(c, tokenUsage.total_tokens, {
           model: model || groqService.getModelName(),
+          kredit,
           prompt_tokens: tokenUsage.prompt_tokens,
           completion_tokens: tokenUsage.completion_tokens,
           task: 'dialogue_feedback',

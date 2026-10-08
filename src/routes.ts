@@ -95,6 +95,8 @@ api.get("/admin/usage/user/:userId", authMiddleware, usageController.requireAdmi
 api.post("/admin/usage/user/:userId/set-admin", authMiddleware, usageController.requireAdmin, usageController.setUserAdmin);
 api.post("/admin/usage/user/:userId/set-access", authMiddleware, usageController.requireAdmin, usageController.setUserTokenAccess);
 api.post("/admin/usage/user/:userId/update-limits", authMiddleware, usageController.requireAdmin, usageController.updateUserLimits);
+api.post("/admin/usage/user/:userId/set-plan", authMiddleware, usageController.requireAdmin, usageController.setUserPlan);
+api.post("/admin/usage/user/:userId/grant-kredit", authMiddleware, usageController.requireAdmin, usageController.grantUserKredit);
 api.post("/admin/usage/reset/weekly", authMiddleware, usageController.requireAdmin, usageController.adminResetWeekly);
 api.post("/admin/usage/reset/monthly", authMiddleware, usageController.requireAdmin, usageController.adminResetMonthly);
 api.post("/admin/usage/cleanup/sessions", authMiddleware, usageController.requireAdmin, usageController.adminCleanupSessions);

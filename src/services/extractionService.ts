@@ -26,9 +26,11 @@ export class ExtractionService {
   private readonly extractionLimiter = createLimiter(3); // Limit concurrent extractions
 
   /**
-   * Extract text from uploaded file
+   * Extract text from uploaded file. With `ocr: false`, images are stored for
+   * later visual analysis without calling the (paid) vision model.
    */
-  async extractFromFile(file: any): Promise<ExtractedFile> {
+  async extractFromFile(file: any, options: { ocr?: boolean } = {}): Promise<ExtractedFile> {
+    const ocr = options.ocr !== false;
     const name = sanitizeFileName(file.name || "unknown");
     const type = file.type || "";
     const buffer = Buffer.from(await file.arrayBuffer());
@@ -42,7 +44,7 @@ export class ExtractionService {
         } else if (this.isImageFile(name, type)) {
           // Try to extract text from image
           try {
-            content = await extractImageText(buffer);
+            content = ocr ? await extractImageText(buffer) : "";
           } catch (error) {
             // OCR failed, will use base64 storage below
             content = "";
@@ -93,7 +95,7 @@ Vision API can analyze this image when queried.`;
   /**
    * Extract text from multiple files
    */
-  async extractFromFiles(files: any[]): Promise<ExtractionResult> {
+  async extractFromFiles(files: any[], options: { ocr?: boolean } = {}): Promise<ExtractionResult> {
     if (!files.length) {
       throw new Error("No files provided for extraction");
     }
@@ -103,7 +105,7 @@ Vision API can analyze this image when queried.`;
 
     // Extract content from each file
     const extractedFiles = await Promise.all(
-      files.map((file) => this.extractFromFile(file))
+      files.map((file) => this.extractFromFile(file, options))
     );
 
     // Calculate total size and create combined content
