@@ -1,5 +1,17 @@
 import "dotenv/config";
 
+/** Where the client's IP comes from (only headers a trusted proxy overwrites are safe). */
+export type ClientIpHeader = "x-real-ip" | "cf-connecting-ip" | "x-forwarded-for" | "none";
+
+function getEnvClientIpHeader(): ClientIpHeader {
+  const value = (process.env.CLIENT_IP_HEADER || "x-real-ip").trim().toLowerCase();
+  if (value === "x-real-ip" || value === "cf-connecting-ip" || value === "x-forwarded-for" || value === "none") {
+    return value;
+  }
+  console.warn(`[CONFIG] Unknown CLIENT_IP_HEADER "${value}"; using x-real-ip`);
+  return "x-real-ip";
+}
+
 export interface AppConfig {
   // Server Configuration
   port: number;
@@ -24,6 +36,13 @@ export interface AppConfig {
   // Rate Limiting
   rateLimitMax: number;
   rateLimitWindowMs: number;
+
+  // Client IP & guest abuse protection
+  clientIpHeader: ClientIpHeader;
+  turnstileSiteKey: string;
+  turnstileSecretKey: string;
+  guestIpDailyVerifications: number;
+  guestIpDailyRequests: number;
 
   // File Processing
   pdfMaxPages: number;
@@ -152,6 +171,16 @@ export const config: AppConfig = {
   rateLimitMax: Math.max(1, getEnvNumber("RATE_LIMIT_MAX", 120)),
   rateLimitWindowMs: 60_000, // 1 minute
 
+  // Client IP & guest abuse protection
+  // Railway's edge overwrites X-Real-IP; behind Cloudflare's proxy use cf-connecting-ip
+  clientIpHeader: getEnvClientIpHeader(),
+  // Cloudflare Turnstile: guests must pass it before using AI (disabled unless both are set)
+  turnstileSiteKey: getEnvString("TURNSTILE_SITE_KEY", "").trim(),
+  turnstileSecretKey: getEnvString("TURNSTILE_SECRET_KEY", "").trim(),
+  // Per client IP per day: new guest devices verified, and guest AI requests
+  guestIpDailyVerifications: Math.max(1, getEnvNumber("GUEST_IP_DAILY_VERIFICATIONS", 20)),
+  guestIpDailyRequests: Math.max(1, getEnvNumber("GUEST_IP_DAILY_REQUESTS", 100)),
+
   // File Processing
   pdfMaxPages: getEnvNumber("PDF_MAX_PAGES", 200),
 
@@ -190,6 +219,12 @@ export const config: AppConfig = {
 if (!config.groqApiKey && config.isProduction) {
   console.warn(
     "Warning: GROQ_API_KEY is not set. AI features will be limited."
+  );
+}
+
+if (config.isProduction && !(config.turnstileSiteKey && config.turnstileSecretKey)) {
+  console.warn(
+    "Warning: TURNSTILE_SITE_KEY/TURNSTILE_SECRET_KEY are not set. Guest AI is protected only by per-IP caps."
   );
 }
 

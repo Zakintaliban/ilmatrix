@@ -1,5 +1,6 @@
 import { Context } from 'hono';
 import { generateGoogleAuthUrl, processGoogleAuth, isGoogleOAuthConfigured } from '../services/googleOAuthService.js';
+import { getClientIp } from '../utils/security.js';
 
 /**
  * Initiate Google OAuth login
@@ -43,10 +44,7 @@ export async function handleGoogleCallback(c: Context) {
 
     // Get user agent and IP address for session tracking
     const userAgent = c.req.header('User-Agent');
-    const ipAddress = c.req.header('x-forwarded-for') || 
-                     c.req.header('x-real-ip') || 
-                     c.env?.ip || 
-                     'unknown';
+    const ipAddress = getClientIp(c);
 
     // Process Google OAuth (exchange code for tokens, get user info, create/login user)
     const { user, sessionToken, isNewUser } = await processGoogleAuth(

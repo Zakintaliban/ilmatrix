@@ -1,6 +1,7 @@
 import { materialService } from "../services/materialService.js";
 import { guestSessionService } from "../services/guestSessionService.js";
 import { behaviorAnalysisService } from "../services/behaviorAnalysisService.js";
+import { guestIpLimiter } from "../services/guestIpLimiter.js";
 import config from "../config/env.js";
 
 /**
@@ -40,6 +41,9 @@ export class BackgroundTaskService {
 
         // Cleanup old behavioral analysis data (keep last 24 hours)
         const behaviorResult = behaviorAnalysisService.cleanup(24 * 60 * 60 * 1000);
+
+        // Drop expired per-IP guest counters
+        guestIpLimiter.cleanup();
 
         if (materialsCleaned > 0 || guestSessionsResult.cleaned > 0 || behaviorResult.profilesCleaned > 0) {
           console.log(

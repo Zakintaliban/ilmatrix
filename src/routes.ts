@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { rateLimitMiddleware } from "./middleware/rateLimit.js";
-import { guestLimitMiddleware, strictAuthMiddleware } from "./middleware/guestLimit.js";
+import { guestLimitMiddleware, guestVerificationMiddleware } from "./middleware/guestLimit.js";
 import { aiRateLimitMiddleware } from "./middleware/aiRateLimit.js";
 import { abuseDetectionMiddleware } from "./middleware/abuseDetection.js";
 import { tokenUsageMiddleware } from "./middleware/tokenUsageMiddleware.js";
@@ -29,6 +29,7 @@ import * as dashboardController from "./controllers/dashboardController.js";
 import * as guestChatController from "./controllers/guestChatController.js";
 import * as usageController from "./controllers/usageController.js";
 import * as securityController from "./controllers/securityController.js";
+import * as guestVerifyController from "./controllers/guestVerifyController.js";
 
 const api = new Hono();
 
@@ -108,6 +109,10 @@ api.get("/security/stats", authMiddleware, usageController.requireAdmin, securit
 api.get("/security/suspicious", authMiddleware, usageController.requireAdmin, securityController.getRecentSuspiciousActivities);
 api.get("/security/device/:deviceId", authMiddleware, usageController.requireAdmin, securityController.getDeviceSuspiciousActivities);
 api.get("/security/pattern/:pattern", authMiddleware, usageController.requireAdmin, securityController.getPatternReport);
+api.get("/admin/client-ip", authMiddleware, usageController.requireAdmin, guestVerifyController.getClientIpInfo);
+
+// Guest human check (Cloudflare Turnstile) before guest AI use
+api.post("/guest/verify", (c) => guestVerifyController.verifyGuest(c));
 
 // Guest chat endpoints (no auth required - uses fingerprint)
 api.get("/guest/chat/sessions", guestChatController.getGuestChatSessions);
@@ -124,7 +129,7 @@ api.get("/guest/chat/pending-migration", authMiddleware, guestChatController.get
 api.post("/guest/chat/migrate", authMiddleware, guestChatController.migrateGuestChats);
 
 // Upload endpoints (optional auth)
-api.post("/upload", optionalAuthMiddleware, (c) => uploadController.handleUpload(c));
+api.post("/upload", optionalAuthMiddleware, guestVerificationMiddleware, (c) => uploadController.handleUpload(c));
 
 // Material management endpoints (optional auth: owned materials are only visible to their owner)
 api.get("/material/:id", optionalAuthMiddleware, (c) => materialController.getMaterial(c));

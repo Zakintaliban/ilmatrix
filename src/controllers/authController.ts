@@ -14,6 +14,7 @@ import {
   LoginCredentials
 } from '../services/authService.js';
 import { guestSessionService } from '../services/guestSessionService.js';
+import { getClientIp } from '../utils/security.js';
 
 /**
  * Register new user
@@ -85,7 +86,7 @@ export async function login(c: Context) {
 
     // Get user agent and IP
     const userAgent = c.req.header('user-agent');
-    const ipAddress = c.req.header('x-forwarded-for') || c.req.header('x-real-ip') || 'unknown';
+    const ipAddress = getClientIp(c);
 
     // Get guest fingerprint for migration
     const guestFingerprint = guestSessionService.generateFingerprint(c);

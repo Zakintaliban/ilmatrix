@@ -44,17 +44,50 @@ export function resolveMaterialPathSafe(id: string): {
 }
 
 /**
- * Extracts client IP from request headers (handles proxies/load balancers)
+ * Client IP for rate limits and guest caps.
+ *
+ * Only a header that our proxy overwrites can be trusted (CLIENT_IP_HEADER):
+ * - x-real-ip (default): set by Railway's edge from the real connection
+ * - cf-connecting-ip: set by Cloudflare when the domain is proxied through it
+ * - x-forwarded-for: the right-most entry, i.e. the one added by the nearest
+ *   proxy (the left-most entries are client-controlled)
+ * - none: the socket address (no proxy)
+ * Falls back to the socket address when the header is missing.
  */
 export function getClientIp(c: any): string {
-  return (
-    c.req.header("x-forwarded-for")?.split(",")[0]?.trim() ||
-    c.req.header("x-real-ip") ||
-    c.req.header("cf-connecting-ip") || // Cloudflare
-    c.req.header("x-client-ip") ||
-    (c.req.raw as any)?.socket?.remoteAddress ||
-    "unknown"
-  );
+  const source = config.clientIpHeader;
+  let ip: string | undefined;
+
+  if (!warnedCloudflare && source !== "cf-connecting-ip" && c.req.header("cf-connecting-ip")) {
+    warnedCloudflare = true;
+    console.warn(
+      `[CLIENT_IP] Requests carry CF-Connecting-IP but CLIENT_IP_HEADER=${source}. If the domain is proxied ` +
+        "through Cloudflare, set CLIENT_IP_HEADER=cf-connecting-ip, otherwise visitors share Cloudflare's IPs " +
+        "in every per-IP limit. Check with GET /api/admin/client-ip."
+    );
+  }
+
+  if (source === "x-forwarded-for") {
+    const parts = (c.req.header("x-forwarded-for") || "")
+      .split(",")
+      .map((p: string) => p.trim())
+      .filter(Boolean);
+    ip = parts[parts.length - 1];
+  } else if (source !== "none") {
+    ip = c.req.header(source)?.split(",")[0]?.trim();
+  }
+
+  return ip || socketAddress(c) || "unknown";
+}
+
+let warnedCloudflare = false;
+
+function socketAddress(c: any): string | undefined {
+  try {
+    return c.env?.incoming?.socket?.remoteAddress || undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 /**

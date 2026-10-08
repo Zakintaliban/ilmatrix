@@ -1,5 +1,6 @@
 import crypto from 'crypto';
 import { Context } from 'hono';
+import { getClientIp } from '../utils/security.js';
 import * as guestChatService from './guestChatService.js';
 
 interface GuestSession {
@@ -11,6 +12,8 @@ interface GuestSession {
   userAgent: string;
   chatSessionCount: number;
   lastChatActivity: Date;
+  /** When this device passed Turnstile (lost when the session expires). */
+  verifiedAt?: Date;
 }
 
 class GuestSessionManager {
@@ -92,19 +95,7 @@ class GuestSessionManager {
    * Get client IP address with proxy support
    */
   private getClientIP(c: Context): string {
-    // Check for forwarded headers (Railway, Cloudflare, etc.)
-    const forwarded = c.req.header('x-forwarded-for');
-    if (forwarded) {
-      return forwarded.split(',')[0].trim();
-    }
-    
-    const realIP = c.req.header('x-real-ip');
-    if (realIP) {
-      return realIP;
-    }
-    
-    // Fallback to connection remote address
-    return c.req.header('x-forwarded-for') || 'unknown';
+    return getClientIp(c);
   }
 
   /**
@@ -162,6 +153,41 @@ class GuestSessionManager {
       newCount: session.usageCount,
       remaining: Math.max(0, this.MAX_USAGE - session.usageCount)
     };
+  }
+
+  /**
+   * Whether this device has passed the human check in its current session
+   */
+  isVerified(fingerprint: string): boolean {
+    const session = this.sessions.get(fingerprint);
+    return !!session?.verifiedAt && !this.isSessionExpired(session);
+  }
+
+  /**
+   * Record that the requesting device passed the human check
+   * (creates the device cookie and session if needed)
+   */
+  markVerified(c: Context): string {
+    const fingerprint = this.generateFingerprint(c);
+    let session = this.sessions.get(fingerprint);
+
+    if (!session || this.isSessionExpired(session)) {
+      session = {
+        fingerprint,
+        usageCount: 0,
+        firstAccess: new Date(),
+        lastAccess: new Date(),
+        ipAddress: this.getClientIP(c),
+        userAgent: c.req.header('user-agent') || 'unknown',
+        chatSessionCount: 0,
+        lastChatActivity: new Date()
+      };
+    }
+
+    session.verifiedAt = new Date();
+    session.lastAccess = new Date();
+    this.sessions.set(fingerprint, session);
+    return fingerprint;
   }
 
   /**

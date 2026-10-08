@@ -1,4 +1,5 @@
 import { Context } from 'hono';
+import { getClientIp } from '../utils/security.js';
 
 /**
  * Behavioral Analysis Service
@@ -319,17 +320,7 @@ class BehaviorAnalysisService {
    * Get client IP with proxy support
    */
   private getClientIP(c: Context): string {
-    const forwarded = c.req.header('x-forwarded-for');
-    if (forwarded) {
-      return forwarded.split(',')[0].trim();
-    }
-
-    const realIP = c.req.header('x-real-ip');
-    if (realIP) {
-      return realIP;
-    }
-
-    return 'unknown';
+    return getClientIp(c);
   }
 
   /**
