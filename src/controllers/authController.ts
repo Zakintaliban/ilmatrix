@@ -10,11 +10,20 @@ import {
   getUserByIdWithPassword,
   verifyEmail,
   resendVerificationEmail,
+  AuthError,
   CreateUserData,
   LoginCredentials
 } from '../services/authService.js';
 import { guestSessionService } from '../services/guestSessionService.js';
+import { loginThrottle } from '../services/loginThrottle.js';
+import { query, transaction } from '../services/databaseService.js';
 import { getClientIp } from '../utils/security.js';
+
+/** Profile field limits (phone matches the VARCHAR(20) column). */
+const MAX_NAME_LENGTH = 100;
+const MAX_PHONE_LENGTH = 20;
+const MAX_BIO_LENGTH = 1000;
+const MAX_PASSWORD_LENGTH = 128;
 
 /**
  * Register new user
@@ -29,8 +38,16 @@ export async function registerUser(c: Context) {
       return c.json({ error: 'All fields are required: email, username, password, name, birth_date, country' }, 400);
     }
     
-    if (password.length < 8) {
-      return c.json({ error: 'Password must be at least 8 characters long' }, 400);
+    if ([email, username, password, name, birth_date, country].some((v) => typeof v !== 'string')) {
+      return c.json({ error: 'All fields must be strings' }, 400);
+    }
+
+    if (password.length < 8 || password.length > MAX_PASSWORD_LENGTH) {
+      return c.json({ error: `Password must be 8-${MAX_PASSWORD_LENGTH} characters long` }, 400);
+    }
+
+    if (name.trim().length === 0 || name.length > MAX_NAME_LENGTH) {
+      return c.json({ error: `Name must be 1-${MAX_NAME_LENGTH} characters` }, 400);
     }
     
     // Validate username format (alphanumeric + underscore, 3-20 chars)
@@ -80,7 +97,7 @@ export async function login(c: Context) {
     const { email, password } = body as LoginCredentials;
 
     // Basic validation
-    if (!email || !password) {
+    if (!email || !password || typeof email !== 'string' || typeof password !== 'string') {
       return c.json({ error: 'Email and password are required' }, 400);
     }
 
@@ -88,21 +105,41 @@ export async function login(c: Context) {
     const userAgent = c.req.header('user-agent');
     const ipAddress = getClientIp(c);
 
+    // Refuse before running bcrypt while this email or IP has too many recent failures
+    const throttle = loginThrottle.check(email, ipAddress);
+    if (!throttle.allowed) {
+      const minutes = Math.ceil(throttle.retryAfterSeconds / 60);
+      c.header('Retry-After', String(throttle.retryAfterSeconds));
+      return c.json(
+        {
+          error: `Too many failed sign-in attempts. Try again in ${minutes} minute${minutes === 1 ? '' : 's'}, or sign in with Google.`,
+          code: 'LOGIN_THROTTLED',
+          retryAfter: throttle.retryAfterSeconds,
+        },
+        429
+      );
+    }
+
     // Get guest fingerprint for migration
     const guestFingerprint = guestSessionService.generateFingerprint(c);
 
     // Login user with guest migration
-    const { user, sessionToken, guestMigration } = await loginUserWithGuestMigration(
-      { email, password },
-      guestFingerprint,
-      userAgent,
-      Array.isArray(ipAddress) ? ipAddress[0] : ipAddress
-    );
+    let loginResult;
+    try {
+      loginResult = await loginUserWithGuestMigration({ email, password }, guestFingerprint, userAgent, ipAddress);
+    } catch (error) {
+      if (error instanceof AuthError && error.code === 'INVALID_CREDENTIALS') {
+        loginThrottle.recordFailure(email, ipAddress);
+      }
+      throw error;
+    }
+    loginThrottle.recordSuccess(email);
+    const { user, sessionToken, guestMigration } = loginResult;
 
     // Set session cookie (Secure only in production)
     const isProduction = process.env.NODE_ENV === 'production';
     const secureFlag = isProduction ? ' Secure;' : '';
-    c.header('Set-Cookie', `session=${sessionToken}; HttpOnly;${secureFlag} SameSite=Lax; Max-Age=${7 * 24 * 60 * 60}; Path=/`);
+    c.header('Set-Cookie', `session=${sessionToken}; HttpOnly;${secureFlag} SameSite=Lax; Max-Age=${7 * 24 * 60 * 60}; Path=/`, { append: true });
 
     // Reset guest usage after successful login
     try {
@@ -134,14 +171,14 @@ export async function login(c: Context) {
     return c.json(response);
 
   } catch (error) {
-    console.error('Login error:', error);
-
-    if (error instanceof Error) {
-      if (error.message.includes('Invalid email or password')) {
-        return c.json({ error: 'Invalid email or password' }, 401);
+    if (error instanceof AuthError) {
+      if (error.code === 'EMAIL_NOT_VERIFIED') {
+        return c.json({ error: error.message, code: error.code }, 403);
       }
+      return c.json({ error: 'Invalid email or password', code: error.code }, 401);
     }
 
+    console.error('Login error:', error);
     return c.json({ error: 'Login failed' }, 500);
   }
 }
@@ -162,7 +199,7 @@ export async function logout(c: Context) {
     // Clear session cookie
     const isProduction = process.env.NODE_ENV === 'production';
     const secureFlag = isProduction ? ' Secure;' : '';
-    c.header('Set-Cookie', `session=; HttpOnly;${secureFlag} SameSite=Lax; Max-Age=0; Path=/`);
+    c.header('Set-Cookie', `session=; HttpOnly;${secureFlag} SameSite=Lax; Max-Age=0; Path=/`, { append: true });
     
     return c.json({ message: 'Logout successful' });
     
@@ -216,13 +253,29 @@ export async function updateProfile(c: Context) {
     
     const body = await c.req.json();
     const { name, phone, bio, email } = body;
+
+    // The email is the account's verified identity (and how Google sign-in finds
+    // it); changing it here would skip verification, so it can't be changed.
+    if (email !== undefined && String(email).toLowerCase() !== String(user.email).toLowerCase()) {
+      return c.json({ error: 'Email cannot be changed' }, 400);
+    }
+
+    const invalid =
+      (name !== undefined && (typeof name !== 'string' || name.trim().length === 0 || name.length > MAX_NAME_LENGTH)) ||
+      (phone != null && (typeof phone !== 'string' || phone.length > MAX_PHONE_LENGTH)) ||
+      (bio != null && (typeof bio !== 'string' || bio.length > MAX_BIO_LENGTH));
+    if (invalid) {
+      return c.json(
+        { error: `Name must be 1-${MAX_NAME_LENGTH} characters, phone at most ${MAX_PHONE_LENGTH}, bio at most ${MAX_BIO_LENGTH}` },
+        400
+      );
+    }
     
     // Prepare updates - phone and bio are new fields
-    const updates: { name?: string; phone?: string; bio?: string; email?: string } = {};
+    const updates: { name?: string; phone?: string; bio?: string } = {};
     if (name !== undefined) updates.name = name;
     if (phone !== undefined) updates.phone = phone;
     if (bio !== undefined) updates.bio = bio;
-    if (email !== undefined) updates.email = email;
     
     if (Object.keys(updates).length === 0) {
       return c.json({ error: 'No fields to update' }, 400);
@@ -274,8 +327,12 @@ export async function changePassword(c: Context) {
       return c.json({ error: 'Current password and new password are required' }, 400);
     }
     
-    if (newPassword.length < 8) {
-      return c.json({ error: 'New password must be at least 8 characters long' }, 400);
+    if (typeof currentPassword !== 'string' || typeof newPassword !== 'string') {
+      return c.json({ error: 'Passwords must be strings' }, 400);
+    }
+
+    if (newPassword.length < 8 || newPassword.length > MAX_PASSWORD_LENGTH) {
+      return c.json({ error: `New password must be 8-${MAX_PASSWORD_LENGTH} characters long` }, 400);
     }
     
     // Import bcrypt for password verification
@@ -285,6 +342,10 @@ export async function changePassword(c: Context) {
     const fullUser = await getUserByIdWithPassword(user.id);
     if (!fullUser) {
       return c.json({ error: 'User not found' }, 404);
+    }
+
+    if (!fullUser.password) {
+      return c.json({ error: 'This account signs in with Google and has no password to change' }, 400);
     }
     
     // Verify current password
@@ -298,6 +359,10 @@ export async function changePassword(c: Context) {
     
     // Update password
     await updateUser(user.id, { password: hashedNewPassword });
+
+    // Sign out every other session (e.g. someone who learned the old password)
+    const currentToken = getSessionFromRequest(c);
+    await query('DELETE FROM user_sessions WHERE user_id = $1 AND session_token <> $2', [user.id, currentToken ?? '']);
     
     return c.json({ message: 'Password updated successfully' });
     
@@ -318,39 +383,24 @@ export async function deleteAccount(c: Context) {
       return c.json({ error: 'Not authenticated' }, 401);
     }
     
-    // Import database service
-    const { query } = await import('../services/databaseService.js');
-    
-    // Begin transaction to delete user and all related data
-    await query('BEGIN');
-    
-    try {
-      // Delete user sessions first
-      await query('DELETE FROM user_sessions WHERE user_id = $1', [user.id]);
-      
-      // Delete chat sessions and messages
-      await query('DELETE FROM chat_messages WHERE session_id IN (SELECT id FROM chat_sessions WHERE user_id = $1)', [user.id]);
-      await query('DELETE FROM chat_sessions WHERE user_id = $1', [user.id]);
-      
-      // Delete user materials
-      await query('DELETE FROM user_materials WHERE user_id = $1', [user.id]);
-      
-      // Finally delete the user
-      await query('DELETE FROM users WHERE id = $1', [user.id]);
-      
-      await query('COMMIT');
-      
-      // Clear session cookie
-      const isProduction = process.env.NODE_ENV === 'production';
+    // One real transaction: BEGIN/COMMIT through the pool could run on different connections
+    await transaction(async (client) => {
+      await client.query('DELETE FROM user_sessions WHERE user_id = $1', [user.id]);
+      await client.query('DELETE FROM chat_messages WHERE session_id IN (SELECT id FROM chat_sessions WHERE user_id = $1)', [user.id]);
+      await client.query('DELETE FROM chat_sessions WHERE user_id = $1', [user.id]);
+      await client.query('DELETE FROM user_materials WHERE user_id = $1', [user.id]);
+      // Guest chats copied into this account at sign-in (their FK has no ON DELETE)
+      await client.query('DELETE FROM guest_chat_sessions WHERE migrated_to_user_id = $1', [user.id]);
+      // Everything else (materials, kredit, usage logs) cascades
+      await client.query('DELETE FROM users WHERE id = $1', [user.id]);
+    });
+
+    // Clear session cookie
+    const isProduction = process.env.NODE_ENV === 'production';
     const secureFlag = isProduction ? ' Secure;' : '';
-    c.header('Set-Cookie', `session=; HttpOnly;${secureFlag} SameSite=Lax; Max-Age=0; Path=/`);
-      
-      return c.json({ message: 'Account deleted successfully' });
-      
-    } catch (error) {
-      await query('ROLLBACK');
-      throw error;
-    }
+    c.header('Set-Cookie', `session=; HttpOnly;${secureFlag} SameSite=Lax; Max-Age=0; Path=/`, { append: true });
+
+    return c.json({ message: 'Account deleted successfully' });
     
   } catch (error) {
     console.error('Delete account error:', error);
@@ -462,32 +512,37 @@ export async function verifyEmailController(c: Context) {
 /**
  * Resend verification email
  */
+const RESEND_COOLDOWN_MS = 60_000;
+const lastResend = new Map<string, number>();
+
 export async function resendVerificationController(c: Context) {
   try {
-    const body = await c.req.json();
-    const { email } = body;
+    const body = await c.req.json().catch(() => ({}));
+    const email = typeof body.email === 'string' ? body.email.trim().toLowerCase() : '';
     
     if (!email) {
       return c.json({ error: 'Email is required' }, 400);
     }
-    
-    const sent = await resendVerificationEmail(email);
-    
-    if (sent) {
-      return c.json({ message: 'Verification email sent successfully' });
-    } else {
-      return c.json({ message: 'Email service not configured, but user account is valid' });
+
+    // Same answer whether or not the account exists (no account discovery), and at
+    // most one email per address per minute (no mailbox flooding)
+    const message = 'If an unverified account exists for this email, a new verification link has been sent.';
+    const now = Date.now();
+    for (const [key, at] of lastResend) if (now - at >= RESEND_COOLDOWN_MS) lastResend.delete(key);
+    if (lastResend.has(email)) {
+      return c.json({ message });
     }
+    lastResend.set(email, now);
+
+    try {
+      await resendVerificationEmail(email);
+    } catch (error) {
+      if (!(error instanceof Error && /not found|already verified/.test(error.message))) throw error;
+    }
+    return c.json({ message });
     
   } catch (error) {
     console.error('Resend verification error:', error);
-    
-    if (error instanceof Error) {
-      if (error.message.includes('not found') || error.message.includes('already verified')) {
-        return c.json({ error: error.message }, 400);
-      }
-    }
-    
     return c.json({ error: 'Failed to resend verification email' }, 500);
   }
 }

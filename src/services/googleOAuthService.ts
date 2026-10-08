@@ -1,6 +1,6 @@
 import { config } from '../config/env.js';
-import { createUser, loginUser, generateSessionToken } from './authService.js';
-import { query } from './databaseService.js';
+import { createSession } from './authService.js';
+import { query, transaction } from './databaseService.js';
 
 export interface GoogleUserInfo {
   id: string;
@@ -23,9 +23,10 @@ export interface GoogleTokenResponse {
 }
 
 /**
- * Generate Google OAuth authorization URL
+ * Generate Google OAuth authorization URL. `state` is a random value also kept
+ * in a cookie; the callback only proceeds when both match (login CSRF).
  */
-export function generateGoogleAuthUrl(): string {
+export function generateGoogleAuthUrl(state: string): string {
   if (!config.googleClientId) {
     throw new Error('Google OAuth is not configured');
   }
@@ -36,8 +37,9 @@ export function generateGoogleAuthUrl(): string {
     redirect_uri: config.googleRedirectUri,
     response_type: 'code',
     scope: 'openid email profile',
-    access_type: 'offline',
-    prompt: 'consent'
+    state,
+    // Sign-in only: no refresh token needed
+    prompt: 'select_account'
   });
 
   return `${baseUrl}?${params.toString()}`;
@@ -134,27 +136,32 @@ async function createOAuthUser(googleUser: GoogleUserInfo) {
  * Create OAuth session for user
  */
 async function createOAuthSession(userId: string, userAgent?: string, ipAddress?: string) {
-  const sessionToken = generateSessionToken();
-  const expiresAt = new Date();
-  expiresAt.setDate(expiresAt.getDate() + 7); // Session expires in 7 days
-  
-  // Handle IP address - only store if it's a valid IP, otherwise null
-  const isValidIP = (ip: string) => /^(\d{1,3}\.){3}\d{1,3}$/.test(ip) || /^[0-9a-fA-F:]+$/.test(ip);
-  const validIpAddress = ipAddress && ipAddress !== 'unknown' && isValidIP(ipAddress) ? ipAddress : null;
-  
-  await query(
-    `INSERT INTO user_sessions (user_id, session_token, expires_at, user_agent, ip_address)
-     VALUES ($1, $2, $3, $4, $5)`,
-    [userId, sessionToken, expiresAt, userAgent || null, validIpAddress]
-  );
-  
-  // Update last login
-  await query(
-    'UPDATE users SET last_login = NOW() WHERE id = $1',
-    [userId]
-  );
-  
+  const sessionToken = await createSession({ query }, userId, userAgent, ipAddress);
+  await query('UPDATE users SET last_login = NOW() WHERE id = $1', [userId]);
   return sessionToken;
+}
+
+/**
+ * Google has proved this person owns the email, but an unverified password
+ * account already uses it. Whoever created that account never proved they own
+ * the inbox and may be an attacker waiting for the real owner to sign in
+ * (account pre-hijacking). The Google user takes the account over: its
+ * password and every existing session are removed and the email is marked
+ * verified, so only Google sign-in (or a new password) can get in afterwards.
+ */
+async function claimUnverifiedAccount(userId: string) {
+  return transaction(async (client) => {
+    await client.query('DELETE FROM user_sessions WHERE user_id = $1', [userId]);
+    const result = await client.query(
+      `UPDATE users
+       SET email_verified = true, password_hash = NULL, auth_method = 'google',
+           email_verification_token = NULL, email_verification_expires = NULL, updated_at = NOW()
+       WHERE id = $1
+       RETURNING id, email, username, name, birth_date, country, phone, bio, email_verified, auth_method, created_at, updated_at, is_active, last_login`,
+      [userId]
+    );
+    return result.rows[0];
+  });
 }
 
 /**
@@ -174,6 +181,11 @@ export async function processGoogleAuth(code: string, userAgent?: string, ipAddr
 
     // Check if user already exists
     let user = await getUserByEmail(googleUser.email);
+
+    if (user && !user.email_verified) {
+      console.warn(`[OAuth] Google sign-in took over unverified account ${user.id}; its password and sessions were removed`);
+      user = await claimUnverifiedAccount(user.id);
+    }
     
     if (user) {
       // User exists, create session for them

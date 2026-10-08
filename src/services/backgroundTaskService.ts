@@ -3,6 +3,7 @@ import { guestSessionService } from "../services/guestSessionService.js";
 import { behaviorAnalysisService } from "../services/behaviorAnalysisService.js";
 import { guestIpLimiter } from "../services/guestIpLimiter.js";
 import { aiRateLimiter } from "../middleware/aiRateLimit.js";
+import { loginThrottle } from "../services/loginThrottle.js";
 import config from "../config/env.js";
 
 /**
@@ -46,6 +47,7 @@ export class BackgroundTaskService {
         // Drop expired per-IP guest counters
         guestIpLimiter.cleanup();
         aiRateLimiter.cleanup();
+        loginThrottle.cleanup();
 
         if (materialsCleaned > 0 || guestSessionsResult.cleaned > 0 || behaviorResult.profilesCleaned > 0) {
           console.log(

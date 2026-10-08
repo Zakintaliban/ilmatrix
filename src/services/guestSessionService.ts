@@ -35,16 +35,25 @@ class GuestSessionManager {
       }
     }
 
+    // One new device per request, however often this is called
+    const assigned = c.get('newGuestDeviceId') as string | undefined;
+    if (assigned) {
+      return assigned;
+    }
+
     // Generate new device ID if not found
     const newDeviceId = crypto.randomUUID();
+    c.set('newGuestDeviceId', newDeviceId);
 
     // Set HTTP-only cookie (expires in 1 year)
     // HttpOnly: prevents JavaScript access (XSS protection)
     // Secure: only sent over HTTPS
     // SameSite=Lax: CSRF protection while allowing normal navigation
     const maxAge = 365 * 24 * 60 * 60; // 1 year in seconds
+    // Appended: replacing would drop other cookies set on this response (e.g. the login session)
     c.header('Set-Cookie',
-      `device_id=${newDeviceId}; HttpOnly; Secure; SameSite=Lax; Max-Age=${maxAge}; Path=/`
+      `device_id=${newDeviceId}; HttpOnly; Secure; SameSite=Lax; Max-Age=${maxAge}; Path=/`,
+      { append: true }
     );
 
     return newDeviceId;

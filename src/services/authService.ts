@@ -73,6 +73,56 @@ export function generateSessionToken(): string {
   return crypto.randomBytes(32).toString('hex');
 }
 
+/** Why a login was refused (mapped to an HTTP status by the controller). */
+export class AuthError extends Error {
+  constructor(public code: 'INVALID_CREDENTIALS' | 'EMAIL_NOT_VERIFIED', message: string) {
+    super(message);
+    this.name = 'AuthError';
+  }
+}
+
+/**
+ * Password accounts must verify their email before signing in, so nobody can
+ * hold an account under someone else's address (and so the free plan needs a
+ * real inbox). Only enforced when verification emails can actually be sent.
+ */
+export function isEmailVerificationRequired(): boolean {
+  return isEmailServiceConfigured();
+}
+
+/** bcrypt hash of a random throwaway string: compared against when the account
+ * doesn't exist or has no password, so response time doesn't reveal which. */
+const DUMMY_PASSWORD_HASH = '$2b$12$14Ufb5.lTh5qqjcg5rUheuerZQ8c2FzSoujUXgtiwzP0EcWtMUM1W';
+
+const SESSION_DAYS = 7;
+
+interface Queryable {
+  query(text: string, params?: any[]): Promise<{ rows: any[]; rowCount: number | null }>;
+}
+
+/** Create a 7-day session for a user and return its token. */
+export async function createSession(
+  db: Queryable,
+  userId: string,
+  userAgent?: string,
+  ipAddress?: string
+): Promise<string> {
+  const sessionToken = generateSessionToken();
+  const expiresAt = new Date();
+  expiresAt.setDate(expiresAt.getDate() + SESSION_DAYS);
+
+  // Handle IP address - only store if it's a valid IP, otherwise null
+  const isValidIP = (ip: string) => /^(\d{1,3}\.){3}\d{1,3}$/.test(ip) || /^[0-9a-fA-F:]+$/.test(ip);
+  const validIpAddress = ipAddress && ipAddress !== 'unknown' && isValidIP(ipAddress) ? ipAddress : null;
+
+  await db.query(
+    `INSERT INTO user_sessions (user_id, session_token, expires_at, user_agent, ip_address)
+     VALUES ($1, $2, $3, $4, $5)`,
+    [userId, sessionToken, expiresAt, userAgent || null, validIpAddress]
+  );
+  return sessionToken;
+}
+
 /**
  * Create new user
  */
@@ -133,52 +183,38 @@ export async function loginUser(
   ipAddress?: string
 ): Promise<{ user: User; sessionToken: string }> {
   const { email, password } = credentials;
-  
-  return transaction(async (client) => {
-    // Get user with password hash
-    const userResult = await client.query(
-      'SELECT * FROM users WHERE email = $1 AND is_active = true',
-      [email.toLowerCase()]
+
+  const userResult = await query(
+    'SELECT id, password_hash, email_verified FROM users WHERE email = $1 AND is_active = true',
+    [String(email).toLowerCase()]
+  );
+  const account = userResult.rows[0];
+
+  // Always run bcrypt (against a dummy hash if needed) so timing doesn't reveal accounts.
+  // Google-only accounts have no password and can't sign in this way.
+  const passwordValid = await verifyPassword(password, account?.password_hash || DUMMY_PASSWORD_HASH);
+  if (!account || !account.password_hash || !passwordValid) {
+    throw new AuthError('INVALID_CREDENTIALS', 'Invalid email or password');
+  }
+
+  // Checked only after the password, so this doesn't reveal unverified accounts to strangers
+  if (!account.email_verified && isEmailVerificationRequired()) {
+    throw new AuthError(
+      'EMAIL_NOT_VERIFIED',
+      'Please verify your email before signing in. Check your inbox, or request a new verification link.'
     );
-    
-    if (userResult.rows.length === 0) {
-      throw new Error('Invalid email or password');
-    }
-    
-    const userWithPassword = userResult.rows[0];
-    
-    // Verify password
-    const passwordValid = await verifyPassword(password, userWithPassword.password_hash);
-    if (!passwordValid) {
-      throw new Error('Invalid email or password');
-    }
-    
-    // Update last login
+  }
+
+  return transaction(async (client) => {
     const userUpdateResult = await client.query(
       `UPDATE users 
        SET last_login = NOW()
        WHERE id = $1
        RETURNING id, email, username, name, birth_date, country, phone, bio, email_verified, auth_method, created_at, updated_at, is_active, last_login`,
-      [userWithPassword.id]
+      [account.id]
     );
-    
     const user = userUpdateResult.rows[0];
-    
-    // Create session
-    const sessionToken = generateSessionToken();
-    const expiresAt = new Date();
-    expiresAt.setDate(expiresAt.getDate() + 7); // Session expires in 7 days
-    
-    // Handle IP address - only store if it's a valid IP, otherwise null
-    const isValidIP = (ip: string) => /^(\d{1,3}\.){3}\d{1,3}$/.test(ip) || /^[0-9a-fA-F:]+$/.test(ip);
-    const validIpAddress = ipAddress && ipAddress !== 'unknown' && isValidIP(ipAddress) ? ipAddress : null;
-    
-    await client.query(
-      `INSERT INTO user_sessions (user_id, session_token, expires_at, user_agent, ip_address)
-       VALUES ($1, $2, $3, $4, $5)`,
-      [user.id, sessionToken, expiresAt, userAgent || null, validIpAddress]
-    );
-    
+    const sessionToken = await createSession(client, user.id, userAgent, ipAddress);
     return { user, sessionToken };
   });
 }
@@ -378,8 +414,8 @@ export async function verifyEmail(token: string): Promise<User | null> {
  * Resend verification email
  */
 export async function resendVerificationEmail(email: string): Promise<boolean> {
-  const result = await query<User & { email_verification_token: string }>(
-    `SELECT id, email, name, email_verification_token, email_verified 
+  const result = await query<User & { email_verification_token: string; email_verification_expires: Date | null }>(
+    `SELECT id, email, name, email_verification_token, email_verification_expires, email_verified 
      FROM users 
      WHERE email = $1 AND is_active = true`,
     [email.toLowerCase()]
@@ -395,9 +431,10 @@ export async function resendVerificationEmail(email: string): Promise<boolean> {
     throw new Error('Email is already verified');
   }
   
-  // Generate new token if needed
+  // Generate a new token if there is none or it has expired
   let token = user.email_verification_token;
-  if (!token) {
+  const expired = !user.email_verification_expires || new Date(user.email_verification_expires) <= new Date();
+  if (!token || expired) {
     token = crypto.randomBytes(32).toString('hex');
     const expires = new Date();
     expires.setHours(expires.getHours() + 24);
