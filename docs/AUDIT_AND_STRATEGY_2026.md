@@ -95,7 +95,7 @@ Browser (app.html) ──fetch JSON──▶ Hono /api/*
 | Flashcards | Yes | JSON via prompt | ❌ model | Yes | Strict schema (done). Persist + spaced repetition (P2) |
 | Dialogue Coach (start/step/hint/feedback) | Yes | 4 JSON prompts + deterministic "How am I doing?" | ❌ model | Yes | Strict schema (done) |
 | Session titles | Yes | substring of first message (no AI) | ✅ | Yes | — |
-| Token quotas (5h session / weekly / monthly) | Yes | Postgres functions + middleware | ❌ **never enforced and never recorded** for signed-in users (see §5, found by testing on a real Postgres). Attribution under concurrency was also wrong (fixed in §19.1) | Yes, it's the billing foundation | Fix together with cost-weighted kredit (P1-6) |
+| Token quotas (5h session / weekly / monthly) | Yes | Postgres functions + middleware | ❌ was **never enforced and never recorded** (§5). ✅ **Replaced by kredit plans (P1-6)**: weekly allowance per plan, passes/top-ups, per-model pricing, metering verified on Postgres | Yes, it's the billing foundation | Payments (P1-5) |
 | Guest trial (5 uses) | Yes | in-memory, keyed on `device_id` cookie | ⚠️ bypass: omit the cookie → unlimited | Yes | Turnstile + IP cap (P1) |
 | Function calling / tools | **No** | — | — | — | Chat-agent registry (P2) |
 | Structured outputs | **No** | regex JSON extraction | — | — | Done (§19.1) |
@@ -174,7 +174,7 @@ to the correct request.
 | Timeout | `withTimeout` rejects but **doesn't abort** the HTTP call, and the SDK's own retries stack on top (up to ~3×45s) | P0 |
 | Multi-file upload | The UI sends several `file` parts but `parseBody()` keeps only the last repeated key, so **only one file per upload was ever extracted** (found by the new regression suite) | P0 (fixed) |
 | Deployment | `.npmrc omit=dev` + `"start": "tsx …"` (tsx is a devDependency) → clean install has no `tsx` → **process fails to start** | P0 |
-| Token quota middleware | `checkAndResetUserUsage()` passes `$1` into a `DO $$ … $$` block, which Postgres rejects ("bind message supplies 1 parameters"). It throws on **every** signed-in AI request; the middleware fails open, so weekly/session limits are never checked and `updateTokenUsageAfterRequest` never records usage (no session in context). The 3-line fix would immediately enforce the current DB defaults (25k tokens per 5-hour session ≈ 2–3 grounded answers on gpt-oss), so it is **not** applied until limits are decided (P1-6) | P1 (needs a pricing decision) |
+| Token quota middleware | `checkAndResetUserUsage()` passes `$1` into a `DO $$ … $$` block, which Postgres rejects ("bind message supplies 1 parameters"). It throws on **every** signed-in AI request; the middleware fails open, so weekly/session limits are never checked and `updateTokenUsageAfterRequest` never records usage (no session in context). The 3-line fix would immediately enforce the current DB defaults (25k tokens per 5-hour session ≈ 2–3 grounded answers on gpt-oss), so it was held back until limits were decided. ✅ **Fixed with P1-6**: kredit metering replaced the token quotas; the per-user reset is two plain UPDATEs; the CHECK constraints that made over-limit usage unrecordable were dropped | Fixed |
 | npm scripts | `.npmrc omit=dev` makes npm run **every** script (including `npm run dev` and `npm test`) with `NODE_ENV=production`, even when NODE_ENV is set explicitly. Locally that forces DB SSL (a local Postgres is unreachable) and Secure cookies. `DATABASE_SSL=false` override added; `.npmrc` left as is because production may rely on the implicit NODE_ENV | P2 |
 | `aiRateLimit` | `recordAITokenUsage` is **never called**, so hourly limits never trigger. The burst check is also wrong (it only looks at the timestamp of the last request) | P1 |
 | `abuseDetection` | Inspects `message`/`materialText`/`question`, but the UI sends `messages`/`prompt`/`materialId`, so the check is **effectively inert**. (A suspected ReDoS in its regex was benchmarked and is *not* exploitable in V8: 2 ms at 20k chars) | P1 |
@@ -216,6 +216,8 @@ Ranked by impact for a student-facing, pay-per-token product. ✅ means fixed on
 | S10 | Vulnerable `hono` / `@hono/node-server` | serve-static bypass | ✅ |
 | S11 | HTML in user `name` interpolated unescaped into emails sent from our domain | Phishing | P1 |
 | S12 | No CSP or security headers. CDN scripts unpinned and without SRI | XSS via supply chain | P1 |
+| S18 | `admin-usage.html` inserted user `name`/`email` into `innerHTML` unescaped: anyone could register with a script as their name and run it in an admin's browser (e.g. call `set-admin` on themselves) | Admin takeover | ✅ (escaped) |
+| S19 | Admin CSV export did not quote fields (commas break rows; `=…` names run as spreadsheet formulas) | CSV injection | ✅ |
 | S13 | DOCX/PPTX zip bombs (JSZip, no decompressed-size cap) | Memory DoS | P1 |
 | S14 | No JSON body size limit on AI routes; `materialText` accepted up to `MATERIAL_CLAMP` (200k chars ≈ 57k tokens) | Cost amplification | P1 (body limit) |
 | S15 | Session tokens stored unhashed; DB TLS `rejectUnauthorized:false` | Defence in depth | P2 |
@@ -542,7 +544,7 @@ Effort is for one developer, in days.
 | P1-3 | AI rate limiter inert/buggy → record usage, sliding-window burst, sane limits | `aiRateLimit.ts`, `aiController.ts` | S | 0.5 | — | Abuse control |
 | P1-4 | Remaining security: OAuth `state`, verified-email login + safe Google linking, email HTML escape, CSP/headers, SRI-pinned CDNs, JSON body limit, zip-bomb cap, hashed session tokens | auth/oauth/email/server/extract | M | 2–3 | — | Trust |
 | P1-5 | No payments → Midtrans or Xendit (QRIS + e-wallets), plans/passes/entitlements → quotas | new `billing*`, migration, UI | L | 4–6 | Can buy | Revenue |
-| P1-6 | Tokens ≠ cost → cost-weighted kredit from prompt/completion tokens + vision/search/audio | `tokenUsageService`, migrations | M | 1–2 | Clear allowance | Bounded COGS |
+| P1-6 ✅ | Tokens ≠ cost → **done**: kredit priced per call by model (migration 012, `config/plans.ts`, `kreditService`). Free 150/week, Bulanan 900/week, Semester 700/week, Pass 7 Hari 1.000, Top-up 600; weekly refill Monday 07:00 WIB; 5-hour session cap removed (it blocked exam-night study); OCR on upload metered and skipped without kredit; admin can set plans / grant passes; dashboard + admin page in kredit; quiz/flashcard/dialogue UIs now show server errors instead of empty results | `config/plans.ts`, `kreditService`, middleware, controllers, migration 012, `dashboard.html`, `admin-usage.html`, `app.html` | M | — | Clear allowance | Bounded COGS |
 | P1-7 | No streaming → SSE for chat/explain + incremental render + regression tests | `aiController`, `groqService`, `app.html` | M | 2 | Feels instant | Retention |
 | P1-8 | No math rendering → KaTeX | `app.html` | S | 0.5 | Readable STEM | Core segment |
 | P1-9 | Prompt order defeats caching → stable prefix (system + material first, task last) | `groqService` | S | 0.5 | — | ~20–40% less input cost |
@@ -587,9 +589,10 @@ vision parameters, and real latency and cost. The provider downgrades rejected p
    (simplest and cheapest).
 5. **Forum tool repositioning** (keep the endpoint, change the prompt to outline/critique).
 6. ~~**Persistent storage choice:** Postgres `TEXT` (simplest) vs Cloudflare R2.~~ **Decided: Postgres. Implemented (P1-1).**
-7. **Token quotas:** the quota system has never been enforced (§5). Decide the free and paid limits (P1-6) before the
-   fix is switched on, otherwise signed-in users are blocked after ~3 answers per 5 hours.
-8. Then build in order: P1-2/3/4 → P1-6 → P1-5 → P1-7/8/9 → P2-1 Exam Mode.
+7. ~~**Token quotas**~~ **Decided: kredit plan limits. Implemented (P1-6).** Web search and lecture audio are not built
+   yet, so they have no kredit price in code; they will be priced the same way when added.
+8. Then build in order: P1-2/3/4 → P1-5 (payments: a webhook only needs `kreditService.setPlan` / `grantProduct`) →
+   P1-7/8/9 → P2-1 Exam Mode.
 
 ## 20. Risks
 
