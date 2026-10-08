@@ -114,6 +114,50 @@ const checks: Check[] = [
     },
   },
   {
+    // Confirms the assumptions the streaming endpoints rely on: text arrives as
+    // content deltas, reasoning stays hidden, and usage comes in the final chunk
+    // (x_groq.usage). If usage is missing, streams are billed by estimate.
+    name: "streaming (raw)",
+    run: async () => {
+      const client = new Groq({ apiKey: config.groqApiKey, timeout: config.groqTimeoutMs, maxRetries: 0 });
+      const stream = await client.chat.completions.create({
+        model: config.groqModel,
+        messages: [{ role: "user", content: "Sebutkan tiga tahap fotosintesis dalam satu kalimat." }],
+        stream: true,
+        include_reasoning: false,
+        reasoning_effort: "low",
+        max_completion_tokens: 600,
+      } as any);
+      let deltas = 0;
+      let reasoningDeltas = 0;
+      let usage: any = null;
+      let usageWhere = "none";
+      for await (const chunk of stream as any) {
+        if (chunk.choices?.[0]?.delta?.content) deltas++;
+        if (chunk.choices?.[0]?.delta?.reasoning) reasoningDeltas++;
+        if (chunk.x_groq?.usage) [usage, usageWhere] = [chunk.x_groq.usage, "x_groq.usage"];
+        else if (chunk.usage) [usage, usageWhere] = [chunk.usage, "usage"];
+      }
+      expect(deltas > 1, `expected several content deltas, got ${deltas}`);
+      expect(reasoningDeltas === 0, `reasoning leaked into the stream (${reasoningDeltas} deltas)`);
+      expect(usage?.total_tokens > 0, "no usage in the stream: streamed answers will be billed by estimate");
+      return `${deltas} deltas, usage in ${usageWhere} (${usage.total_tokens} tok)`;
+    },
+  },
+  {
+    name: "streaming (service)",
+    run: async () => {
+      let pieces = 0;
+      const result = await groqService.streamChat(
+        { materialText: MATERIAL, messages: [{ role: "user", content: "Di mana reaksi terang terjadi?" }] },
+        { onDelta: () => pieces++ }
+      );
+      expect(result.content && pieces > 1, `stream produced ${pieces} pieces`);
+      expect(!result.estimated, "usage was estimated, not reported by Groq");
+      return `${pieces} pieces, ${result.content.slice(0, 40)}`;
+    },
+  },
+  {
     name: "vision OCR",
     run: async () => {
       if (!config.groqVisionModel) return "skipped (GROQ_VISION_MODEL empty)";

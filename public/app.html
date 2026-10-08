@@ -2626,6 +2626,132 @@
         });
       }
 
+      // ---------------------------------------------------------------
+      // Streaming answers (Server-Sent Events from /api/chat, /api/explain, ...)
+      // ---------------------------------------------------------------
+
+      /**
+       * POST with stream: true. Calls onText(fullTextSoFar) as text arrives.
+       * Returns { response } when the server answered with JSON instead
+       * (validation, limits, guest checks), otherwise
+       * { text, final, error, headers } once the stream ends.
+       */
+      async function streamAI(endpoint, payload, onText) {
+        const res = await fetch(endpoint, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Accept: "text/event-stream" },
+          body: JSON.stringify({ ...payload, stream: true }),
+        });
+        if (!(res.headers.get("content-type") || "").includes("text/event-stream") || !res.body) {
+          return { response: res };
+        }
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
+        let text = "";
+        let final = null;
+        let error = null;
+        const handle = (block) => {
+          let event = "message";
+          const data = [];
+          for (const line of block.split("\n")) {
+            if (line.startsWith("event: ")) event = line.slice(7);
+            else if (line.startsWith("data: ")) data.push(line.slice(6));
+          }
+          if (!data.length) return; // keep-alive comments
+          let payload;
+          try {
+            payload = JSON.parse(data.join("\n"));
+          } catch {
+            return;
+          }
+          if (event === "delta" && typeof payload.text === "string") {
+            text += payload.text;
+            onText(text);
+          } else if (event === "done") {
+            final = payload;
+          } else if (event === "error") {
+            error = payload;
+          }
+        };
+        while (true) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          let cut;
+          while ((cut = buffer.indexOf("\n\n")) !== -1) {
+            handle(buffer.slice(0, cut));
+            buffer = buffer.slice(cut + 2);
+          }
+        }
+        if (buffer.trim()) handle(buffer);
+        if (!final && !error) error = { error: "Koneksi terputus sebelum jawaban selesai." };
+        return { text: final && typeof final.answer === "string" ? final.answer : text, final, error, headers: res.headers };
+      }
+
+      /** Re-render Markdown at most once per frame while text streams in. */
+      function throttledMarkdown(el, onRender) {
+        let latest = "";
+        let scheduled = false;
+        return (text) => {
+          latest = text;
+          if (scheduled) return;
+          scheduled = true;
+          requestAnimationFrame(() => {
+            scheduled = false;
+            el.innerHTML = renderMarkdown(latest);
+            if (onRender) onRender();
+          });
+        };
+      }
+
+      /** Final answer text for the stream result (partial text + error note if it broke off). */
+      function streamedAnswer(result) {
+        if (!result.error) return result.text;
+        const message = result.error.error || "Jawaban terputus.";
+        return result.text ? result.text + "\n\n_(" + message + ")_" : message;
+      }
+
+      /**
+       * Stream an answer into a temporary bubble at the end of the chat, then
+       * return the answer text (or null if a guest limit took over). The chat
+       * log is aria-busy while streaming, so screen readers read the finished
+       * answer once instead of every fragment.
+       */
+      async function streamIntoChat(endpoint, payload) {
+        const log = $("chat");
+        const row = document.createElement("div");
+        row.className = "my-2 flex justify-start items-start gap-2";
+        row.innerHTML =
+          '<div class="avatar shrink-0" aria-hidden="true">A</div>' +
+          '<div class="bubble-in rounded-2xl px-3 py-2 shadow-sm max-w-[80%] sm:max-w-[70%] transition-all duration-200 ease-out"><div class="skeleton p-3"><span class="sr-only">Menulis jawaban…</span></div></div>';
+        const bubble = row.lastElementChild;
+        log.setAttribute("aria-busy", "true");
+        log.appendChild(row);
+        log.scrollTop = log.scrollHeight;
+        try {
+          const result = await streamAI(endpoint, payload, throttledMarkdown(bubble, () => (log.scrollTop = log.scrollHeight)));
+          if (result.response) {
+            const res = result.response;
+            if (res.status === 401) {
+              const errorData = await res.clone().json().catch(() => ({}));
+              if (errorData.requiresAuth) {
+                handleGuestLimitReached(errorData);
+                return null;
+              }
+            }
+            updateGuestUsageDisplay(res.headers);
+            const data = await res.json().catch(() => ({}));
+            return data.answer || data.error || JSON.stringify(data);
+          }
+          updateGuestUsageDisplay(result.headers);
+          return streamedAnswer(result);
+        } finally {
+          row.remove();
+          log.removeAttribute("aria-busy");
+        }
+      }
+
       // Standardized loading and error helpers
       function setLoading(el, text) {
         if (!el) return;
@@ -3346,12 +3472,16 @@
         const el = $(targetId);
         if (!el) return;
         setLoading(el, "Processing...");
+        el.setAttribute("aria-busy", "true");
         try {
-          const res = await fetch(endpoint, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payload),
-          });
+          const result = await streamAI(endpoint, payload, throttledMarkdown(el));
+          if (!result.response) {
+            updateGuestUsageDisplay(result.headers);
+            el.innerHTML = renderMarkdown(streamedAnswer(result));
+            addCopyButtons(el);
+            return;
+          }
+          const res = result.response;
           
           // Handle guest usage limits
           if (res.status === 401) {
@@ -3377,6 +3507,8 @@
           addCopyButtons(el);
         } catch (e) {
           renderError(el, e.message);
+        } finally {
+          el.removeAttribute("aria-busy");
         }
       }
 
@@ -3875,26 +4007,8 @@
           renderChat();
           try {
             const route = TOOL_ROUTES[activeTool];
-            const res = await fetch(route.endpoint, {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify(route.makePayload(defaultPrompt)),
-            });
-            
-            // Handle guest usage limits
-            if (res.status === 401) {
-              const errorData = await res.json();
-              if (errorData.requiresAuth) {
-                handleGuestLimitReached(errorData);
-                return;
-              }
-            }
-            
-            // Update guest usage counter from headers
-            updateGuestUsageDisplay(res.headers);
-            
-            const data = await res.json();
-            const answer = data.answer || JSON.stringify(data);
+            const answer = await streamIntoChat(route.endpoint, route.makePayload(defaultPrompt));
+            if (answer === null) return;
             chat.push({ role: "assistant", content: answer });
             renderChat();
           } catch (e) {
@@ -3945,28 +4059,9 @@
               return;
             }
             const route = TOOL_ROUTES[activeTool];
-            const body = route.makePayload(trimmed);
-            const res = await fetch(route.endpoint, {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify(body),
-            });
-
-            // Handle guest usage limits
-            if (res.status === 401) {
-              const errorData = await res.json();
-              if (errorData.requiresAuth) {
-                handleGuestLimitReached(errorData);
-                return;
-              }
-            }
-
-            // Update guest usage counter from headers
-            updateGuestUsageDisplay(res.headers);
-
-            const data = await res.json();
-            const answer = data.answer || JSON.stringify(data);
-            await addChatMessage("assistant", answer, activeTool);
+            const tool = activeTool;
+            const answer = await streamIntoChat(route.endpoint, route.makePayload(trimmed));
+            if (answer !== null) await addChatMessage("assistant", answer, tool);
             return;
           }
 
@@ -3975,27 +4070,8 @@
             materialId: materialId || undefined,
             messages: cleanMessagesForAPI(chat),  // CRITICAL FIX: Clean messages before sending
           };
-          const res = await fetch("/api/chat", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payload),
-          });
-
-          // Handle guest usage limits
-          if (res.status === 401) {
-            const errorData = await res.json();
-            if (errorData.requiresAuth) {
-              handleGuestLimitReached(errorData);
-              return;
-            }
-          }
-
-          // Update guest usage counter from headers
-          updateGuestUsageDisplay(res.headers);
-
-          const data = await res.json();
-          const answer = data.answer || JSON.stringify(data);
-          await addChatMessage("assistant", answer, "chat");
+          const answer = await streamIntoChat("/api/chat", payload);
+          if (answer !== null) await addChatMessage("assistant", answer, "chat");
         } catch (e) {
           addChatMessage("system", "Chat error: " + e.message);
         }

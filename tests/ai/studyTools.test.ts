@@ -8,8 +8,8 @@
  *
  * Not applicable to this codebase (documented in docs/AUDIT_AND_STRATEGY_2026.md):
  * the tools are prompt templates, not LLM function calls, so there is no
- * model tool-call loop to resume, no parallel tool calls, and no streaming
- * endpoint yet.
+ * model tool-call loop to resume and no parallel tool calls. Streaming of
+ * chat and the explain-family tools is covered in streaming.test.ts.
  */
 import test, { after, beforeEach } from "node:test";
 import assert from "node:assert/strict";
