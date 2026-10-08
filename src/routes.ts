@@ -154,7 +154,7 @@ api.post("/dialogue/hint", optionalAuthMiddleware, tokenUsageMiddleware, guestLi
 api.post("/dialogue/feedback", optionalAuthMiddleware, tokenUsageMiddleware, guestLimitMiddleware, (c) => aiController.feedbackDialogue(c));
 
 // Admin/debug endpoints
-api.post("/admin/cleanup", async (c) => {
+api.post("/admin/cleanup", authMiddleware, usageController.requireAdmin, async (c) => {
   try {
     const cleaned = await backgroundTaskService.runCleanupNow();
     return c.json({ success: true, cleaned });

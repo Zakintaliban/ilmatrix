@@ -60,7 +60,6 @@ export async function handleGoogleCallback(c: Context) {
     const secureFlag = isProduction ? ' Secure;' : '';
     const cookieValue = `session=${sessionToken}; HttpOnly;${secureFlag} SameSite=Lax; Path=/; Max-Age=${7 * 24 * 60 * 60}`;
 
-    console.log(`[OAuth] Setting cookie (production: ${isProduction}): ${cookieValue}`);
     console.log(`[OAuth] User created/logged in:`, { 
       id: user.id, 
       email: user.email, 
@@ -68,7 +67,6 @@ export async function handleGoogleCallback(c: Context) {
       auth_method: user.auth_method,
       isNewUser 
     });
-    console.log(`[OAuth] Session token:`, sessionToken);
     
     c.header('Set-Cookie', cookieValue);
 

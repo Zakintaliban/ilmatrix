@@ -152,6 +152,7 @@ export async function addChatMessage(c: Context) {
 
     const message = await chatHistoryService.addMessage({
       sessionId,
+      userId,
       role: role as 'user' | 'assistant',
       content,
       materialId,
