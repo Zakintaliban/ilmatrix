@@ -1,4 +1,6 @@
 import { Hono } from "hono";
+import { bodyLimit } from "hono/body-limit";
+import config from "./config/env.js";
 import { rateLimitMiddleware } from "./middleware/rateLimit.js";
 import { guestLimitMiddleware, guestVerificationMiddleware } from "./middleware/guestLimit.js";
 import { aiRateLimitMiddleware } from "./middleware/aiRateLimit.js";
@@ -35,6 +37,19 @@ const api = new Hono();
 
 // Apply rate limiting to all API routes
 api.use("/*", rateLimitMiddleware());
+
+// Request body size limits (enforced while streaming, so a missing or false
+// Content-Length doesn't get around them). JSON bodies carry at most ~200k
+// characters of materialText; uploads get the file limit plus multipart overhead.
+const JSON_BODY_LIMIT_BYTES = 2 * 1024 * 1024;
+const tooLarge = (maxBytes: number) => (c: any) =>
+  c.json({ error: `Request too large (max ${Math.round(maxBytes / 1024 / 1024)} MB)`, code: "BODY_TOO_LARGE" }, 413);
+const jsonBodyLimit = bodyLimit({ maxSize: JSON_BODY_LIMIT_BYTES, onError: tooLarge(JSON_BODY_LIMIT_BYTES) });
+const uploadBodyLimit = bodyLimit({
+  maxSize: config.uploadMaxSizeBytes + 1024 * 1024,
+  onError: tooLarge(config.uploadMaxSizeBytes),
+});
+api.use("/*", (c, next) => (c.req.path.endsWith("/upload") ? uploadBodyLimit(c, next) : jsonBodyLimit(c, next)));
 
 // Health check endpoint
 api.get("/health", (c) =>
