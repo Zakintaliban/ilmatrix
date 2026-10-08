@@ -53,10 +53,47 @@ in [src/config/plans.ts](src/config/plans.ts)). A grounded answer costs ~9 kredi
   soonest-expiring first. A request is allowed while any kredit remains (the last one may overshoot slightly)
 - When kredit runs out, AI endpoints return `429` with `code: "KREDIT_EXHAUSTED"` and a message students see in the app;
   image uploads still work but skip OCR
-- Admins are metered but never blocked. Until payments are integrated, apply a sale from the admin page
-  (`/admin-usage.html` → user → Set Plan / Grant Pass 7 Hari / Grant Top-up) or the API:
+- Admins are metered but never blocked. Sales outside Midtrans (e.g. a manual transfer) can still be applied from the
+  admin page (`/admin-usage.html` → user → Set Plan / Grant Pass 7 Hari / Grant Top-up) or the API:
   `POST /api/admin/usage/user/:id/set-plan {"plan":"semester"}` and
   `POST /api/admin/usage/user/:id/grant-kredit {"product":"pass_7d","reference":"QRIS-..."}`
+
+### Payments (Midtrans)
+
+Students buy passes, top-ups and plans from the dashboard (**Tambah Kredit**) with Midtrans Snap: QRIS, e-wallets,
+bank transfer, whatever is active on the merchant account (narrow it with `MIDTRANS_ENABLED_PAYMENTS`). Snap runs in
+redirect mode: the student is sent to Midtrans' hosted page and back to `/payment.html`, so no Midtrans script runs on
+our pages. Code: [paymentService](src/services/paymentService.ts), [midtransClient](src/services/midtransClient.ts).
+
+- **Checkout** `POST /api/payments/checkout {"product":"pass_7d"}` (signed in) creates a pending payment with the
+  catalogue price and returns Midtrans' `redirect_url`. A pending checkout of the same product from the last hour is
+  reused; at most 5 checkouts per user per hour
+- **Webhook** `POST /api/payments/midtrans/notification`: the SHA-512 `signature_key` is checked, then the real status
+  is fetched from Midtrans' Get Status API (the signature doesn't cover `transaction_status`). If Midtrans can't be
+  reached the webhook answers `503`, so Midtrans retries
+- **Return page** polls `GET /api/payments/:orderId`, which re-checks a pending payment with Midtrans (at most every
+  10 s). A sale is completed even if the webhook never arrives
+- **Fulfilment** happens exactly once (row lock), only when the amount matches exactly: `settlement`, or `capture` with
+  fraud status `accept`. Pass/Top-up add kredit; a plan starts or, if it's the same plan, extends. A different paid
+  plan can't be bought while one is active (passes and top-ups can)
+- **Refunds/chargebacks** after fulfilment mark the payment `refunded` and add a review note; the plan or kredit is not
+  revoked automatically. Amount mismatches are never fulfilled and also get a review note. Both show on the admin
+  page (**Payments**), which can re-check any payment with Midtrans
+- Payments are kept when an account is deleted (`user_id` set to NULL); every received or fetched status is stored in
+  `payment_events`
+
+Setup:
+
+1. Run `npm run migrate run` (migration 014 creates `payments` and `payment_events`)
+2. Set `MIDTRANS_SERVER_KEY` (sandbox key first) and `MIDTRANS_IS_PRODUCTION=false`; the server warns if the key and
+   the environment don't match
+3. Webhook: with an `https://` `BASE_URL`, each transaction tells Midtrans to notify
+   `${BASE_URL}/api/payments/midtrans/notification`. Otherwise set that URL as the Notification URL in the Midtrans
+   dashboard (Settings > Payment). For local testing a tunnel is needed; without one the return page still completes
+   payments by polling
+4. Test in sandbox with Midtrans' simulator, then switch to production keys and `MIDTRANS_IS_PRODUCTION=true`
+5. Consider `MIDTRANS_ENABLED_PAYMENTS=other_qris,gopay,shopeepay`: bank virtual accounts usually carry a flat fee per
+   transaction (often Rp2–5k), too much for a Rp5.000 top-up. Confirm current rates with Midtrans
 
 ### Guest access & bot protection
 
@@ -250,6 +287,10 @@ Server (default): <http://localhost:8787>
 - TURNSTILE_SITE_KEY / TURNSTILE_SECRET_KEY: Cloudflare Turnstile keys for the guest bot check. Both must be set to enable it.
 - GUEST_IP_DAILY_REQUESTS: Guest AI requests per IP per 24 hours (default 100).
 - GUEST_IP_DAILY_VERIFICATIONS: Guest device verifications per IP per 24 hours (default 20).
+- MIDTRANS_SERVER_KEY: Midtrans server key; payments are off without it. Never sent to the browser.
+- MIDTRANS_IS_PRODUCTION: `true` for real payments (default `false`, sandbox).
+- MIDTRANS_ENABLED_PAYMENTS: Comma-separated Snap payment methods to offer (default: all active on the account).
+- MIDTRANS_NOTIFICATION_URL: Webhook URL sent per transaction (default: `${BASE_URL}/api/payments/midtrans/notification` when BASE_URL is https).
 
 ## Storage & retention
 
@@ -289,6 +330,10 @@ Server (default): <http://localhost:8787>
 Base: /api
 
 - GET /api/health → { "ok": true, "uptime": number }
+
+- Payments: `GET /api/payments/products` (public), `POST /api/payments/checkout`, `GET /api/payments`,
+  `GET /api/payments/:orderId` (signed in), `POST /api/payments/midtrans/notification` (Midtrans),
+  `GET /api/admin/payments?status=`, `POST /api/admin/payments/:orderId/sync` (admin). See [Payments](#payments-midtrans).
 
 - POST /api/guest/verify (application/json)
 
