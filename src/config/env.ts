@@ -19,6 +19,7 @@ export interface AppConfig {
 
   // Groq Configuration
   groqApiKey: string;
+  aiBaseUrl: string;
   groqModel: string;
   groqFallbackModel: string;
   groqVisionModel: string;
@@ -133,7 +134,8 @@ const RETIRED_GROQ_MODELS: Record<string, string> = {
 
 export function resolveGroqModel(key: string, model: string): string {
   const replacement = RETIRED_GROQ_MODELS[model];
-  if (!replacement) return model;
+  // Retired on Groq only: another host (AI_BASE_URL) may still serve the model
+  if (!replacement || getEnvString("AI_BASE_URL", "").trim()) return model;
   console.warn(
     `[CONFIG] ${key}=${model} has been retired by Groq; using ${replacement} instead. Update your environment.`
   );
@@ -160,6 +162,8 @@ export const config: AppConfig = {
 
   // Groq Configuration
   groqApiKey: getEnvString("GROQ_API_KEY", ""),
+  // Another OpenAI-compatible host instead of Groq (e.g. https://api.deepinfra.com/v1/openai); GROQ_API_KEY is its key
+  aiBaseUrl: getEnvString("AI_BASE_URL", "").trim().replace(/\/+$/, ""),
   // meta-llama/llama-4-maverick-17b-128e-instruct was retired by Groq on 2026-03-09.
   groqModel: resolveGroqModel("GROQ_MODEL", getEnvString("GROQ_MODEL", "openai/gpt-oss-120b")),
   // Used when the primary model is rate limited, down or decommissioned. Empty disables.

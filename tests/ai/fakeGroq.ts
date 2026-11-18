@@ -112,6 +112,7 @@ export function timeoutError() {
 
 export const TEST_PROVIDER_CONFIG = {
   apiKey: "test-key",
+  baseURL: "",
   model: "openai/gpt-oss-120b",
   fallbackModel: "openai/gpt-oss-20b",
   visionModel: "qwen/qwen3.8-27b",

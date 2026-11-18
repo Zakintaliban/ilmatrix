@@ -100,6 +100,11 @@ Chat and the Explain/Quiz/Forum/Exam answers stream token by token (Server-Sent 
 
 ### Payments (Midtrans)
 
+**No payments (e.g. an internal campus deployment):** leave `MIDTRANS_SERVER_KEY` empty. Then nothing can be bought:
+the pricing, checkout, payment and refund pages redirect to `/`, their links are hidden, the dashboard has no
+**Tambah Kredit** section, and running out of kredit shows only when it refills. Kredit still limits AI use per week;
+admins can give users a bigger plan for free from the admin page. Setting the key turns all of it back on.
+
 Students buy passes, top-ups and plans from the public pricing page (`/harga`) or the dashboard (**Tambah Kredit**)
 with Midtrans Snap: QRIS, e-wallets, whatever is active on the merchant account (narrow it with
 `MIDTRANS_ENABLED_PAYMENTS`). Payment happens on our own checkout page (`/checkout.html?product=…`) in the **Snap
@@ -327,12 +332,13 @@ Server (default): <http://localhost:8787>
 - PDF_MAX_PAGES: Max PDF pages extracted per file (default 200). See [extractPdfTextImpl()](src/extract/pdf.ts:50).
 - GROQ_CONCURRENCY: Concurrent LLM requests per process, including image OCR (default 4). See [groqProvider](src/services/groqProvider.ts).
 - GROQ_TIMEOUT_MS: Per-request LLM timeout in ms, enforced by the Groq SDK (default 45000). See [groqProvider](src/services/groqProvider.ts).
+- AI_BASE_URL: Use another OpenAI-compatible host instead of Groq; `GROQ_API_KEY` is then that host's key and the `GROQ_*` model settings name its models. Groq no longer serves Llama 4 Maverick (shut down 2026-03-09); to run Maverick only, e.g. on DeepInfra: `AI_BASE_URL=https://api.deepinfra.com/v1/openai`, `GROQ_MODEL` and `GROQ_VISION_MODEL` = `meta-llama/Llama-4-Maverick-17B-128E-Instruct-FP8`, `GROQ_FALLBACK_MODEL=` (empty). Check it with `npm run groq:check`.
 - EXTRACTION_CONCURRENCY: Max concurrent file extraction operations (default 2). See [extractionService](src/services/extractionService.ts).
 - CLIENT_IP_HEADER: Header holding the real client IP: `x-real-ip` (default, Railway), `cf-connecting-ip` (behind Cloudflare), `x-forwarded-for` (rightmost entry) or `none` (socket address). Used by every per-IP limit.
 - TURNSTILE_SITE_KEY / TURNSTILE_SECRET_KEY: Cloudflare Turnstile keys for the guest bot check. Both must be set to enable it.
 - GUEST_IP_DAILY_REQUESTS: Guest AI requests per IP per 24 hours (default 100).
 - GUEST_IP_DAILY_VERIFICATIONS: Guest device verifications per IP per 24 hours (default 20).
-- MIDTRANS_SERVER_KEY: Midtrans server key; payments are off without it. Never sent to the browser.
+- MIDTRANS_SERVER_KEY: Midtrans server key; payments are off without it (no price, checkout or refund pages). Never sent to the browser.
 - MIDTRANS_CLIENT_KEY: Midtrans client key for the Snap popup on the checkout page (public by design). Without it, checkout offers Midtrans' hosted page instead.
 - MIDTRANS_IS_PRODUCTION: `true` for real payments (default `false`, sandbox).
 - MIDTRANS_ENABLED_PAYMENTS: Comma-separated Snap payment methods to offer (default: all active on the account).

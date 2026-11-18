@@ -66,6 +66,7 @@ export interface ChatClient {
 
 export interface ProviderConfig {
   apiKey: string;
+  baseURL: string;
   model: string;
   fallbackModel: string;
   visionModel: string;
@@ -257,7 +258,8 @@ export function buildParams(model: string, req: CompletionRequest, cfg: Provider
     params.reasoning_format = "hidden";
     params.max_completion_tokens = visible + REASONING_HEADROOM[effort];
   } else {
-    params.max_completion_tokens = visible;
+    // max_tokens: every OpenAI-compatible host accepts it, max_completion_tokens not everywhere
+    params[cfg.baseURL ? "max_tokens" : "max_completion_tokens"] = visible;
   }
 
   if (req.json) {
@@ -359,6 +361,7 @@ export function toAIServiceError(err: unknown, vision = false): AIServiceError {
 function defaultConfig(): ProviderConfig {
   return {
     apiKey: config.groqApiKey,
+    baseURL: config.aiBaseUrl,
     model: config.groqModel,
     fallbackModel: config.groqFallbackModel,
     visionModel: config.groqVisionModel,
@@ -367,6 +370,21 @@ function defaultConfig(): ProviderConfig {
     timeoutMs: config.groqTimeoutMs,
     concurrency: config.groqConcurrency,
   };
+}
+
+/** Groq SDK client for Groq, or for the OpenAI-compatible host in `baseURL`. */
+export function createGroqClient(cfg: { apiKey: string; baseURL?: string; timeoutMs: number }): Groq {
+  const base = cfg.baseURL;
+  return new Groq({
+    apiKey: cfg.apiKey,
+    timeout: cfg.timeoutMs,
+    maxRetries: 0,
+    ...(base && {
+      baseURL: base,
+      // Other hosts serve /chat/completions and /models right under their base URL, without Groq's /openai/v1
+      fetch: (url, init) => fetch(String(url).replace(`${base}/openai/v1/`, `${base}/`), init),
+    }),
+  });
 }
 
 export class GroqProvider {
@@ -395,11 +413,7 @@ export class GroqProvider {
     if (!this.client) {
       // The SDK enforces the timeout (and aborts the request); fallback to the
       // secondary model replaces SDK-level retries so latency stays bounded.
-      this.client = new Groq({
-        apiKey: this.cfg.apiKey,
-        timeout: this.cfg.timeoutMs,
-        maxRetries: 0,
-      });
+      this.client = createGroqClient(this.cfg);
     }
     return this.client;
   }
@@ -504,7 +518,12 @@ export class GroqProvider {
     onDelta: (text: string) => void,
     signal?: AbortSignal
   ): Promise<StreamResult> {
-    const params = { ...buildParams(model, req, this.cfg), stream: true };
+    const params = {
+      ...buildParams(model, req, this.cfg),
+      stream: true,
+      // Groq always reports usage (x_groq); other hosts only when asked
+      ...(this.cfg.baseURL && { stream_options: { include_usage: true } }),
+    };
     const controller = new AbortController();
     const forwardAbort = () => controller.abort();
     if (signal?.aborted) controller.abort();

@@ -1,5 +1,5 @@
 /**
- * Live check of every AI study tool against the real Groq API.
+ * Live check of every AI study tool against the real Groq API (or the host in AI_BASE_URL).
  *
  *   GROQ_API_KEY=... npm run groq:check
  *
@@ -7,8 +7,8 @@
  * configured models exist, then calls each tool once with a short Indonesian
  * material and validates the response shape. Costs well under US$0.01.
  */
-import Groq from "groq-sdk";
 import config from "../src/config/env.js";
+import { createGroqClient } from "../src/services/groqProvider.js";
 import { groqService } from "../src/services/groqService.js";
 
 const MATERIAL = `Fotosintesis adalah proses tumbuhan hijau mengubah energi cahaya menjadi energi kimia.
@@ -34,7 +34,7 @@ const checks: Check[] = [
   {
     name: "models available",
     run: async () => {
-      const client = new Groq({ apiKey: config.groqApiKey });
+      const client = createGroqClient({ apiKey: config.groqApiKey, baseURL: config.aiBaseUrl, timeoutMs: config.groqTimeoutMs });
       const list = await client.models.list();
       const ids = new Set(list.data.map((m: any) => m.id));
       const wanted = [config.groqModel, config.groqFallbackModel, config.groqVisionModel].filter(Boolean);
@@ -119,7 +119,8 @@ const checks: Check[] = [
     // (x_groq.usage). If usage is missing, streams are billed by estimate.
     name: "streaming (raw)",
     run: async () => {
-      const client = new Groq({ apiKey: config.groqApiKey, timeout: config.groqTimeoutMs, maxRetries: 0 });
+      if (config.aiBaseUrl) return "skipped (Groq-specific; the chat check above covers the provider)";
+      const client = createGroqClient({ apiKey: config.groqApiKey, timeoutMs: config.groqTimeoutMs });
       const stream = await client.chat.completions.create({
         model: config.groqModel,
         messages: [{ role: "user", content: "Sebutkan tiga tahap fotosintesis dalam satu kalimat." }],
@@ -172,7 +173,7 @@ async function main() {
     console.error("GROQ_API_KEY is not set.");
     process.exit(1);
   }
-  console.log(`Primary: ${config.groqModel} | fallback: ${config.groqFallbackModel || "-"} | vision: ${config.groqVisionModel || "-"}\n`);
+  console.log(`Host: ${config.aiBaseUrl || "Groq"} | primary: ${config.groqModel} | fallback: ${config.groqFallbackModel || "-"} | vision: ${config.groqVisionModel || "-"}\n`);
 
   let failed = 0;
   for (const check of checks) {

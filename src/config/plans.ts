@@ -69,11 +69,12 @@ export function isKreditProductCode(value: unknown): value is KreditProductCode 
 /** US$1 of Groq cost in kredit (1 kredit ~ Rp4 at Rp18,000/USD). */
 export const KREDIT_PER_USD = 4_500;
 
-/** Groq on-demand prices in US$ per million tokens (October 2026). */
+/** On-demand prices in US$ per million tokens: Groq (October 2026), DeepInfra (November 2026). */
 export const MODEL_PRICES: Record<string, { input: number; output: number }> = {
   "openai/gpt-oss-120b": { input: 0.15, output: 0.6 },
   "openai/gpt-oss-20b": { input: 0.075, output: 0.3 },
   "qwen/qwen3.8-27b": { input: 0.8, output: 4.0 },
+  "meta-llama/Llama-4-Maverick-17B-128E-Instruct-FP8": { input: 0.2, output: 0.8 },
 };
 
 // Unknown models are charged at the most expensive known rate

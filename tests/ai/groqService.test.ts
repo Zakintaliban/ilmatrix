@@ -5,7 +5,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { GroqService } from "../../src/services/groqService.js";
-import { buildParams, GroqProvider, trackUsage, AIServiceError } from "../../src/services/groqProvider.js";
+import { buildParams, createGroqClient, GroqProvider, trackUsage, AIServiceError } from "../../src/services/groqProvider.js";
 import { resolveGroqModel } from "../../src/config/env.js";
 import { sanitizeChatMessages } from "../../src/controllers/aiController.js";
 import {
@@ -36,6 +36,30 @@ test("retired model IDs are replaced with Groq's recommended successors", () => 
   );
   assert.equal(resolveGroqModel("GROQ_MODEL", "llama-3.1-8b-instant"), "openai/gpt-oss-20b");
   assert.equal(resolveGroqModel("GROQ_MODEL", "openai/gpt-oss-120b"), "openai/gpt-oss-120b");
+});
+
+test("another OpenAI-compatible host (AI_BASE_URL): no Groq remapping, its own paths, max_tokens", async (t) => {
+  const maverick = "meta-llama/llama-4-maverick-17b-128e-instruct";
+  process.env.AI_BASE_URL = "https://llm.example.com/v1/openai";
+  t.after(() => delete process.env.AI_BASE_URL);
+  assert.equal(resolveGroqModel("GROQ_MODEL", maverick), maverick);
+
+  const urls: string[] = [];
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = (async (url: any) => {
+    urls.push(String(url));
+    return new Response(JSON.stringify(completion("ok")), { headers: { "content-type": "application/json" } });
+  }) as typeof fetch;
+  t.after(() => (globalThis.fetch = realFetch));
+
+  const client = createGroqClient({ apiKey: "k", baseURL: process.env.AI_BASE_URL, timeoutMs: 5000 });
+  await client.chat.completions.create({ model: maverick, messages: [{ role: "user", content: "hi" }] });
+  assert.deepEqual(urls, ["https://llm.example.com/v1/openai/chat/completions"]);
+
+  const params = buildParams(maverick, { messages: [], maxOutputTokens: 800 }, { ...TEST_PROVIDER_CONFIG, baseURL: process.env.AI_BASE_URL });
+  assert.equal(params.max_tokens, 800);
+  assert.equal(params.max_completion_tokens, undefined);
+  assert.equal(params.reasoning_effort, undefined);
 });
 
 test("gpt-oss requests use reasoning params, completion headroom and strict JSON schema", () => {
