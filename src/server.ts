@@ -222,13 +222,6 @@ class IlmatrixServer {
    */
   async start(): Promise<void> {
     try {
-      // Validate configuration
-      if (config.isProduction && !config.groqApiKey) {
-        console.warn(
-          "[ILMATRIX] Warning: GROQ_API_KEY not set in production environment"
-        );
-      }
-
       // Initialize database if configured
       if (validateDatabaseConfig()) {
         console.log("[ILMATRIX] Initializing database connection...");

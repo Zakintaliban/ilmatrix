@@ -255,7 +255,7 @@ export const config: AppConfig = {
 };
 
 // Validate critical configuration
-if (!config.groqApiKey && config.isProduction) {
+if (!config.groqApiKey && !config.aiBaseUrl.includes("aiplatform.googleapis.com") && config.isProduction) {
   console.warn(
     "Warning: GROQ_API_KEY is not set. AI features will be limited."
   );

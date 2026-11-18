@@ -289,7 +289,7 @@ function downgradeParams(params: any, err: unknown): boolean {
     }
     return true;
   }
-  for (const key of ["reasoning_effort", "include_reasoning", "reasoning_format"]) {
+  for (const key of ["reasoning_effort", "include_reasoning", "reasoning_format", "stream_options"]) {
     if (key in params && msg.includes(key)) {
       delete params[key];
       return true;
@@ -372,17 +372,42 @@ function defaultConfig(): ProviderConfig {
   };
 }
 
+/** Vertex AI's OpenAI-compatible endpoint (e.g. Llama 4 Maverick as MaaS in Model Garden). */
+export function isVertexUrl(baseURL?: string): boolean {
+  return /^https:\/\/[^/]*aiplatform\.googleapis\.com\//.test(baseURL || "");
+}
+
+let gcpToken: { value: string; expiresAt: number } | null = null;
+
+/** Access token of the service account we run as (Cloud Run), from the GCP metadata server. */
+async function gcpAccessToken(): Promise<string> {
+  if (gcpToken && gcpToken.expiresAt - 60_000 > Date.now()) return gcpToken.value;
+  const res = await fetch("http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token", {
+    headers: { "Metadata-Flavor": "Google" },
+  });
+  if (!res.ok) throw new Error(`GCP metadata token request failed (${res.status}); outside GCP set GROQ_API_KEY to a token`);
+  const body = (await res.json()) as { access_token: string; expires_in: number };
+  gcpToken = { value: body.access_token, expiresAt: Date.now() + body.expires_in * 1000 };
+  return gcpToken.value;
+}
+
 /** Groq SDK client for Groq, or for the OpenAI-compatible host in `baseURL`. */
 export function createGroqClient(cfg: { apiKey: string; baseURL?: string; timeoutMs: number }): Groq {
   const base = cfg.baseURL;
+  // Vertex tokens expire hourly, so without a key each request gets a fresh one
+  const useGcpToken = !cfg.apiKey && isVertexUrl(base);
   return new Groq({
-    apiKey: cfg.apiKey,
+    apiKey: cfg.apiKey || "gcp-metadata-token",
     timeout: cfg.timeoutMs,
     maxRetries: 0,
     ...(base && {
       baseURL: base,
-      // Other hosts serve /chat/completions and /models right under their base URL, without Groq's /openai/v1
-      fetch: (url, init) => fetch(String(url).replace(`${base}/openai/v1/`, `${base}/`), init),
+      fetch: async (url, init) => {
+        const headers = new Headers(init?.headers);
+        if (useGcpToken) headers.set("authorization", `Bearer ${await gcpAccessToken()}`);
+        // Other hosts serve /chat/completions and /models right under their base URL, without Groq's /openai/v1
+        return fetch(String(url).replace(`${base}/openai/v1/`, `${base}/`), { ...init, headers });
+      },
     }),
   });
 }
@@ -402,7 +427,7 @@ export class GroqProvider {
   }
 
   get isConfigured(): boolean {
-    return this.injected || !!this.cfg.apiKey;
+    return this.injected || !!this.cfg.apiKey || isVertexUrl(this.cfg.baseURL);
   }
 
   get hasVision(): boolean {

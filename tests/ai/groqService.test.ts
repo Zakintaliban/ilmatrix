@@ -62,6 +62,31 @@ test("another OpenAI-compatible host (AI_BASE_URL): no Groq remapping, its own p
   assert.equal(params.reasoning_effort, undefined);
 });
 
+test("Vertex AI without a key: a metadata-server token, cached, as the bearer", async (t) => {
+  const base = "https://us-east5-aiplatform.googleapis.com/v1/projects/p/locations/us-east5/endpoints/openapi";
+  const seen: { url: string; auth: string | null }[] = [];
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = (async (url: any, init?: RequestInit) => {
+    const href = String(url);
+    seen.push({ url: href, auth: new Headers(init?.headers).get("authorization") });
+    const body = href.includes("metadata.google.internal") ? { access_token: "tok-1", expires_in: 3599 } : completion("ok");
+    return new Response(JSON.stringify(body), { headers: { "content-type": "application/json" } });
+  }) as typeof fetch;
+  t.after(() => (globalThis.fetch = realFetch));
+
+  const client = createGroqClient({ apiKey: "", baseURL: base, timeoutMs: 5000 });
+  const ask = () => client.chat.completions.create({ model: "meta/llama-4-maverick-17b-128e-instruct-maas", messages: [{ role: "user", content: "hi" }] });
+  await ask();
+  await ask();
+  const calls = seen.filter((s) => !s.url.includes("metadata.google.internal"));
+  assert.equal(seen.length - calls.length, 1, "token fetched once");
+  assert.deepEqual(calls.map((c) => [c.url, c.auth]), [
+    [`${base}/chat/completions`, "Bearer tok-1"],
+    [`${base}/chat/completions`, "Bearer tok-1"],
+  ]);
+  assert.equal(new GroqProvider({ config: { ...TEST_PROVIDER_CONFIG, apiKey: "", baseURL: base } }).isConfigured, true);
+});
+
 test("gpt-oss requests use reasoning params, completion headroom and strict JSON schema", () => {
   const params = buildParams(
     "openai/gpt-oss-120b",

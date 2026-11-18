@@ -34,6 +34,7 @@ const checks: Check[] = [
   {
     name: "models available",
     run: async () => {
+      if (config.aiBaseUrl) return "skipped (other host; the checks below call the models)";
       const client = createGroqClient({ apiKey: config.groqApiKey, baseURL: config.aiBaseUrl, timeoutMs: config.groqTimeoutMs });
       const list = await client.models.list();
       const ids = new Set(list.data.map((m: any) => m.id));
