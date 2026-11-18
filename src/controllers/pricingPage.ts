@@ -1,6 +1,8 @@
 import type { Context } from "hono";
+import config from "../config/env.js";
 import { PLANS } from "../config/plans.js";
 import { getCatalog, isPaymentsEnabled } from "../services/paymentService.js";
+import { getDefaults } from "../services/quotaService.js";
 
 /**
  * Public pricing page (/harga), rendered on the server from the same catalogue
@@ -14,7 +16,8 @@ const escape = (value: unknown) =>
 
 const rupiah = (n: number) => `Rp${n.toLocaleString("id-ID")}`;
 
-export function renderPricingPage(): string {
+/** Free tier = the AI quotas everyone has (admin setting, else the env defaults). */
+export function renderPricingPage(quota = { daily: config.aiDailyKreditLimit, weekly: config.aiWeeklyKreditLimit }): string {
   const catalog = getCatalog();
   const free = PLANS.free;
   const paymentsOn = isPaymentsEnabled();
@@ -37,7 +40,7 @@ export function renderPricingPage(): string {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="icon" type="image/svg+xml" href="./logo.svg" />
     <title>Harga - ILMATRIX</title>
-    <meta name="description" content="Harga ILMATRIX: asisten belajar AI untuk mahasiswa. Gratis 150 kredit per minggu, Pass 7 Hari ${escape(rupiah(9900))}, paket Bulanan dan Semester. Bayar dengan QRIS dan e-wallet.">
+    <meta name="description" content="Harga ILMATRIX: asisten belajar AI untuk mahasiswa. Gratis dengan kuota harian dan mingguan, Pass 7 Hari ${escape(rupiah(9900))}, paket Bulanan dan Semester. Bayar dengan QRIS dan e-wallet.">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;700&display=swap" rel="stylesheet">
@@ -71,7 +74,7 @@ export function renderPricingPage(): string {
             <h2 id="kredit-title" class="text-xl font-semibold">Cara kerja kredit</h2>
             <ul class="mt-3 list-disc pl-5 text-sm text-gray-700 dark:text-gray-300 space-y-1">
                 <li>Contoh pemakaian: satu penjelasan materi sekitar 9 kredit, kuis 10 soal sekitar 17 kredit, membaca foto/gambar sekitar 36 kredit.</li>
-                <li>Kredit mingguan dari paket terisi lagi setiap Senin pukul 07.00 WIB. Kredit tambahan (Pass dan Top-up) dipakai setelah kredit mingguan habis, sesuai masa berlakunya.</li>
+                <li>Setiap akun punya kuota harian dan mingguan. Kuota harian terisi lagi setiap pukul 00.00 WIB dan kuota mingguan setiap Senin pukul 00.00 WIB. Kredit tambahan (Pass dan Top-up) dipakai saat kuota habis, sesuai masa berlakunya.</li>
                 <li>Semua harga dalam Rupiah dan sudah final. Kredit tidak dapat diuangkan atau dipindahkan ke akun lain.</li>
             </ul>
         </section>
@@ -83,7 +86,7 @@ export function renderPricingPage(): string {
             <p class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Paket</p>
             <h3 class="mt-1 text-lg font-semibold">${escape(free.name)}</h3>
             <p class="mt-2 text-3xl font-bold">${escape(rupiah(0))}</p>
-            <p class="mt-3 flex-1 text-sm text-gray-600 dark:text-gray-300">${escape(free.weeklyKredit.toLocaleString("id-ID"))} kredit per minggu. Cukup daftar dengan email.</p>
+            <p class="mt-3 flex-1 text-sm text-gray-600 dark:text-gray-300">${escape(quota.daily.toLocaleString("id-ID"))} kredit per hari, hingga ${escape(quota.weekly.toLocaleString("id-ID"))} per minggu. Cukup daftar dengan email.</p>
             <a href="/register.html" class="mt-6 rounded-md border border-gray-300 dark:border-gray-600 px-4 py-2 text-center text-sm font-semibold hover:bg-gray-50 dark:hover:bg-gray-700">Daftar gratis</a>
           </li>${catalog.map(card).join("")}
             </ul>
@@ -125,6 +128,7 @@ export function renderPricingPage(): string {
 </html>`;
 }
 
-export function pricingPage(c: Context) {
-  return c.html(renderPricingPage());
+export async function pricingPage(c: Context) {
+  const defaults = await getDefaults().catch(() => null);
+  return c.html(renderPricingPage(defaults ? { daily: defaults.daily, weekly: defaults.weekly } : undefined));
 }

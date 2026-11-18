@@ -4,8 +4,9 @@ import { extractionService } from "../services/extractionService.js";
 import { validateContentLength } from "../utils/security.js";
 import { MaterialQuotaError } from "../services/materialStore.js";
 import { groqService } from "../services/groqService.js";
-import * as kreditService from "../services/kreditService.js";
-import { updateTokenUsageAfterRequest } from "../middleware/tokenUsageMiddleware.js";
+import { observeCost } from "../services/groqProvider.js";
+import { reservationKredit } from "../services/quotaEstimates.js";
+import { finishQuota, reserveQuota, updateTokenUsageAfterRequest } from "../middleware/tokenUsageMiddleware.js";
 import config from "../config/env.js";
 
 export class UploadController {
@@ -46,20 +47,21 @@ export class UploadController {
 
       const userId: string | null = c.get("user")?.id ?? null;
 
-      // Image OCR uses the paid vision model: signed-in users pay kredit for it,
-      // and without kredit their images are kept as images instead
+      // Image OCR uses the paid vision model and counts against signed-in users'
+      // quotas. Without room (or if the quota can't be checked) images are kept
+      // as images instead; the upload itself is never refused for quota.
       let ocr = true;
-      if (userId) {
-        try {
-          ocr = kreditService.canUseAI(await kreditService.getKreditStatus(userId));
-        } catch (error) {
-          console.error("[KREDIT] Balance check failed before OCR:", error);
-        }
+      let cost = { kredit: 0 };
+      const images = files.filter((f: any) => extractionService.isImageFile(f.name || "", f.type || "")).length;
+      if (userId && images > 0) {
+        const reservation = await reserveQuota(c, userId, "ocr", reservationKredit("ocr", { images }));
+        if (reservation instanceof Response) ocr = false;
+        else cost = reservation.cost;
       }
 
       // Extract text from all files
-      const { result: extractionResult, usage, model, kredit } = await groqService.track(() =>
-        extractionService.extractFromFiles(files, { ocr })
+      const { result: extractionResult, usage, model, kredit } = await observeCost(cost, () =>
+        groqService.track(() => extractionService.extractFromFiles(files, { ocr }))
       );
 
       if (userId && usage) {
@@ -121,6 +123,9 @@ export class UploadController {
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       return c.json({ error: message }, error instanceof MaterialQuotaError ? 413 : 400);
+    } finally {
+      // Settles an OCR reservation the success path didn't (errors, no text found)
+      await finishQuota(c);
     }
   }
 

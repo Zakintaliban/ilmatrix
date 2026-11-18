@@ -11,7 +11,11 @@
  */
 
 import { query, transaction } from './databaseService.js';
-import * as kreditService from './kreditService.js';
+import config from '../config/env.js';
+import { PLANS } from '../config/plans.js';
+import * as quotaService from './quotaService.js';
+import { activePlan } from './kreditService.js';
+import { isPaymentsEnabled } from './paymentService.js';
 import type { PoolClient } from 'pg';
 
 // ============================================================================
@@ -448,15 +452,15 @@ export async function getUserUsageHistory(
  * Get aggregated usage statistics for a user
  */
 export async function getUsageStats(userId: string): Promise<UsageStats> {
-  // All figures are in kredit
+  // All figures are in kredit; days, weeks (from Monday) and months follow the quota timezone
 
   // Today's usage
   const todayResult = await query<{ total: string }>(
     `SELECT COALESCE(SUM(kredit_used), 0) as total
      FROM token_usage_logs
      WHERE user_id = $1
-     AND created_at >= CURRENT_DATE`,
-    [userId]
+     AND created_at >= DATE_TRUNC('day', NOW() AT TIME ZONE $2) AT TIME ZONE $2`,
+    [userId, config.aiQuotaTimezone]
   );
 
   // This week's usage
@@ -464,8 +468,8 @@ export async function getUsageStats(userId: string): Promise<UsageStats> {
     `SELECT COALESCE(SUM(kredit_used), 0) as total
      FROM token_usage_logs
      WHERE user_id = $1
-     AND created_at >= DATE_TRUNC('week', CURRENT_DATE)`,
-    [userId]
+     AND created_at >= DATE_TRUNC('week', NOW() AT TIME ZONE $2) AT TIME ZONE $2`,
+    [userId, config.aiQuotaTimezone]
   );
 
   // This month's usage
@@ -473,8 +477,8 @@ export async function getUsageStats(userId: string): Promise<UsageStats> {
     `SELECT COALESCE(SUM(kredit_used), 0) as total
      FROM token_usage_logs
      WHERE user_id = $1
-     AND created_at >= DATE_TRUNC('month', CURRENT_DATE)`,
-    [userId]
+     AND created_at >= DATE_TRUNC('month', NOW() AT TIME ZONE $2) AT TIME ZONE $2`,
+    [userId, config.aiQuotaTimezone]
   );
 
   // Total usage
@@ -554,16 +558,6 @@ export async function resetMonthlyUsage(): Promise<string[]> {
   return result.rows.map(row => row.user_id);
 }
 
-/**
- * Check and perform any needed resets for a specific user
- * This is called lazily when user makes a request
- */
-export async function checkAndResetUserUsage(userId: string): Promise<void> {
-  // The previous implementation passed $1 into a DO block, which Postgres
-  // rejects, so this threw on every request and quotas were never checked.
-  await kreditService.resetUsageIfDue(userId);
-}
-
 // ============================================================================
 // Admin Functions
 // ============================================================================
@@ -572,67 +566,96 @@ export interface AdminUserUsage {
   user_id: string;
   email: string;
   name: string;
-  plan: string;
-  plan_name: string;
-  plan_expires_at: Date | null;
+  daily_kredit_used: number;
+  daily_kredit_limit: number;
+  daily_percentage: number;
+  daily_limit_source: string;
   weekly_kredit_used: number;
   weekly_kredit_limit: number;
   weekly_percentage: number;
-  extra_kredit: number;
+  weekly_limit_source: string;
   monthly_kredit_used: number;
-  weekly_tokens_used: number;
-  monthly_tokens_used: number;
+  requests_today: number;
+  requests_this_week: number;
   is_admin: boolean;
   token_access_enabled: boolean;
+  /** Payment entitlements: only take part in quotas while payments are enabled. */
+  plan: string;
+  plan_name: string;
+  plan_expires_at: Date | null;
+  extra_kredit: number;
 }
 
 /**
- * Get all users' kredit usage (admin only). Counters whose reset time has
- * passed are reported as 0 even before the user's next request resets them.
+ * Every user's quota use in the current day, week and month (admin only).
+ * Running requests' reservations count as used, like in the quota check.
  */
-export async function getAllUsersUsage(
-  limit: number = 100,
-  offset: number = 0
-): Promise<AdminUserUsage[]> {
+export async function getAllUsersUsage(limit: number = 100, offset: number = 0): Promise<AdminUserUsage[]> {
   const result = await query<any>(
-    `SELECT
-      u.id AS user_id, u.email, u.name, u.plan, u.plan_expires_at, u.weekly_kredit_override,
-      CASE WHEN u.weekly_usage_reset_at <= NOW() THEN 0 ELSE u.weekly_kredit_used END AS weekly_kredit_used,
-      CASE WHEN u.monthly_usage_reset_at <= NOW() THEN 0 ELSE u.monthly_kredit_used END AS monthly_kredit_used,
-      CASE WHEN u.weekly_usage_reset_at <= NOW() THEN 0 ELSE u.weekly_tokens_used END AS weekly_tokens_used,
-      CASE WHEN u.monthly_usage_reset_at <= NOW() THEN 0 ELSE u.monthly_tokens_used END AS monthly_tokens_used,
-      u.weekly_usage_reset_at, u.monthly_usage_reset_at, u.is_admin, u.token_access_enabled,
-      COALESCE(g.remaining, 0) AS extra_kredit
+    `WITH p AS (
+       SELECT l::date AS day, date_trunc('week', l)::date AS week, date_trunc('month', l)::date AS month
+       FROM (SELECT NOW() AT TIME ZONE $3 AS l) t
+     )
+     SELECT u.id AS user_id, u.email, u.name, u.plan, u.plan_expires_at, u.is_admin, u.token_access_enabled,
+            u.daily_kredit_override, u.weekly_kredit_override,
+            COALESCE(d.kredit_used, 0) + COALESCE(r.day, 0) AS daily_used, COALESCE(d.request_count, 0) AS daily_requests,
+            COALESCE(w.kredit_used, 0) + COALESCE(r.week, 0) AS weekly_used, COALESCE(w.request_count, 0) AS weekly_requests,
+            COALESCE(m.kredit, 0) AS monthly_used,
+            COALESCE(g.remaining, 0) AS extra_kredit
      FROM users u
+     CROSS JOIN p
+     LEFT JOIN ai_quota_usage d ON d.user_id = u.id AND d.period_type = 'day' AND d.period_start = p.day
+     LEFT JOIN ai_quota_usage w ON w.user_id = u.id AND w.period_type = 'week' AND w.period_start = p.week
+     LEFT JOIN LATERAL (
+       SELECT SUM(kredit_used) AS kredit FROM ai_quota_usage
+       WHERE user_id = u.id AND period_type = 'day' AND period_start >= p.month
+     ) m ON true
+     LEFT JOIN LATERAL (
+       SELECT SUM(reserved_kredit) FILTER (WHERE day_start = p.day) AS day,
+              SUM(reserved_kredit) FILTER (WHERE week_start = p.week) AS week
+       FROM ai_quota_reservations WHERE user_id = u.id AND status = 'active'
+     ) r ON true
      LEFT JOIN LATERAL (
        SELECT SUM(kredit_total - kredit_used) AS remaining
        FROM kredit_grants
        WHERE user_id = u.id AND kredit_used < kredit_total AND (expires_at IS NULL OR expires_at > NOW())
      ) g ON true
-     ORDER BY weekly_kredit_used DESC, u.created_at DESC
+     ORDER BY weekly_used DESC, u.created_at DESC
      LIMIT $1 OFFSET $2`,
-    [limit, offset]
+    [limit, offset, config.aiQuotaTimezone]
   );
 
+  const defaults = await quotaService.getDefaults();
+  const payments = isPaymentsEnabled();
+  const round2 = (n: number) => Math.round(n * 100) / 100;
+  const pct = (used: number, max: number) => (max > 0 ? round2((used / max) * 100) : used > 0 ? 100 : 0);
+
   return result.rows.map((row) => {
-    const status = kreditService.buildStatus(row, [{ remaining: row.extra_kredit }]);
+    const plan = activePlan(row);
+    const limits = quotaService.resolveLimits(row, defaults, payments ? { weeklyLimit: plan === 'free' ? null : PLANS[plan].weeklyKredit } : null);
+    const daily = round2(Number(row.daily_used));
+    const weekly = round2(Number(row.weekly_used));
     return {
       user_id: row.user_id,
       email: row.email,
       name: row.name,
-      plan: status.plan,
-      plan_name: status.planName,
-      plan_expires_at: status.planExpiresAt,
-      weekly_kredit_used: status.weeklyUsed,
-      weekly_kredit_limit: status.weeklyLimit,
-      weekly_percentage:
-        status.weeklyLimit > 0 ? Math.round((status.weeklyUsed / status.weeklyLimit) * 10000) / 100 : 0,
-      extra_kredit: status.extraRemaining,
-      monthly_kredit_used: status.monthlyUsed,
-      weekly_tokens_used: Number(row.weekly_tokens_used),
-      monthly_tokens_used: Number(row.monthly_tokens_used),
-      is_admin: status.isAdmin,
-      token_access_enabled: status.accessEnabled,
+      daily_kredit_used: daily,
+      daily_kredit_limit: limits.daily,
+      daily_percentage: pct(daily, limits.daily),
+      daily_limit_source: limits.dailySource,
+      weekly_kredit_used: weekly,
+      weekly_kredit_limit: limits.weekly,
+      weekly_percentage: pct(weekly, limits.weekly),
+      weekly_limit_source: limits.weeklySource,
+      monthly_kredit_used: round2(Number(row.monthly_used)),
+      requests_today: Number(row.daily_requests),
+      requests_this_week: Number(row.weekly_requests),
+      is_admin: !!row.is_admin,
+      token_access_enabled: row.token_access_enabled !== false,
+      plan,
+      plan_name: PLANS[plan].name,
+      plan_expires_at: plan === 'free' ? null : row.plan_expires_at,
+      extra_kredit: round2(Number(row.extra_kredit)),
     };
   });
 }

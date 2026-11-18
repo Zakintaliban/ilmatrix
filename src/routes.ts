@@ -112,8 +112,12 @@ api.get("/admin/usage/user/:userId", authMiddleware, usageController.requireAdmi
 api.post("/admin/usage/user/:userId/set-admin", authMiddleware, usageController.requireAdmin, usageController.setUserAdmin);
 api.post("/admin/usage/user/:userId/set-access", authMiddleware, usageController.requireAdmin, usageController.setUserTokenAccess);
 api.post("/admin/usage/user/:userId/update-limits", authMiddleware, usageController.requireAdmin, usageController.updateUserLimits);
-api.post("/admin/usage/user/:userId/set-plan", authMiddleware, usageController.requireAdmin, usageController.setUserPlan);
-api.post("/admin/usage/user/:userId/grant-kredit", authMiddleware, usageController.requireAdmin, usageController.grantUserKredit);
+api.post("/admin/usage/user/:userId/reset-quota", authMiddleware, usageController.requireAdmin, usageController.resetUserQuota);
+api.get("/admin/quota/settings", authMiddleware, usageController.requireAdmin, usageController.getQuotaSettings);
+api.put("/admin/quota/settings", authMiddleware, usageController.requireAdmin, usageController.updateQuotaSettings);
+// Plans and passes are payment entitlements: off with payments (quota changes go through update-limits)
+api.post("/admin/usage/user/:userId/set-plan", paymentController.requirePaymentsEnabled, authMiddleware, usageController.requireAdmin, usageController.setUserPlan);
+api.post("/admin/usage/user/:userId/grant-kredit", paymentController.requirePaymentsEnabled, authMiddleware, usageController.requireAdmin, usageController.grantUserKredit);
 api.post("/admin/usage/reset/weekly", authMiddleware, usageController.requireAdmin, usageController.adminResetWeekly);
 api.post("/admin/usage/reset/monthly", authMiddleware, usageController.requireAdmin, usageController.adminResetMonthly);
 api.post("/admin/usage/cleanup/sessions", authMiddleware, usageController.requireAdmin, usageController.adminCleanupSessions);
@@ -128,11 +132,13 @@ api.get("/security/pattern/:pattern", authMiddleware, usageController.requireAdm
 api.get("/admin/client-ip", authMiddleware, usageController.requireAdmin, guestVerifyController.getClientIpInfo);
 
 // Payments (Midtrans Snap). The webhook has no session: it is verified by signature + Get Status
-api.get("/payments/products", paymentController.getProducts);
+// Buying is behind PAYMENTS_ENABLED; the webhook and admin re-check settle earlier transactions regardless
+const payments = paymentController.requirePaymentsEnabled;
+api.get("/payments/products", payments, paymentController.getProducts);
 api.post("/payments/midtrans/notification", paymentController.midtransNotification);
-api.post("/payments/checkout", authMiddleware, paymentController.checkout);
-api.get("/payments", authMiddleware, paymentController.listMyPayments);
-api.get("/payments/:orderId", authMiddleware, paymentController.getPaymentStatus);
+api.post("/payments/checkout", payments, authMiddleware, paymentController.checkout);
+api.get("/payments", payments, authMiddleware, paymentController.listMyPayments);
+api.get("/payments/:orderId", payments, authMiddleware, paymentController.getPaymentStatus);
 api.get("/admin/payments", authMiddleware, usageController.requireAdmin, paymentController.adminListPayments);
 api.post("/admin/payments/:orderId/sync", authMiddleware, usageController.requireAdmin, paymentController.adminSyncPayment);
 

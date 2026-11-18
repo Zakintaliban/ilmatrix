@@ -4,7 +4,7 @@ import { AIServiceError, groqService, type ChatMessage, type StreamResult } from
 import type { StreamOptions } from "../services/groqProvider.js";
 import { mcqScoringService } from "../services/mcqScoringService.js";
 import { materialService } from "../services/materialService.js";
-import { updateTokenUsageAfterRequest } from "../middleware/tokenUsageMiddleware.js";
+import { finishQuota, updateTokenUsageAfterRequest } from "../middleware/tokenUsageMiddleware.js";
 
 /** Chat history limits: bound prompt size and keep the system prompt server-owned. */
 const MAX_CHAT_MESSAGES = 30;
@@ -53,10 +53,10 @@ const KEEP_ALIVE_MS = 15_000;
  *   event: delta  {"text": "..."}             (repeated)
  *   event: done   {"answer", "token_usage", "usage_warning"}
  *   event: error  {"error", "code"}           (instead of done)
- * Validation, auth, kredit and rate limits run before the stream opens and
- * answer with normal JSON errors. Kredit is charged when the stream ends
- * (estimated if the student leaves early); the AI rate-limit slot is held
- * until then through `streamDone`.
+ * Validation, auth, quota and rate limits run before the stream opens and
+ * answer with normal JSON errors. The quota reservation is settled when the
+ * stream ends (estimated if the student leaves early, released if nothing was
+ * generated); the AI rate-limit slot is held until then through `streamDone`.
  */
 function streamAnswer(c: Context, task: string, produce: (opts: StreamOptions) => Promise<StreamResult>) {
   let finished!: () => void;
@@ -110,6 +110,8 @@ function streamAnswer(c: Context, task: string, produce: (opts: StreamOptions) =
       });
     } finally {
       clearInterval(keepAlive);
+      // Errors and early exits: settle from what the completions really cost
+      await finishQuota(c);
       finished();
     }
   });

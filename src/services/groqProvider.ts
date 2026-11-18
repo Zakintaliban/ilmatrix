@@ -2,7 +2,7 @@ import Groq from "groq-sdk";
 import { AsyncLocalStorage } from "node:async_hooks";
 import { createLimiter, type Limiter } from "../utils/concurrency.js";
 import config from "../config/env.js";
-import { kreditForUsage } from "../config/plans.js";
+import { kreditForUsage } from "../config/inferenceCost.js";
 
 /**
  * Single place that knows how to talk to Groq: model routing, reasoning
@@ -171,7 +171,26 @@ export async function trackUsage<T>(
   return { result, usage: store.usage, model: store.model, kredit: Math.round(store.kredit * 100) / 100 };
 }
 
-function recordUsage(store: UsageStore | undefined, result: CompletionResult): void {
+/** Running total of what a whole request has cost so far (for quota settlement). */
+export interface CostSink {
+  kredit: number;
+}
+
+const costSinks = new AsyncLocalStorage<CostSink>();
+
+/**
+ * Add the kredit of every completion `fn` makes (in any nested trackUsage)
+ * to `sink`, including calls whose caller later fails: the quota is settled
+ * from what was really spent, not from what a controller reported.
+ */
+export function observeCost<T>(sink: CostSink, fn: () => Promise<T>): Promise<T> {
+  return costSinks.run(sink, fn);
+}
+
+function recordUsage(store: UsageStore | undefined, sink: CostSink | undefined, result: CompletionResult): void {
+  if (result.usage && sink) {
+    sink.kredit += kreditForUsage(result.model, result.usage.prompt_tokens, result.usage.completion_tokens);
+  }
   if (!store) return;
   store.model = result.model;
   if (!result.usage) return;
@@ -454,6 +473,7 @@ export class GroqProvider {
     // Capture the caller's usage scope now: the limiter may start this job
     // from another request's async context.
     const store = usageStorage.getStore();
+    const sink = costSinks.getStore();
 
     const models = req.vision
       ? [this.cfg.visionModel]
@@ -468,7 +488,7 @@ export class GroqProvider {
         this.breaker.assertClosed();
         const result = await this.limiter(() => this.completeWithModel(model, req));
         this.breaker.onSuccess();
-        recordUsage(store, result);
+        recordUsage(store, sink, result);
         return result;
       } catch (err) {
         lastError = err;
@@ -501,6 +521,7 @@ export class GroqProvider {
       throw new AIServiceError("vision_unavailable");
     }
     const store = usageStorage.getStore();
+    const sink = costSinks.getStore();
     const models = req.vision
       ? [this.cfg.visionModel]
       : [this.cfg.model, this.cfg.fallbackModel].filter((m, i, all) => !!m && all.indexOf(m) === i);
@@ -518,7 +539,7 @@ export class GroqProvider {
         this.breaker.assertClosed();
         const result = await this.limiter(() => this.streamWithModel(model, req, onDelta, opts.signal));
         if (!result.aborted) this.breaker.onSuccess();
-        recordUsage(store, result);
+        recordUsage(store, sink, result);
         return result;
       } catch (err) {
         lastError = err;

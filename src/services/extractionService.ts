@@ -165,7 +165,7 @@ Vision API can analyze this image when queried.`;
     return type.includes("pdf") || name.toLowerCase().endsWith(".pdf");
   }
 
-  private isImageFile(name: string, type: string): boolean {
+  isImageFile(name: string, type: string): boolean {
     return type.startsWith("image/") || /\.(png|jpe?g)$/i.test(name);
   }
 

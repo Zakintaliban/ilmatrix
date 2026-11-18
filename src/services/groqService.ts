@@ -74,7 +74,17 @@ export interface DialogueSession {
 }
 
 /** Groq accepts at most this many images per vision request. */
-const MAX_IMAGES_PER_REQUEST = 3;
+/** Output token caps per tool: sent with every request, and quota reservations are sized from them. */
+export const OUTPUT_CAPS = {
+  answer: 2500,
+  ocr: 4000,
+  dialogue: 1500,
+  dialogueHint: 500,
+  mcq: (numQuestions: number) => Math.min(16000, 600 + numQuestions * 260),
+  flashcards: (numCards: number) => Math.min(12000, 300 + numCards * 120),
+};
+
+export const MAX_IMAGES_PER_REQUEST = 3;
 
 /** Matches the image blocks extractionService stores for images without text. */
 const IMAGE_BLOCK_RE =
@@ -415,7 +425,7 @@ ${this.clampText(this.stripImageData(params.materialText))}
         { role: "system", content: this.systemPrompt },
         { role: "user", content },
       ],
-      maxOutputTokens: 2500,
+      maxOutputTokens: OUTPUT_CAPS.answer,
     };
   }
 
@@ -466,7 +476,7 @@ ${this.clampText(this.stripImageData(params.materialText))}
               role: "user",
               content: [{ type: "text", text: "Context materials:" }, ...materialContent],
             }),
-            maxOutputTokens: 2500,
+            maxOutputTokens: OUTPUT_CAPS.answer,
             reasoningEffort: "low" as const,
             vision: true,
           }
@@ -481,7 +491,7 @@ ${this.clampText(this.stripImageData(params.materialText))}
     const note = hasImages
       ? "\n\n(Note: the attached images could not be analyzed right now; answer from the text and tell the student the images were not viewed.)"
       : "";
-    const text = { messages: buildMessages(textOnlyMaterial, systemMessage + note), maxOutputTokens: 2500 };
+    const text = { messages: buildMessages(textOnlyMaterial, systemMessage + note), maxOutputTokens: OUTPUT_CAPS.answer };
 
     return { vision, text };
   }
@@ -556,7 +566,7 @@ ${this.clampText(this.stripImageData(params.materialText))}
         },
       ],
       temperature: 0.1, // Low temperature for accurate OCR
-      maxOutputTokens: 4000, // Enough for most document text
+      maxOutputTokens: OUTPUT_CAPS.ocr, // Enough for most document text
       reasoningEffort: "none",
       vision: true,
     });
@@ -614,7 +624,7 @@ Rules:
         ],
         temperature: 0.2,
         // ~260 tokens per question (rationale, weaknesses, study plan)
-        maxOutputTokens: Math.min(16000, 600 + params.numQuestions * 260),
+        maxOutputTokens: OUTPUT_CAPS.mcq(params.numQuestions),
         reasoningEffort: "low",
         json: { name: "mcq_questions", schema: MCQ_SCHEMA },
       });
@@ -694,7 +704,7 @@ Rules:
           { role: "user", content },
         ],
         temperature: 0.2,
-        maxOutputTokens: Math.min(12000, 300 + params.numCards * 120),
+        maxOutputTokens: OUTPUT_CAPS.flashcards(params.numCards),
         reasoningEffort: "low",
         json: { name: "flashcards", schema: FLASHCARDS_SCHEMA },
       });
@@ -781,7 +791,7 @@ Important: Return ONLY the JSON object, no extra text.`;
           { role: "user", content },
         ],
         temperature: 0.4,
-        maxOutputTokens: 1500,
+        maxOutputTokens: OUTPUT_CAPS.dialogue,
         reasoningEffort: "low",
         json: { name: "dialogue_start", schema: DIALOGUE_START_SCHEMA },
       });
@@ -868,7 +878,7 @@ Important: Return ONLY the JSON object, no extra text.`;
             { role: "user", content },
           ],
           temperature: 0.5,
-          maxOutputTokens: 1500,
+          maxOutputTokens: OUTPUT_CAPS.dialogue,
           reasoningEffort: "low",
           json: { name: "dialogue_final_step", schema: DIALOGUE_FINAL_STEP_SCHEMA },
         });
@@ -929,7 +939,7 @@ Important: Return ONLY the JSON object, no extra text.`;
           { role: "user", content },
         ],
         temperature: 0.5,
-        maxOutputTokens: 1500,
+        maxOutputTokens: OUTPUT_CAPS.dialogue,
         reasoningEffort: "low",
         json: { name: "dialogue_step", schema: DIALOGUE_STEP_SCHEMA },
       });
@@ -994,7 +1004,7 @@ Important: Return ONLY the JSON object, no extra text.`;
           { role: "user", content },
         ],
         temperature: 0.6,
-        maxOutputTokens: 500,
+        maxOutputTokens: OUTPUT_CAPS.dialogueHint,
         reasoningEffort: "low",
         json: { name: "dialogue_hint", schema: DIALOGUE_HINT_SCHEMA },
       });
@@ -1070,7 +1080,7 @@ Important: Return ONLY the JSON object, no extra text.`;
           { role: "user", content },
         ],
         temperature: 0.4,
-        maxOutputTokens: 1500,
+        maxOutputTokens: OUTPUT_CAPS.dialogue,
         reasoningEffort: "low",
         json: { name: "dialogue_feedback", schema: DIALOGUE_FEEDBACK_SCHEMA },
       });

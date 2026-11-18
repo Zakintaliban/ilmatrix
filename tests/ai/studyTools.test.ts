@@ -16,7 +16,7 @@ import assert from "node:assert/strict";
 import api, { stopBackgroundTasks } from "../../src/routes.js";
 import { groqService } from "../../src/services/groqService.js";
 import { GroqProvider } from "../../src/services/groqProvider.js";
-import { apiError, completion, createFakeGroq, TEST_PROVIDER_CONFIG, type FakeHandler } from "./fakeGroq.js";
+import { apiError, completion, createFakeGroq, STUDY_JSON_RESPONSES, STUDY_TOPICS, TEST_PROVIDER_CONFIG, type FakeHandler } from "./fakeGroq.js";
 import config from "../../src/config/env.js";
 import { aiRateLimiter } from "../../src/middleware/aiRateLimit.js";
 
@@ -24,34 +24,8 @@ import { aiRateLimiter } from "../../src/middleware/aiRateLimit.js";
 config.aiRateLimitPerMinute = 10_000;
 config.aiRateLimitPerHour = 10_000;
 
-const TOPICS = [
-  { id: 1, title: "Definisi fotosintesis" },
-  { id: 2, title: "Reaksi terang" },
-  { id: 3, title: "Siklus Calvin" },
-];
-
-/** Canned structured outputs keyed by the JSON schema name each tool requests. */
-const JSON_RESPONSES: Record<string, unknown> = {
-  mcq_questions: {
-    questions: [
-      {
-        id: 1,
-        question: "Di mana reaksi terang terjadi?",
-        options: ["Stroma", "Membran tilakoid", "Sitoplasma", "Nukleus", "Ribosom"],
-        answer: "B",
-        rationale: "Reaksi terang terjadi di membran tilakoid.",
-        weaknesses: ["Tertukar dengan stroma"],
-        studyPlan: ["Gambar struktur kloroplas"],
-      },
-    ],
-  },
-  flashcards: { cards: [{ id: 1, front: "Apa itu klorofil?", back: "Pigmen hijau penyerap cahaya." }] },
-  dialogue_start: { language: "id", intro: "Mari berdiskusi.", topics: TOPICS, firstCoachPrompt: "Apa itu fotosintesis?" },
-  dialogue_step: { addressed: true, moveToNext: true, coachMessage: "Tepat!", nextCoachQuestion: "Bagaimana reaksi terang?" },
-  dialogue_final_step: { addressed: true, isComplete: true, coachMessage: "Selamat, selesai!", nextCoachQuestion: null },
-  dialogue_hint: { hint: "Ingat peran cahaya matahari." },
-  dialogue_feedback: { feedback: "Diskusi yang baik.", strengths: ["Jelas"], improvements: ["Contoh"] },
-};
+const TOPICS = STUDY_TOPICS;
+const JSON_RESPONSES = STUDY_JSON_RESPONSES;
 
 const defaultHandler: FakeHandler = (params) => {
   const schemaName = params.response_format?.json_schema?.name;

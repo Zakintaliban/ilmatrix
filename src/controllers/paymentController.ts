@@ -1,6 +1,7 @@
-import type { Context } from "hono";
+import type { Context, Next } from "hono";
 import {
   PaymentError,
+  canSettlePayments,
   createCheckout,
   getCatalog,
   getPayment,
@@ -15,6 +16,18 @@ import {
 import { verifyNotificationSignature } from "../services/midtransClient.js";
 
 const ORDER_ID = /^[A-Za-z0-9\-_~.]{1,50}$/;
+
+/**
+ * Routes for buying (catalogue, checkout, a student's payments) and admin
+ * plan/kredit sales: 404 while payments are off, so no client can reach them.
+ * Settlement of earlier transactions (webhook, admin re-check) is not behind this.
+ */
+export async function requirePaymentsEnabled(c: Context, next: Next) {
+  if (!isPaymentsEnabled()) {
+    return c.json({ error: "Payments are disabled", code: "PAYMENTS_DISABLED", enabled: false }, 404);
+  }
+  await next();
+}
 
 function paymentError(c: Context, error: unknown) {
   if (error instanceof PaymentError) {
@@ -85,7 +98,8 @@ export async function listMyPayments(c: Context) {
  * makes Midtrans retry (4 times) when we can't confirm right now.
  */
 export async function midtransNotification(c: Context) {
-  if (!isPaymentsEnabled()) return c.json({ error: "Payments are not configured" }, 503);
+  // Works with PAYMENTS_ENABLED=false too: transactions started earlier must still settle
+  if (!canSettlePayments()) return c.json({ error: "Payments are not configured" }, 503);
 
   const body = await c.req.json().catch(() => null);
   if (!body || typeof body !== "object" || typeof body.order_id !== "string" || !ORDER_ID.test(body.order_id)) {
@@ -124,6 +138,7 @@ export async function adminListPayments(c: Context) {
 export async function adminSyncPayment(c: Context) {
   const orderId = c.req.param("orderId")!;
   if (!ORDER_ID.test(orderId) || !(await getPayment(orderId))) return c.json({ error: "Payment not found" }, 404);
+  if (!canSettlePayments()) return c.json({ error: "Payments are not configured" }, 503);
   try {
     const payment = await syncPayment(orderId, "admin");
     return c.json({ payment });

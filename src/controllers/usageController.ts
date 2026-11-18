@@ -1,27 +1,21 @@
 /**
  * Usage Controller
- * Kredit balances, usage statistics and admin management endpoints
+ * AI quota status, usage statistics and admin management endpoints
  */
 
 import type { Context } from 'hono';
 import * as tokenUsageService from '../services/tokenUsageService.js';
 import * as kreditService from '../services/kreditService.js';
-import { kreditSummary } from '../middleware/tokenUsageMiddleware.js';
+import config from '../config/env.js';
+import { query } from '../services/databaseService.js';
+import * as quotaService from '../services/quotaService.js';
+import { reservationTable } from '../services/quotaEstimates.js';
+import { isPaymentsEnabled } from '../services/paymentService.js';
 import { KREDIT_PRODUCTS, isKreditProductCode, isPlanCode } from '../config/plans.js';
 
-/** Usage block shared by the user and admin endpoints (all figures in kredit). */
-function usagePayload(status: kreditService.KreditStatus) {
-  const pct = (used: number, limit: number) => (limit > 0 ? Math.round((used / limit) * 10000) / 100 : 0);
-  const summary = kreditSummary(status);
-  return {
-    ...summary,
-    weekly: { ...summary.weekly, percentage: pct(status.weeklyUsed, status.weeklyLimit) },
-    extra: {
-      remaining: status.extraRemaining,
-      grants: status.grants.map((g) => ({ source: g.source, remaining: g.remaining, expires_at: g.expiresAt })),
-    },
-    monthly: { used: status.monthlyUsed, resets_at: status.monthlyResetsAt },
-  };
+/** A quota limit from an admin: kredit (0 blocks AI) or null for the default. */
+function isLimitValue(value: unknown): value is number | null {
+  return value === null || (typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 1_000_000);
 }
 
 // ============================================================================
@@ -40,15 +34,19 @@ export async function getUserStats(c: Context) {
       return c.json({ error: 'Not authenticated' }, 401);
     }
 
-    const status = await kreditService.getKreditStatus(user.id);
+    const status = await quotaService.getStatus(user.id);
 
     return c.json({
-      usage: usagePayload(status),
+      usage: quotaService.quotaSummary(status),
+      recent_days: await quotaService.recentDays(user.id, 14),
+      // Kredit reserved per request with default settings (what one use can cost at most, normally)
+      tool_estimates: reservationTable(),
+      payments_enabled: isPaymentsEnabled(),
       user: {
         id: user.id,
         email: user.email,
         name: user.name,
-        is_admin: status.isAdmin,
+        is_admin: status.exempt,
         token_access_enabled: status.accessEnabled,
       },
     });
@@ -161,25 +159,28 @@ export async function getAdminDashboard(c: Context) {
     const users = await tokenUsageService.getAllUsersUsage(limit, offset);
 
     // Calculate aggregate statistics
-    const totalUsers = users.length;
-    const totalKreditUsedWeekly = users.reduce((sum, u) => sum + u.weekly_kredit_used, 0);
-    const totalKreditUsedMonthly = users.reduce((sum, u) => sum + u.monthly_kredit_used, 0);
-    const totalTokensUsedWeekly = users.reduce((sum, u) => sum + u.weekly_tokens_used, 0);
-    const totalTokensUsedMonthly = users.reduce((sum, u) => sum + u.monthly_tokens_used, 0);
-    const usersAtWeeklyLimit = users.filter(u => u.weekly_percentage >= 100).length;
-    const usersNearWeeklyLimit = users.filter(u => u.weekly_percentage >= 80 && u.weekly_percentage < 100).length;
+    const sum = (pick: (u: (typeof users)[number]) => number) => Math.round(users.reduce((n, u) => n + pick(u), 0) * 100) / 100;
+    const peak = (u: (typeof users)[number]) => Math.max(u.daily_percentage, u.weekly_percentage);
+    const defaults = await quotaService.getDefaults();
 
     return c.json({
       users,
       aggregate: {
-        total_users: totalUsers,
-        total_kredit_used_weekly: Math.round(totalKreditUsedWeekly * 100) / 100,
-        total_kredit_used_monthly: Math.round(totalKreditUsedMonthly * 100) / 100,
-        total_tokens_used_weekly: totalTokensUsedWeekly,
-        total_tokens_used_monthly: totalTokensUsedMonthly,
-        users_at_weekly_limit: usersAtWeeklyLimit,
-        users_near_weekly_limit: usersNearWeeklyLimit,
+        total_users: users.length,
+        total_kredit_used_today: sum((u) => u.daily_kredit_used),
+        total_kredit_used_weekly: sum((u) => u.weekly_kredit_used),
+        total_kredit_used_monthly: sum((u) => u.monthly_kredit_used),
+        users_at_daily_limit: users.filter((u) => !u.is_admin && u.daily_percentage >= 100).length,
+        users_at_weekly_limit: users.filter((u) => !u.is_admin && u.weekly_percentage >= 100).length,
+        users_at_limit: users.filter((u) => !u.is_admin && peak(u) >= 100).length,
+        users_near_limit: users.filter((u) => !u.is_admin && peak(u) >= 80 && peak(u) < 100).length,
       },
+      quota_defaults: {
+        daily: defaults.daily,
+        weekly: defaults.weekly,
+        timezone: config.aiQuotaTimezone,
+      },
+      payments_enabled: isPaymentsEnabled(),
       pagination: {
         limit,
         offset,
@@ -205,19 +206,27 @@ export async function getAdminUserDetail(c: Context) {
     }
 
     const stats = await tokenUsageService.getUserUsageStats(userId);
-    const status = await kreditService.getKreditStatus(userId);
+    const status = await quotaService.getStatus(userId);
     const history = await tokenUsageService.getUserUsageHistory(userId, 100);
     const analytics = await tokenUsageService.getUsageStats(userId);
+    const overrides = await query(`SELECT daily_kredit_override, weekly_kredit_override FROM users WHERE id = $1`, [userId]);
+    const num = (v: unknown) => (v === null || v === undefined ? null : Number(v));
 
     return c.json({
       user: {
         id: stats.user_id,
         email: stats.email,
         name: stats.name,
-        is_admin: status.isAdmin,
+        is_admin: status.exempt,
         token_access_enabled: status.accessEnabled,
       },
-      usage: usagePayload(status),
+      usage: quotaService.quotaSummary(status),
+      overrides: {
+        daily: num(overrides.rows[0]?.daily_kredit_override),
+        weekly: num(overrides.rows[0]?.weekly_kredit_override),
+      },
+      recent_days: await quotaService.recentDays(userId, 14),
+      payments_enabled: isPaymentsEnabled(),
       analytics,
       recent_history: history.slice(0, 20),
     });
@@ -295,33 +304,32 @@ export async function setUserTokenAccess(c: Context) {
 
 /**
  * POST /api/admin/usage/user/:userId/update-limits
- * Update user's token limits
+ * Override a user's daily and/or weekly AI quota. This is the only way to
+ * give one user more (or less) than the default; there is no hidden bypass.
  *
- * Body:
- * - weekly_limit?: number
- * - monthly_limit?: number
+ * Body (each optional, at least one):
+ * - daily_limit: number of kredit, or null for the global default
+ * - weekly_limit: number of kredit, or null for the global default
  */
 export async function updateUserLimits(c: Context) {
   try {
-    const userId = c.req.param('userId');
-    const body = await c.req.json();
-    const { weekly_limit } = body;
+    const userId = c.req.param('userId')!;
+    const body = await c.req.json().catch(() => ({}));
+    const { daily_limit, weekly_limit } = body ?? {};
 
-    if (!userId) {
-      return c.json({ error: 'User ID is required' }, 400);
+    if (daily_limit === undefined && weekly_limit === undefined) {
+      return c.json({ error: 'Send daily_limit and/or weekly_limit' }, 400);
+    }
+    for (const [name, value] of [['daily_limit', daily_limit], ['weekly_limit', weekly_limit]] as const) {
+      if (value !== undefined && !isLimitValue(value)) {
+        return c.json({ error: `${name} must be a number of kredit between 0 and 1000000, or null for the default` }, 400);
+      }
     }
 
-    if (weekly_limit !== null && (typeof weekly_limit !== 'number' || weekly_limit < 0)) {
-      return c.json({ error: 'weekly_limit must be a non-negative number of kredit, or null to use the plan allowance' }, 400);
-    }
+    await quotaService.setUserLimits(userId, { daily: daily_limit, weekly: weekly_limit });
+    const status = await quotaService.getStatus(userId);
 
-    await kreditService.setWeeklyOverride(userId, weekly_limit);
-
-    return c.json({
-      success: true,
-      message: 'User limits updated successfully',
-      limits: { weekly_kredit: weekly_limit ?? 'plan default' },
-    });
+    return c.json({ success: true, message: 'User limits updated successfully', usage: quotaService.quotaSummary(status) });
   } catch (error) {
     console.error('Error updating user limits:', error);
     return c.json({ error: 'Failed to update user limits' }, 500);
@@ -329,8 +337,73 @@ export async function updateUserLimits(c: Context) {
 }
 
 /**
+ * POST /api/admin/usage/user/:userId/reset-quota
+ * Set the user's usage for today and/or this week back to zero.
+ *
+ * Body: { period: 'daily' | 'weekly' | 'both' }
+ */
+export async function resetUserQuota(c: Context) {
+  try {
+    const userId = c.req.param('userId')!;
+    const { period } = await c.req.json().catch(() => ({}));
+    const periods: quotaService.QuotaPeriod[] | undefined =
+      period === 'daily' ? ['daily'] : period === 'weekly' ? ['weekly'] : period === 'both' ? ['daily', 'weekly'] : undefined;
+    if (!periods) return c.json({ error: "period must be 'daily', 'weekly' or 'both'" }, 400);
+
+    const status = await quotaService.resetUsage(userId, periods);
+    return c.json({ success: true, usage: quotaService.quotaSummary(status) });
+  } catch (error) {
+    console.error('Error resetting user quota:', error);
+    return c.json({ error: 'Failed to reset quota' }, 500);
+  }
+}
+
+/** GET /api/admin/quota/settings: global daily/weekly defaults. */
+export async function getQuotaSettings(c: Context) {
+  try {
+    const d = await quotaService.getDefaults();
+    return c.json({
+      daily_limit: d.daily,
+      weekly_limit: d.weekly,
+      daily_source: d.dailySource,
+      weekly_source: d.weeklySource,
+      env_defaults: { daily_limit: config.aiDailyKreditLimit, weekly_limit: config.aiWeeklyKreditLimit },
+      timezone: config.aiQuotaTimezone,
+      updated_at: d.updatedAt,
+      tool_estimates: reservationTable(),
+    });
+  } catch (error) {
+    console.error('Error reading quota settings:', error);
+    return c.json({ error: 'Failed to read quota settings' }, 500);
+  }
+}
+
+/**
+ * PUT /api/admin/quota/settings
+ * Body: { daily_limit?: number | null, weekly_limit?: number | null } (null = env default)
+ */
+export async function updateQuotaSettings(c: Context) {
+  try {
+    const { daily_limit, weekly_limit } = (await c.req.json().catch(() => ({}))) ?? {};
+    if (daily_limit === undefined && weekly_limit === undefined) {
+      return c.json({ error: 'Send daily_limit and/or weekly_limit' }, 400);
+    }
+    for (const [name, value] of [['daily_limit', daily_limit], ['weekly_limit', weekly_limit]] as const) {
+      if (value !== undefined && !isLimitValue(value)) {
+        return c.json({ error: `${name} must be a number of kredit between 0 and 1000000, or null for the env default` }, 400);
+      }
+    }
+    await quotaService.setDefaults({ daily: daily_limit, weekly: weekly_limit }, c.get('user').id);
+    return getQuotaSettings(c);
+  } catch (error) {
+    console.error('Error updating quota settings:', error);
+    return c.json({ error: 'Failed to update quota settings' }, 500);
+  }
+}
+
+/**
  * POST /api/admin/usage/user/:userId/set-plan
- * Put a user on a plan (until payments exist, this is how a sale is applied)
+ * Put a user on a plan (payments enabled only; a paid plan sets the weekly quota)
  *
  * Body:
  * - plan: 'free' | 'bulanan' | 'semester'
@@ -349,8 +422,8 @@ export async function setUserPlan(c: Context) {
     }
 
     await kreditService.setPlan(userId, plan, days);
-    const status = await kreditService.getKreditStatus(userId);
-    return c.json({ success: true, usage: usagePayload(status) });
+    const status = await quotaService.getStatus(userId);
+    return c.json({ success: true, usage: quotaService.quotaSummary(status) });
   } catch (error) {
     console.error('Error setting user plan:', error);
     return c.json({ error: 'Failed to set plan' }, 500);
@@ -387,8 +460,8 @@ export async function grantUserKredit(c: Context) {
       await kreditService.grantKredit(userId, { source: 'admin', kredit, validDays: valid_days ?? null, reference: ref });
     }
 
-    const status = await kreditService.getKreditStatus(userId);
-    return c.json({ success: true, usage: usagePayload(status) });
+    const status = await quotaService.getStatus(userId);
+    return c.json({ success: true, usage: quotaService.quotaSummary(status) });
   } catch (error) {
     console.error('Error granting kredit:', error);
     return c.json({ error: 'Failed to grant kredit' }, 500);
@@ -487,24 +560,28 @@ export async function exportUsageData(c: Context) {
       if (/^[=+\-@\t\r]/.test(text)) text = `'${text}`;
       return `"${text.replace(/"/g, '""')}"`;
     };
-    const csvHeader = 'User ID,Email,Name,Plan,Plan Expires,Weekly Kredit Used,Weekly Kredit Limit,Weekly %,Extra Kredit,Monthly Kredit Used,Weekly Tokens,Monthly Tokens,Is Admin,Access Enabled\n';
+    const csvHeader =
+      'User ID,Email,Name,Daily Kredit Used,Daily Limit,Daily %,Weekly Kredit Used,Weekly Limit,Weekly %,Monthly Kredit Used,Requests Today,Requests This Week,Is Admin,Access Enabled,Plan,Plan Expires,Extra Kredit\n';
 
     const csvRows = users.map(user => {
       return [
         user.user_id,
         user.email,
         user.name,
-        user.plan,
-        user.plan_expires_at ? new Date(user.plan_expires_at).toISOString() : '',
+        user.daily_kredit_used,
+        user.daily_kredit_limit,
+        user.daily_percentage.toFixed(2),
         user.weekly_kredit_used,
         user.weekly_kredit_limit,
         user.weekly_percentage.toFixed(2),
-        user.extra_kredit,
         user.monthly_kredit_used,
-        user.weekly_tokens_used,
-        user.monthly_tokens_used,
+        user.requests_today,
+        user.requests_this_week,
         user.is_admin,
         user.token_access_enabled,
+        user.plan,
+        user.plan_expires_at ? new Date(user.plan_expires_at).toISOString() : '',
+        user.extra_kredit,
       ].map(cell).join(',');
     }).join('\n');
 

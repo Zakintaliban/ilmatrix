@@ -83,6 +83,7 @@ before(async () => {
 
 beforeEach(() => {
   if (skip) return;
+  config.paymentsEnabled = true;
   config.midtransServerKey = SERVER_KEY;
   config.midtransClientKey = "";
   config.midtransIsProduction = false;
@@ -194,7 +195,7 @@ test("the catalogue lists products and plans with their prices", { skip }, async
   assert.equal(byCode.free, undefined);
 });
 
-test("checkout needs a session, a real product and configured payments", { skip }, async () => {
+test("checkout needs a session, a real product and payments switched on", { skip }, async () => {
   assert.equal((await request("POST", "/payments/checkout", { json: { product: "pass_7d" } })).status, 401);
   const u = await createUser();
   const unknown = await checkout(u.cookie, "free");
@@ -203,9 +204,57 @@ test("checkout needs a session, a real product and configured payments", { skip 
 
   config.midtransServerKey = "";
   const disabled = await checkout(u.cookie, "pass_7d");
-  assert.equal(disabled.status, 503);
+  assert.equal(disabled.status, 404, "PAYMENTS_ENABLED without a server key keeps payments off");
   assert.equal(disabled.body.code, "PAYMENTS_DISABLED");
   assert.equal(midtrans.snapRequests.length, 0);
+});
+
+// ---------------------------------------------------------------------------
+// PAYMENTS_ENABLED=false
+// ---------------------------------------------------------------------------
+
+test("with PAYMENTS_ENABLED=false every purchase route is closed server-side, even with a server key", { skip }, async () => {
+  const u = await createUser();
+  const { body: earlier } = await checkout(u.cookie, "pass_7d");
+  config.paymentsEnabled = false;
+  midtrans.snapRequests.length = 0;
+
+  for (const [method, path] of [
+    ["GET", "/payments/products"],
+    ["POST", "/payments/checkout"],
+    ["GET", "/payments"],
+    ["GET", `/payments/${earlier.order_id}`],
+  ] as const) {
+    const res = await request(method, path, { cookie: u.cookie, json: method === "POST" ? { product: "pass_7d" } : undefined });
+    assert.equal(res.status, 404, `${method} ${path}`);
+    assert.equal(res.body.code, "PAYMENTS_DISABLED");
+    assert.equal(res.body.enabled, false);
+  }
+  assert.equal(midtrans.snapRequests.length, 0, "no new Midtrans transaction");
+  assert.ok(await paymentRow(earlier.order_id), "existing records are kept");
+});
+
+test("with PAYMENTS_ENABLED=false a transaction started earlier still settles, once, with a verified signature", { skip }, async () => {
+  const u = await createUser();
+  const { body } = await checkout(u.cookie, "pass_7d");
+  const { body: second } = await checkout(u.cookie, "topup");
+  config.paymentsEnabled = false;
+  customerPays(body.order_id, 9900);
+
+  assert.equal((await notify(notification(body.order_id, 9900, {}, "wrong-key"))).status, 403, "the signature is still checked");
+  assert.equal((await notify(notification(body.order_id, 9900))).status, 200);
+  assert.equal((await notify(notification(body.order_id, 9900))).status, 200);
+  assert.equal((await paymentRow(body.order_id)).status, "paid");
+  assert.equal((await grants(u.id)).length, 1, "fulfilled exactly once");
+
+  // Admins can still re-check a pending one
+  customerPays(second.order_id, 5000);
+  const admin = await createUser();
+  await query(`UPDATE users SET is_admin = true WHERE id = $1`, [admin.id]);
+  const synced = await request("POST", `/admin/payments/${second.order_id}/sync`, { cookie: admin.cookie });
+  assert.equal(synced.status, 200, JSON.stringify(synced.body));
+  assert.equal(synced.body.payment.status, "paid");
+  assert.equal((await grants(u.id)).length, 2);
 });
 
 test("checkout creates a pending payment and a Snap transaction with the exact amount", { skip }, async () => {
@@ -502,18 +551,18 @@ test("deleting the account keeps the payment record without the user", { skip },
   assert.match(paid.review_note, /account was deleted/);
 });
 
-test("when kredit runs out the message links to buying more (only if payments are on)", { skip }, async () => {
+test("when the quota runs out the message links to buying more (only if payments are on)", { skip }, async () => {
   const u = await createUser();
-  await query(`UPDATE users SET weekly_kredit_used = 150 WHERE id = $1`, [u.id]);
+  await query(`UPDATE users SET daily_kredit_override = 0 WHERE id = $1`, [u.id]);
   const explain = () => request("POST", "/explain", { cookie: u.cookie, json: { materialText: `Materi ${randomUUID()}: fotosintesis.` } });
 
   const res = await explain();
   assert.equal(res.status, 429);
-  assert.equal(res.body.code, "KREDIT_EXHAUSTED");
+  assert.equal(res.body.code, "QUOTA_EXCEEDED");
   assert.equal(res.body.upgrade_url, "/dashboard.html#upgrade");
   assert.match(res.body.answer, /\[Tambah kredit\]\(\/dashboard\.html#upgrade\)/);
 
-  config.midtransServerKey = "";
+  config.paymentsEnabled = false;
   const off = await explain();
   assert.equal(off.body.upgrade_url, undefined);
   assert.doesNotMatch(off.body.answer, /Tambah kredit/);

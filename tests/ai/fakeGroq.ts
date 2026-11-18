@@ -136,3 +136,36 @@ data:image/png;base64,${payload}
 
 Vision API can analyze this image when queried.`;
 }
+
+// ---------------------------------------------------------------------------
+// Study-tool fixtures shared by the AI and database suites
+// ---------------------------------------------------------------------------
+
+export const STUDY_TOPICS = [
+  { id: 1, title: "Definisi fotosintesis" },
+  { id: 2, title: "Reaksi terang" },
+  { id: 3, title: "Siklus Calvin" },
+];
+
+/** Canned structured outputs keyed by the JSON schema name each tool requests. */
+export const STUDY_JSON_RESPONSES: Record<string, unknown> = {
+  mcq_questions: {
+    questions: [
+      {
+        id: 1,
+        question: "Di mana reaksi terang terjadi?",
+        options: ["Stroma", "Membran tilakoid", "Sitoplasma", "Nukleus", "Ribosom"],
+        answer: "B",
+        rationale: "Reaksi terang terjadi di membran tilakoid.",
+        weaknesses: ["Tertukar dengan stroma"],
+        studyPlan: ["Gambar struktur kloroplas"],
+      },
+    ],
+  },
+  flashcards: { cards: [{ id: 1, front: "Apa itu klorofil?", back: "Pigmen hijau penyerap cahaya." }] },
+  dialogue_start: { language: "id", intro: "Mari berdiskusi.", topics: STUDY_TOPICS, firstCoachPrompt: "Apa itu fotosintesis?" },
+  dialogue_step: { addressed: true, moveToNext: true, coachMessage: "Tepat!", nextCoachQuestion: "Bagaimana reaksi terang?" },
+  dialogue_final_step: { addressed: true, isComplete: true, coachMessage: "Selamat, selesai!", nextCoachQuestion: null },
+  dialogue_hint: { hint: "Ingat peran cahaya matahari." },
+  dialogue_feedback: { feedback: "Diskusi yang baik.", strengths: ["Jelas"], improvements: ["Contoh"] },
+};

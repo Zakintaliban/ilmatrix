@@ -4,6 +4,8 @@ import { behaviorAnalysisService } from "../services/behaviorAnalysisService.js"
 import { guestIpLimiter } from "../services/guestIpLimiter.js";
 import { aiRateLimiter } from "../middleware/aiRateLimit.js";
 import { loginThrottle } from "../services/loginThrottle.js";
+import { expireStale } from "../services/quotaService.js";
+import { validateDatabaseConfig } from "../config/database.js";
 import config from "../config/env.js";
 
 /**
@@ -48,6 +50,11 @@ export class BackgroundTaskService {
         guestIpLimiter.cleanup();
         aiRateLimiter.cleanup();
         loginThrottle.cleanup();
+
+        // Charge AI requests the server never finished (crash, lost stream) in full
+        if (validateDatabaseConfig()) {
+          await expireStale().catch((error) => console.error("[QUOTA] Reservation expiry sweep failed:", error));
+        }
 
         if (materialsCleaned > 0 || guestSessionsResult.cleaned > 0 || behaviorResult.profilesCleaned > 0) {
           console.log(

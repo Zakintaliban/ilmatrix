@@ -71,7 +71,16 @@ function catalogItem(code: unknown): CatalogItem | undefined {
   return getCatalog().find((item) => item.code === code);
 }
 
+/**
+ * New purchases (catalogue, checkout, plans and passes counting towards AI use):
+ * only with PAYMENTS_ENABLED=true and a server key.
+ */
 export function isPaymentsEnabled(): boolean {
+  return config.paymentsEnabled && !!config.midtransServerKey;
+}
+
+/** Settling transactions already started (webhook, admin re-check) needs only the server key, whatever the flag. */
+export function canSettlePayments(): boolean {
   return !!config.midtransServerKey;
 }
 

@@ -1,10 +1,11 @@
 /**
- * Plans, kredit products and model pricing.
+ * Plans and kredit products: the payment system's catalogue.
  *
- * Kredit is the unit students see. It is cost-weighted: 1 kredit is about
- * Rp4 of AI cost (US$1 = 4,500 kredit at Rp18,000/USD), so every plan's
- * allowance is also its worst-case AI cost. See docs/AUDIT_AND_STRATEGY_2026.md
- * §16-17 for the pricing rationale.
+ * Only used while payments are enabled (PAYMENTS_ENABLED=true): then an active
+ * paid plan sets the weekly AI quota and passes/top-ups add kredit beyond the
+ * quotas. These values are kept as they were; they are not rebalanced for the
+ * daily/weekly quota system yet. Kredit itself is priced in inferenceCost.ts.
+ * See docs/AUDIT_AND_STRATEGY_2026.md §16-17 for the pricing rationale.
  */
 
 export type PlanCode = "free" | "bulanan" | "semester";
@@ -12,7 +13,7 @@ export type PlanCode = "free" | "bulanan" | "semester";
 export interface Plan {
   code: PlanCode;
   name: string;
-  /** Kredit available each week (resets Monday 00:00 UTC). */
+  /** Weekly AI quota while this plan is active and payments are enabled. */
   weeklyKredit: number;
   priceIdr: number;
   /** Length of a paid period; null = does not expire. */
@@ -60,42 +61,4 @@ export const KREDIT_PRODUCTS: Record<KreditProductCode, KreditProduct> = {
 
 export function isKreditProductCode(value: unknown): value is KreditProductCode {
   return typeof value === "string" && value in KREDIT_PRODUCTS;
-}
-
-// ---------------------------------------------------------------------------
-// Pricing: tokens -> kredit
-// ---------------------------------------------------------------------------
-
-/** US$1 of Groq cost in kredit (1 kredit ~ Rp4 at Rp18,000/USD). */
-export const KREDIT_PER_USD = 4_500;
-
-/** On-demand prices in US$ per million tokens: Groq (October 2026), DeepInfra and Vertex AI (November 2026). */
-export const MODEL_PRICES: Record<string, { input: number; output: number }> = {
-  "openai/gpt-oss-120b": { input: 0.15, output: 0.6 },
-  "openai/gpt-oss-20b": { input: 0.075, output: 0.3 },
-  "qwen/qwen3.8-27b": { input: 0.8, output: 4.0 },
-  "meta-llama/Llama-4-Maverick-17B-128E-Instruct-FP8": { input: 0.2, output: 0.8 },
-  "meta/llama-4-maverick-17b-128e-instruct-maas": { input: 0.35, output: 1.15 },
-};
-
-// Unknown models are charged at the most expensive known rate
-const FALLBACK_PRICE = Object.values(MODEL_PRICES).reduce((max, p) =>
-  p.input + p.output > max.input + max.output ? p : max
-);
-const warnedModels = new Set<string>();
-
-/** Kredit for one completion, rounded up to 0.01. */
-export function kreditForUsage(model: string, promptTokens: number, completionTokens: number): number {
-  let price = MODEL_PRICES[model];
-  if (!price) {
-    if (!warnedModels.has(model)) {
-      warnedModels.add(model);
-      console.warn(`[KREDIT] No price for model "${model}"; charging the highest known rate`);
-    }
-    price = FALLBACK_PRICE;
-  }
-  const usd = (promptTokens * price.input + completionTokens * price.output) / 1_000_000;
-  // Trim floating-point noise (e.g. 945.0000000001) before rounding up to 0.01
-  const hundredths = Number((usd * KREDIT_PER_USD * 100).toFixed(6));
-  return Math.ceil(hundredths) / 100;
 }

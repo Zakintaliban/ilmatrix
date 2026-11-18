@@ -76,7 +76,15 @@ export interface AppConfig {
   googleClientSecret?: string;
   googleRedirectUri: string;
 
+  // AI usage quotas (always on): env fallbacks for the admin-editable defaults
+  aiDailyKreditLimit: number;
+  aiWeeklyKreditLimit: number;
+  /** IANA zone for quota days and weeks (resets at local midnight, weeks start Monday). */
+  aiQuotaTimezone: string;
+
   // Payments (Midtrans Snap)
+  /** Feature flag: new purchases need this and MIDTRANS_SERVER_KEY. Settlement of existing ones needs only the key. */
+  paymentsEnabled: boolean;
   midtransServerKey: string;
   /** Public key for Snap.js (the payment popup); without it checkout falls back to Midtrans' page. */
   midtransClientKey: string;
@@ -108,6 +116,17 @@ function getEnvNumber(key: string, defaultValue: number): number {
     throw new Error(`Environment variable ${key} must be a valid number`);
   }
   return parsed;
+}
+
+function getEnvTimezone(key: string, defaultValue: string): string {
+  const value = (process.env[key] || "").trim() || defaultValue;
+  try {
+    new Intl.DateTimeFormat("en", { timeZone: value });
+    return value;
+  } catch {
+    console.warn(`[CONFIG] Unknown ${key} "${value}"; using ${defaultValue}`);
+    return defaultValue;
+  }
 }
 
 function getEnvBoolean(key: string, defaultValue: boolean): boolean {
@@ -234,7 +253,12 @@ export const config: AppConfig = {
   googleClientSecret: process.env.GOOGLE_CLIENT_SECRET,
   googleRedirectUri: process.env.GOOGLE_REDIRECT_URI || `${process.env.BASE_URL || "http://localhost:8787"}/api/auth/google/callback`,
 
-  // Payments (Midtrans Snap). Disabled until MIDTRANS_SERVER_KEY is set.
+  aiDailyKreditLimit: Math.max(0, getEnvNumber("AI_DAILY_KREDIT_LIMIT", 100)),
+  aiWeeklyKreditLimit: Math.max(0, getEnvNumber("AI_WEEKLY_KREDIT_LIMIT", 500)),
+  aiQuotaTimezone: getEnvTimezone("AI_QUOTA_TIMEZONE", "Asia/Jakarta"),
+
+  // Payments (Midtrans Snap). Off unless PAYMENTS_ENABLED=true and MIDTRANS_SERVER_KEY is set.
+  paymentsEnabled: getEnvBoolean("PAYMENTS_ENABLED", false),
   midtransServerKey: getEnvString("MIDTRANS_SERVER_KEY", "").trim(),
   midtransClientKey: getEnvString("MIDTRANS_CLIENT_KEY", "").trim(),
   midtransIsProduction: getEnvBoolean("MIDTRANS_IS_PRODUCTION", false),
@@ -265,6 +289,10 @@ if (config.isProduction && !(config.turnstileSiteKey && config.turnstileSecretKe
   console.warn(
     "Warning: TURNSTILE_SITE_KEY/TURNSTILE_SECRET_KEY are not set. Guest AI is protected only by per-IP caps."
   );
+}
+
+if (config.paymentsEnabled && !config.midtransServerKey) {
+  console.warn("Warning: PAYMENTS_ENABLED=true but MIDTRANS_SERVER_KEY is not set; payments stay off.");
 }
 
 // Sandbox server keys start with "SB-"; a mismatch means payments hit the wrong Midtrans environment
