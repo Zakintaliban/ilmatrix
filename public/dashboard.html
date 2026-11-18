@@ -1132,8 +1132,9 @@
         async function loadPayments() {
             try {
                 const { enabled, products } = await apiCall('/payments/products');
+                // No payments on this deployment: nothing to buy, so no section at all
+                if (!enabled) return;
                 document.getElementById('upgrade-products').replaceChildren(...products.map((p) => renderProduct(p, enabled)));
-                if (!enabled) showUpgradeMessage('Pembayaran online belum tersedia. Hubungi admin untuk membeli paket.', 'info');
                 document.getElementById('upgrade').classList.remove('hidden');
                 const { payments } = await apiCall('/payments');
                 renderPaymentHistory(payments);

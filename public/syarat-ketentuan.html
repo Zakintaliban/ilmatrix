@@ -20,13 +20,14 @@
         .legal ul { list-style: disc; padding-left: 1.25rem; }
         .legal a { text-decoration: underline; }
     </style>
+    <script src="/js/payments-links.js" defer></script>
 </head>
 <body class="min-h-screen bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-white">
     <header class="border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-800">
         <div class="mx-auto max-w-3xl px-4 py-4 flex items-center justify-between">
             <a href="/" class="text-lg font-bold text-primary dark:text-blue-300">ILMATRIX</a>
             <nav class="flex gap-4 text-sm text-gray-600 dark:text-gray-300">
-                <a href="/harga.html" class="hover:underline">Harga</a>
+                <a href="/harga.html" class="hover:underline" data-payments hidden>Harga</a>
                 <a href="/app" class="hover:underline">Aplikasi</a>
             </nav>
         </div>
@@ -77,7 +78,7 @@
         <p>ILMATRIX dapat menangguhkan atau menutup akun yang melanggar ketentuan ini (misalnya penyalahgunaan, berbagi akun, atau upaya mengganggu Layanan). Kamu dapat menghapus akunmu kapan saja dari halaman Profil; materi dan riwayat obrolanmu ikut dihapus. Catatan pembayaran tetap disimpan tanpa identitas akunmu untuk keperluan pembukuan.</p>
 
         <h2>11. Privasi</h2>
-        <p>ILMATRIX memahami bahwa privasi penting bagimu. Data yang kami kumpulkan dan gunakan untuk menjalankan Layanan: nama, email, materi yang kamu unggah, riwayat obrolan, catatan pemakaian kredit, status pembayaran, serta data teknis seperti alamat IP untuk keamanan. Data tidak kami jual. Untuk menjalankan Layanan, sebagian data diproses oleh penyedia pihak ketiga: penyedia AI (Groq) untuk membuat jawaban, Midtrans untuk pembayaran, layanan email (Resend) untuk verifikasi akun, Cloudflare Turnstile untuk perlindungan dari bot, dan penyedia hosting. Sebagian penyedia ini dapat memproses data di luar Indonesia. Untuk pertanyaan atau permintaan terkait data pribadimu, termasuk penghapusan, hubungi kami lewat email di bawah.</p>
+        <p>ILMATRIX memahami bahwa privasi penting bagimu. Data yang kami kumpulkan dan gunakan untuk menjalankan Layanan: nama, email, materi yang kamu unggah, riwayat obrolan, catatan pemakaian kredit, status pembayaran, serta data teknis seperti alamat IP untuk keamanan. Data tidak kami jual. Untuk menjalankan Layanan, sebagian data diproses oleh penyedia pihak ketiga: penyedia AI tempat model berjalan (misalnya Groq atau DeepInfra) untuk membuat jawaban, Midtrans untuk pembayaran, layanan email (Resend) untuk verifikasi akun, Cloudflare Turnstile untuk perlindungan dari bot, dan penyedia hosting. Sebagian penyedia ini dapat memproses data di luar Indonesia. Untuk pertanyaan atau permintaan terkait data pribadimu, termasuk penghapusan, hubungi kami lewat email di bawah.</p>
 
         <h2>12. Penafian</h2>
         <p>Layanan disediakan "sebagaimana adanya". ILMATRIX berupaya menjaga Layanan tetap tersedia dan akurat, tetapi tidak menjamin Layanan selalu bebas gangguan atau bahwa jawaban AI selalu benar, lengkap, atau terbaru. ILMATRIX tidak bertanggung jawab atas keputusan atau nilai akademik yang diambil berdasarkan jawaban AI.</p>
@@ -95,8 +96,8 @@
     <footer class="border-t border-gray-200 dark:border-gray-800">
         <div class="mx-auto max-w-3xl px-4 py-6 text-xs text-gray-600 dark:text-gray-400 flex flex-wrap gap-x-4 gap-y-2">
             <span>© ILMATRIX</span>
-            <a href="/harga.html" class="hover:underline">Harga</a>
-            <a href="/kebijakan-pengembalian.html" class="hover:underline">Kebijakan Pengembalian Dana</a>
+            <a href="/harga.html" class="hover:underline" data-payments hidden>Harga</a>
+            <a href="/kebijakan-pengembalian.html" class="hover:underline" data-payments hidden>Kebijakan Pengembalian Dana</a>
             <span>Kontak: <a href="mailto:hasbizakin0804@gmail.com" class="hover:underline">hasbizakin0804@gmail.com</a></span>
         </div>
     </footer>

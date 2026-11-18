@@ -63,3 +63,16 @@ test("payment opens on our checkout page (Snap popup); Midtrans' page is only an
   assert.match(dashboard, /\/checkout\.html\?product=/);
   assert.doesNotMatch(dashboard, /window\.location\.assign\(url\.href\)/, "dashboard no longer jumps to Midtrans");
 });
+
+test("price and refund links stay hidden unless the deployment takes payments", () => {
+  for (const name of ["index.html", "about.html", "login.html", "register.html"]) {
+    const html = page(name);
+    assert.match(html, /<script src="\/js\/payments-links\.js" defer><\/script>/, name);
+    const visible = html
+      .replace(/<span data-payments hidden>[\s\S]*?<\/span>/g, "")
+      .replace(/<a\b[^>]*\bdata-payments\s+hidden\b[^>]*>[\s\S]*?<\/a>/g, "");
+    assert.doesNotMatch(visible, /\/(?:harga|kebijakan-pengembalian)\.html/, `${name} shows a payment link`);
+  }
+  const script = page("js/payments-links.js");
+  assert.match(script, /if \(data\.enabled\)/);
+});
