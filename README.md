@@ -175,6 +175,72 @@ can take without signing up ([guestLimit](src/middleware/guestLimit.ts)):
   logs a `[CLIENT_IP]` warning when it sees Cloudflare headers without that setting)
 - Create a Turnstile widget for your domain (Managed mode) and set `TURNSTILE_SITE_KEY` / `TURNSTILE_SECRET_KEY`
 
+### Deploy to Google Cloud (Cloud Run + Cloud SQL, Llama 4 Maverick on Vertex AI)
+
+The app runs on Cloud Run from the [Dockerfile](Dockerfile), Postgres on Cloud SQL, and the model is Llama 4
+Maverick as a managed API (MaaS) from Vertex AI Model Garden. On Vertex there is no API key: the app uses the Cloud
+Run service account's token (`GROQ_API_KEY` stays empty). Replace `PROJECT_ID` and the password below.
+
+1. Project and APIs:
+   ```bash
+   gcloud config set project PROJECT_ID
+   gcloud services enable run.googleapis.com sqladmin.googleapis.com aiplatform.googleapis.com \
+     secretmanager.googleapis.com cloudbuild.googleapis.com artifactregistry.googleapis.com
+   ```
+2. In the console: Vertex AI → Model Garden → **Llama 4 Maverick** → **Enable** (accept Meta's license). It is served
+   in `us-east5`.
+3. Database (Jakarta region):
+   ```bash
+   gcloud sql instances create ilmatrix-db --database-version=POSTGRES_16 --edition=enterprise \
+     --tier=db-f1-micro --region=asia-southeast2
+   gcloud sql databases create ilmatrix --instance=ilmatrix-db
+   gcloud sql users create ilmatrix --instance=ilmatrix-db --password='CHANGE_ME'   # letters and digits, or URL-encode it below
+   printf '%s' 'postgresql://ilmatrix:CHANGE_ME@/ilmatrix?host=/cloudsql/PROJECT_ID:asia-southeast2:ilmatrix-db' \
+     | gcloud secrets create DATABASE_URL --data-file=-
+   ```
+4. A service account that may call Vertex AI, connect to Cloud SQL and read secrets:
+   ```bash
+   gcloud iam service-accounts create ilmatrix-run
+   SA=ilmatrix-run@PROJECT_ID.iam.gserviceaccount.com
+   for role in roles/aiplatform.user roles/cloudsql.client roles/secretmanager.secretAccessor; do
+     gcloud projects add-iam-policy-binding PROJECT_ID --member=serviceAccount:$SA --role=$role
+   done
+   ```
+5. `env.yaml` (not committed):
+   ```yaml
+   NODE_ENV: production
+   DATABASE_SSL: "false"            # Cloud SQL socket; the connector encrypts
+   CLIENT_IP_HEADER: x-forwarded-for
+   AI_BASE_URL: https://us-east5-aiplatform.googleapis.com/v1/projects/PROJECT_ID/locations/us-east5/endpoints/openapi
+   GROQ_MODEL: meta/llama-4-maverick-17b-128e-instruct-maas
+   GROQ_VISION_MODEL: meta/llama-4-maverick-17b-128e-instruct-maas
+   GROQ_FALLBACK_MODEL: ""
+   ```
+6. Deploy, then set `BASE_URL` to the URL it prints:
+   ```bash
+   gcloud run deploy ilmatrix --source . --region=asia-southeast2 --service-account=$SA \
+     --add-cloudsql-instances=PROJECT_ID:asia-southeast2:ilmatrix-db \
+     --set-secrets=DATABASE_URL=DATABASE_URL:latest --env-vars-file=env.yaml \
+     --allow-unauthenticated --max-instances=2
+   gcloud run services update ilmatrix --region=asia-southeast2 --update-env-vars=BASE_URL=https://ilmatrix-....run.app
+   ```
+7. Create the tables with a one-off job from the same image:
+   ```bash
+   IMAGE=$(gcloud run services describe ilmatrix --region=asia-southeast2 \
+     --format='value(spec.template.spec.containers[0].image)')
+   gcloud run jobs create ilmatrix-migrate --image=$IMAGE --region=asia-southeast2 --service-account=$SA \
+     --set-cloudsql-instances=PROJECT_ID:asia-southeast2:ilmatrix-db --set-secrets=DATABASE_URL=DATABASE_URL:latest \
+     --set-env-vars=DATABASE_SSL=false --command=npm --args=run,migrate,run --execute-now --wait
+   ```
+   After a deploy with new migrations: `gcloud run jobs update ilmatrix-migrate --image=$IMAGE ... --execute-now`.
+8. Check the model from your machine: `GROQ_API_KEY=$(gcloud auth print-access-token)` plus the `env.yaml` model
+   settings, then `npm run groq:check`. If Vertex answers 404, try `v1beta1` instead of `v1` in `AI_BASE_URL`.
+9. Optional secrets the same way (`--set-secrets`): `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` (add
+   `BASE_URL/api/auth/google/callback` as a redirect URI), `RESEND_API_KEY`, `TURNSTILE_SECRET_KEY`.
+
+Notes: rate limits and guest caps are counted in memory per instance, so keep `--max-instances` low. Materials sent
+to the model are processed in the US (`us-east5`).
+
 Students upload their materials and get help:
   - **Explain** material (concise + short citations)
   - **MCQ Quiz** (generate, answer with simple "1 a" format, deterministic grading, per-question feedback for wrong answers only)
