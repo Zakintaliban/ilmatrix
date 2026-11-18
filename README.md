@@ -36,27 +36,74 @@ An AI study companion for university students with **multimodal AI capabilities*
 - A background cleaner deletes expired materials ([backgroundTaskService](src/services/backgroundTaskService.ts)); deleting
   an account deletes its materials
 
-### Kredit & plans
+### AI quotas (daily and weekly)
 
-AI usage by signed-in users is metered in **kredit**, a cost-weighted unit (1 kredit ≈ Rp4 of AI cost, priced per model
-in [src/config/plans.ts](src/config/plans.ts)). A grounded answer costs ~9 kredit, a 10-question quiz ~17, a photo ~36.
+AI use by signed-in users is metered in **kredit**, a provider-neutral unit of AI cost (US$1 = 4,500 kredit, so
+1 kredit ≈ Rp4). Each completion is priced by the model that served it ([inferenceCost](src/config/inferenceCost.ts);
+`AI_MODEL_PRICES` adds prices for a new host without a code change). A grounded answer costs ~9 kredit on gpt-oss-120b,
+~20 on Llama 4 Maverick (Vertex AI).
+
+Every user has a **daily** and a **weekly** quota, both hard limits, always on whether or not payments are enabled
+([quotaService](src/services/quotaService.ts)):
+
+- Every AI operation (the eight study tools, chat, image OCR on upload) counts against both. A request is refused
+  when either quota lacks room: `429` with `code: "QUOTA_EXCEEDED"`, `limit: "daily" | "weekly"` (the one that lifts
+  last), `exhausted`, `required`, `resets_at`, both meters in `quota`, and a message (`answer`) the tools show in the
+  chat. Image uploads still work but keep images as images
+- Days start at 00:00 and weeks on Monday 00:00 in `AI_QUOTA_TIMEZONE` (Asia/Jakarta), computed by Postgres. Usage is
+  stored per period (`ai_quota_usage`), so resets need no job and past days are history
+- Limits: per-user override → global default (set by admins on `/admin-usage.html`, stored in `ai_quota_settings`) →
+  `AI_DAILY_KREDIT_LIMIT` / `AI_WEEKLY_KREDIT_LIMIT`. Admins raise one student's quota only through an explicit
+  override; nothing else bypasses the quotas while payments are disabled
+- **Reservations** (`ai_quota_reservations`): before the model is called, one transaction locks the user's row and
+  admits the request only if both quotas have room for a conservative estimate of its cost, then holds that amount.
+  Parallel requests can't pass the same check. Afterwards the hold is replaced by the real cost (0 releases it);
+  settling twice is a no-op. The cost lands in the day and week the request started in, even if it ends after a reset
+- Estimates ([quotaEstimates](src/services/quotaEstimates.ts)) price a per-tool token budget with the configured
+  model, using the exact output cap the provider is sent ([OUTPUT_CAPS](src/services/groqService.ts)). **They can't
+  guarantee zero overshoot**: a request whose real cost exceeds its reservation (a much longer material than budgeted,
+  an image answered by a pricier vision model) can take a quota over its limit by that difference, never more
+- Streams settle when they end (an estimate if the student leaves early, released if nothing was generated). A
+  reservation the server never finishes (crash) expires after 15 minutes and is **charged in full**, never dropped; a
+  late settlement corrects it to the real cost. A background sweep charges expired ones for inactive users
+- Provider errors: whatever the completions really cost is charged (observed per request), nothing if nothing ran
+- **Fail closed**: if the quota can't be checked (database error), AI requests get `503 QUOTA_UNAVAILABLE`; they never
+  run unmetered
+- **Admin exemption**: admin accounts are reserved and charged like everyone (their use shows up) but never refused
+  for quota. Disabling a user's AI access (`set-access`) always refuses, admins included
+- Guests are unchanged: Turnstile, per-device and per-IP caps ([guestLimit](src/middleware/guestLimit.ts)); the AI
+  rate limiter and abuse detection still apply to everyone
+
+Students see both meters, reset times (WIB), 14 days of history and the per-tool estimates on the dashboard
+(`GET /api/usage/stats`). Admin API:
+
+| Endpoint | |
+|---|---|
+| `GET` / `PUT /api/admin/quota/settings` `{"daily_limit":100,"weekly_limit":500}` | global defaults (`null` = env) |
+| `POST /api/admin/usage/user/:id/update-limits` `{"daily_limit":150,"weekly_limit":null}` | per-user overrides (`null` = default, `0` blocks AI) |
+| `POST /api/admin/usage/user/:id/reset-quota` `{"period":"daily"\|"weekly"\|"both"}` | zero today's / this week's usage |
+| `POST /api/admin/usage/user/:id/set-access` `{"enabled":false}` | turn AI off for a user |
+
+The older weekly token counters on `users` (`weekly_kredit_used`, `/api/admin/usage/reset/weekly`) are legacy and no
+longer used for limits.
+
+### Plans and paid kredit (only with payments enabled)
+
+Kept as they were for when monetization returns; not yet rebalanced for daily/weekly quotas
+([plans](src/config/plans.ts)):
 
 | Plan / product | Price | Kredit |
 |---|---|---|
-| Gratis | Rp0 | 150 per week (`KREDIT_FREE_WEEKLY`) |
-| Bulanan | Rp29.000 / 30 days | 900 per week |
-| Semester | Rp99.000 / 182 days | 700 per week |
+| Bulanan | Rp29.000 / 30 days | weekly quota 900 |
+| Semester | Rp99.000 / 182 days | weekly quota 700 |
 | Pass 7 Hari | Rp9.900 | 1.000, valid 7 days |
 | Top-up | Rp5.000 | 600, valid 90 days |
 
-- Weekly kredit refill every Monday 00:00 UTC (07:00 WIB); passes and top-ups are used after the weekly allowance,
-  soonest-expiring first. A request is allowed while any kredit remains (the last one may overshoot slightly)
-- When kredit runs out, AI endpoints return `429` with `code: "KREDIT_EXHAUSTED"` and a message students see in the app;
-  image uploads still work but skip OCR
-- Admins are metered but never blocked. Sales outside Midtrans (e.g. a manual transfer) can still be applied from the
-  admin page (`/admin-usage.html` → user → Set Plan / Grant Pass 7 Hari / Grant Top-up) or the API:
-  `POST /api/admin/usage/user/:id/set-plan {"plan":"semester"}` and
-  `POST /api/admin/usage/user/:id/grant-kredit {"product":"pass_7d","reference":"QRIS-..."}`
+While `PAYMENTS_ENABLED=true`: an active paid plan sets the weekly quota (a per-user override still wins), and
+passes, top-ups and bonus kredit pay for requests the quotas would refuse, soonest-expiring first. While payments are
+disabled, existing plans and grants stay in the database untouched and have no effect; admins can't sell plans or grant
+kredit (`404 PAYMENTS_DISABLED`). Manual sales: `POST /api/admin/usage/user/:id/set-plan {"plan":"semester"}` and
+`POST /api/admin/usage/user/:id/grant-kredit {"product":"pass_7d","reference":"QRIS-..."}`.
 
 ### Pages for Midtrans' merchant review
 
@@ -100,10 +147,18 @@ Chat and the Explain/Quiz/Forum/Exam answers stream token by token (Server-Sent 
 
 ### Payments (Midtrans)
 
-**No payments (e.g. an internal campus deployment):** leave `MIDTRANS_SERVER_KEY` empty. Then nothing can be bought:
-the pricing, checkout, payment and refund pages redirect to `/`, their links are hidden, the dashboard has no
-**Tambah Kredit** section, and running out of kredit shows only when it refills. Kredit still limits AI use per week;
-admins can give users a bigger plan for free from the admin page. Setting the key turns all of it back on.
+**Feature flag `PAYMENTS_ENABLED` (default `false`).** Payments are on only with `PAYMENTS_ENABLED=true` *and*
+`MIDTRANS_SERVER_KEY`. While off (e.g. an internal campus deployment):
+
+- New purchases are closed server-side: `/api/payments/products`, `/api/payments/checkout`, `/api/payments`,
+  `/api/payments/:orderId` and the admin plan/kredit sales answer `404 {"code":"PAYMENTS_DISABLED"}`
+- The pricing, checkout, payment and refund pages redirect to `/` (direct URLs included), their links are hidden, the
+  dashboard has no **Tambah Kredit** section or plan/extra-kredit box, and quota messages have no buy link
+- **Settlement still works** when the server key is set: the Midtrans webhook (signature check, Get Status as the
+  source of truth, exactly-once fulfilment) and the admin re-check settle transactions started before payments were
+  turned off. Their plan or kredit is stored but only counts once payments are on again
+- Nothing is deleted: the Midtrans integration, checkout, migrations 014/015, plans and payment records stay as they
+  are. `PAYMENTS_ENABLED=true` turns everything back on
 
 Students buy passes, top-ups and plans from the public pricing page (`/harga`) or the dashboard (**Tambah Kredit**)
 with Midtrans Snap: QRIS, e-wallets, whatever is active on the merchant account (narrow it with
@@ -224,7 +279,7 @@ Run service account's token (`GROQ_API_KEY` stays empty). Replace `PROJECT_ID` a
      --allow-unauthenticated --max-instances=2
    gcloud run services update ilmatrix --region=asia-southeast2 --update-env-vars=BASE_URL=https://ilmatrix-....run.app
    ```
-7. Create the tables with a one-off job from the same image:
+7. Create the tables (migrations up to 016) with a one-off job from the same image:
    ```bash
    IMAGE=$(gcloud run services describe ilmatrix --region=asia-southeast2 \
      --format='value(spec.template.spec.containers[0].image)')
@@ -393,6 +448,9 @@ Server (default): <http://localhost:8787>
 - KREDIT_FREE_WEEKLY: Weekly kredit on the free plan (default 150). Paid plans and products are defined in [src/config/plans.ts](src/config/plans.ts).
 - DATABASE_SSL: `true`/`false` to override database SSL (default: on when NODE_ENV=production). Note that npm runs every script with NODE_ENV=production because `.npmrc` sets `omit=dev`, so set `DATABASE_SSL=false` for a local Postgres without SSL.
 - RATE_LIMIT_MAX: Requests per minute per IP (default 120). Lightweight token bucket applied to all /api routes. See [middleware](src/routes.ts:70).
+- AI_DAILY_KREDIT_LIMIT / AI_WEEKLY_KREDIT_LIMIT: default daily and weekly AI quotas in kredit (100 and 500) when admins haven't set them on the admin page. See [quotaService](src/services/quotaService.ts).
+- AI_QUOTA_TIMEZONE: IANA zone for quota days (reset 00:00) and weeks (Monday 00:00). Default `Asia/Jakarta`.
+- AI_MODEL_PRICES: optional JSON of US$ per million tokens per model, added to or replacing the built-in prices, e.g. `{"meta/llama-4-maverick-17b-128e-instruct-maas":{"input":0.35,"output":1.15}}`. Unknown models are charged at the highest known rate.
 - AI_RATE_LIMIT_PER_MINUTE / AI_RATE_LIMIT_PER_HOUR: AI requests per user (guests: per device) in sliding 1-minute and 1-hour windows (defaults 12 and 150). See [aiRateLimit](src/middleware/aiRateLimit.ts).
 - AI_MAX_CONCURRENT: AI requests one user/device may have in flight (default 2); more get an immediate `429` instead of queueing for the shared Groq slots.
 - PDF_MAX_PAGES: Max PDF pages extracted per file (default 200). See [extractPdfTextImpl()](src/extract/pdf.ts:50).
@@ -404,7 +462,8 @@ Server (default): <http://localhost:8787>
 - TURNSTILE_SITE_KEY / TURNSTILE_SECRET_KEY: Cloudflare Turnstile keys for the guest bot check. Both must be set to enable it.
 - GUEST_IP_DAILY_REQUESTS: Guest AI requests per IP per 24 hours (default 100).
 - GUEST_IP_DAILY_VERIFICATIONS: Guest device verifications per IP per 24 hours (default 20).
-- MIDTRANS_SERVER_KEY: Midtrans server key; payments are off without it (no price, checkout or refund pages). Never sent to the browser.
+- PAYMENTS_ENABLED: `true` to sell plans and kredit (also needs MIDTRANS_SERVER_KEY). Default `false`: no purchases; earlier transactions still settle.
+- MIDTRANS_SERVER_KEY: Midtrans server key, needed for payments and for settling earlier transactions. Never sent to the browser.
 - MIDTRANS_CLIENT_KEY: Midtrans client key for the Snap popup on the checkout page (public by design). Without it, checkout offers Midtrans' hosted page instead.
 - MIDTRANS_IS_PRODUCTION: `true` for real payments (default `false`, sandbox).
 - MIDTRANS_ENABLED_PAYMENTS: Comma-separated Snap payment methods to offer (default: all active on the account).
