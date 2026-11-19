@@ -63,14 +63,28 @@ Every user has a **daily** and a **weekly** quota, both hard limits, always on w
   model, using the exact output cap the provider is sent ([OUTPUT_CAPS](src/services/groqService.ts)). **They can't
   guarantee zero overshoot**: a request whose real cost exceeds its reservation (a much longer material than budgeted,
   an image answered by a pricier vision model) can take a quota over its limit by that difference, never more
+- Image OCR reserves per image: about 43 kredit on qwen/qwen3.8-27b at the 2,000-token output cap (~8,000 characters,
+  about two dense pages per photo), about 14 on Llama 4 Maverick (Vertex). An upload whose images don't all fit in the
+  remaining quota gets no OCR (the images are kept as images); the upload itself always works
+- Settlement: a reservation is marked settled only once the database confirms it. A failed settlement is retried once
+  when the request (or stream) ends, from the larger of the reported and observed cost; settlement is idempotent, so a
+  retry never charges twice. If that fails too, the reservation stays open. A usage-log failure never affects the quota
 - Streams settle when they end (an estimate if the student leaves early, released if nothing was generated). A
-  reservation the server never finishes (crash) expires after 15 minutes and is **charged in full**, never dropped; a
-  late settlement corrects it to the real cost. A background sweep charges expired ones for inactive users
+  reservation the server never finishes (crash, or every settlement failed) expires after 15 minutes and is **charged
+  in full**, never dropped; a late settlement corrects it to the real cost
+- Expiry runs at request time: each user's stale reservations are charged at their next AI request or status read,
+  so enforcement never depends on a scheduler. A sweep for users who don't come back runs in the process every few
+  minutes and, where that isn't reliable (Cloud Run), as `npm run quota:expire` on a schedule (see the Google Cloud
+  guide). Sweeps can run in parallel: each reservation is expired once
 - Provider errors: whatever the completions really cost is charged (observed per request), nothing if nothing ran
 - **Fail closed**: if the quota can't be checked (database error), AI requests get `503 QUOTA_UNAVAILABLE`; they never
   run unmetered
 - **Admin exemption**: admin accounts are reserved and charged like everyone (their use shows up) but never refused
-  for quota. Disabling a user's AI access (`set-access`) always refuses, admins included
+  for quota. Disabling a user's AI access (`set-access`) always refuses, admins included. **Risk:** AI spend by
+  admins is unbounded; a misused or compromised admin account (or a script using an admin session) can run up the AI
+  bill until someone notices. Keep admins few, give staff who only need more AI a per-user override instead of admin,
+  watch admin rows on the admin page, and set a billing budget/alert at the AI provider (GCP billing budgets, Groq
+  spend limits). The per-minute AI rate limit still applies to admins
 - Guests are unchanged: Turnstile, per-device and per-IP caps ([guestLimit](src/middleware/guestLimit.ts)); the AI
   rate limiter and abuse detection still apply to everyone
 
@@ -84,8 +98,9 @@ Students see both meters, reset times (WIB), 14 days of history and the per-tool
 | `POST /api/admin/usage/user/:id/reset-quota` `{"period":"daily"\|"weekly"\|"both"}` | zero today's / this week's usage |
 | `POST /api/admin/usage/user/:id/set-access` `{"enabled":false}` | turn AI off for a user |
 
-The older weekly token counters on `users` (`weekly_kredit_used`, `/api/admin/usage/reset/weekly`) are legacy and no
-longer used for limits.
+`POST /api/admin/usage/reset/weekly` and `/reset/monthly` are **deprecated**: they reset the pre-quota token counters
+on `users` (`weekly_kredit_used` and friends), which no longer limit anything, so they now change nothing and answer
+`410 ENDPOINT_DEPRECATED`. Quotas reset by themselves; use `reset-quota` for one user.
 
 ### Plans and paid kredit (only with payments enabled)
 
@@ -288,9 +303,25 @@ Run service account's token (`GROQ_API_KEY` stays empty). Replace `PROJECT_ID` a
      --set-env-vars=DATABASE_SSL=false --command=npm --args=run,migrate,run --execute-now --wait
    ```
    After a deploy with new migrations: `gcloud run jobs update ilmatrix-migrate --image=$IMAGE ... --execute-now`.
-8. Check the model from your machine: `GROQ_API_KEY=$(gcloud auth print-access-token)` plus the `env.yaml` model
+8. Expire stale quota reservations on a schedule. Cloud Run throttles CPU between requests and stops idle instances,
+   so the in-process sweep isn't reliable there; quotas are still enforced at request time either way. A Cloud Run Job
+   started by Cloud Scheduler through the Jobs API with IAM, so nothing is exposed over HTTP:
+   ```bash
+   gcloud run jobs create ilmatrix-quota-expire --image=$IMAGE --region=asia-southeast2 --service-account=$SA \
+     --set-cloudsql-instances=PROJECT_ID:asia-southeast2:ilmatrix-db --set-secrets=DATABASE_URL=DATABASE_URL:latest \
+     --set-env-vars=DATABASE_SSL=false --command=npm --args=run,quota:expire
+   gcloud iam service-accounts create ilmatrix-scheduler
+   gcloud run jobs add-iam-policy-binding ilmatrix-quota-expire --region=asia-southeast2 \
+     --member=serviceAccount:ilmatrix-scheduler@PROJECT_ID.iam.gserviceaccount.com --role=roles/run.invoker
+   gcloud scheduler jobs create http ilmatrix-quota-expire --location=asia-southeast2 --schedule="*/10 * * * *" \
+     --uri=https://run.googleapis.com/v2/projects/PROJECT_ID/locations/asia-southeast2/jobs/ilmatrix-quota-expire:run \
+     --http-method=POST --oauth-service-account-email=ilmatrix-scheduler@PROJECT_ID.iam.gserviceaccount.com
+   ```
+   Update its image with each deploy like the migrate job (`gcloud run jobs update ilmatrix-quota-expire --image=$IMAGE`).
+   A failed run exits non-zero and shows in the job's executions.
+9. Check the model from your machine: `GROQ_API_KEY=$(gcloud auth print-access-token)` plus the `env.yaml` model
    settings, then `npm run groq:check`. If Vertex answers 404, try `v1beta1` instead of `v1` in `AI_BASE_URL`.
-9. Optional secrets the same way (`--set-secrets`): `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` (add
+10. Optional secrets the same way (`--set-secrets`): `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` (add
    `BASE_URL/api/auth/google/callback` as a redirect URI), `RESEND_API_KEY`, `TURNSTILE_SECRET_KEY`.
 
 Notes: rate limits and guest caps are counted in memory per instance, so keep `--max-instances` low. Materials sent
@@ -687,6 +718,7 @@ curl -H "Content-Type: application/json" \
 - npm run test:ai → run AI layer and study-tool regression tests (fake Groq client)
 - npm run test:smoke → run API integration tests
 - npm run groq:check → live check of every study tool against Groq (needs GROQ_API_KEY)
+- npm run quota:expire → charge stale AI quota reservations once and exit (for a scheduled job; needs DATABASE_URL)
 
 ## Notes and next steps
 

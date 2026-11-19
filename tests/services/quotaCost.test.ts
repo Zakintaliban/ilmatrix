@@ -115,6 +115,16 @@ test("reservations follow the requested size and the priciest model that may ans
   });
 });
 
+test("reading one image reserves well under half of the default daily quota on the default vision model", () => {
+  withModel({ groqVisionModel: "qwen/qwen3.8-27b" }, () => {
+    const perImage = reservationKredit("ocr");
+    assert.equal(perImage, kreditForUsage("qwen/qwen3.8-27b", 2_000, OUTPUT_CAPS.ocr));
+    // With a 4,000-token cap it was 79.2: one photo held most of a 100-kredit day
+    assert.ok(perImage <= 50, `one image reserves ${perImage}`);
+    assert.equal(reservationKredit("ocr", { images: 3 }), Math.round(3 * perImage * 100) / 100, "scales per image");
+  });
+});
+
 const defaults: QuotaDefaults = { daily: 100, weekly: 500, dailySource: "env", weeklySource: "admin", updatedAt: null };
 
 test("limits: a per-user override beats a paid plan, which beats the global default", () => {

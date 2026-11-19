@@ -118,8 +118,9 @@ api.put("/admin/quota/settings", authMiddleware, usageController.requireAdmin, u
 // Plans and passes are payment entitlements: off with payments (quota changes go through update-limits)
 api.post("/admin/usage/user/:userId/set-plan", paymentController.requirePaymentsEnabled, authMiddleware, usageController.requireAdmin, usageController.setUserPlan);
 api.post("/admin/usage/user/:userId/grant-kredit", paymentController.requirePaymentsEnabled, authMiddleware, usageController.requireAdmin, usageController.grantUserKredit);
-api.post("/admin/usage/reset/weekly", authMiddleware, usageController.requireAdmin, usageController.adminResetWeekly);
-api.post("/admin/usage/reset/monthly", authMiddleware, usageController.requireAdmin, usageController.adminResetMonthly);
+// Deprecated (410): they reset pre-quota counters that no longer limit anything
+api.post("/admin/usage/reset/weekly", authMiddleware, usageController.requireAdmin, usageController.adminResetDeprecated);
+api.post("/admin/usage/reset/monthly", authMiddleware, usageController.requireAdmin, usageController.adminResetDeprecated);
 api.post("/admin/usage/cleanup/sessions", authMiddleware, usageController.requireAdmin, usageController.adminCleanupSessions);
 api.post("/admin/usage/cleanup/logs", authMiddleware, usageController.requireAdmin, usageController.adminCleanupLogs);
 api.get("/admin/usage/export", authMiddleware, usageController.requireAdmin, usageController.exportUsageData);

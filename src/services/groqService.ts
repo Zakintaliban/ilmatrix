@@ -77,7 +77,9 @@ export interface DialogueSession {
 /** Output token caps per tool: sent with every request, and quota reservations are sized from them. */
 export const OUTPUT_CAPS = {
   answer: 2500,
-  ocr: 4000,
+  // ~8,000 characters, about two dense pages per photo. The reservation scales with this
+  // cap, and 4,000 made one image hold ~80 kredit on the vision model (most of a day's quota).
+  ocr: 2000,
   dialogue: 1500,
   dialogueHint: 500,
   mcq: (numQuestions: number) => Math.min(16000, 600 + numQuestions * 260),

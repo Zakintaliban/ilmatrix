@@ -8,6 +8,7 @@
 import test, { after, before, beforeEach } from "node:test";
 import assert from "node:assert/strict";
 import { randomBytes, randomUUID } from "node:crypto";
+import { spawnSync } from "node:child_process";
 
 const DB_URL = process.env.TEST_DATABASE_URL;
 const skip = DB_URL ? false : "TEST_DATABASE_URL not set";
@@ -39,6 +40,46 @@ const createdUsers: string[] = [];
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
+/**
+ * Database fault injection for listed users only (other suites share the
+ * database): settlements fail the first N times (a sequence, so the count
+ * survives the rolled-back transactions), usage-log inserts always fail.
+ */
+const FAULTS_SQL = `
+  CREATE SEQUENCE IF NOT EXISTS test_settle_failures;
+  CREATE TABLE IF NOT EXISTS test_fail_settle (user_id UUID PRIMARY KEY, failures INT NOT NULL);
+  CREATE TABLE IF NOT EXISTS test_fail_log (user_id UUID PRIMARY KEY);
+  CREATE OR REPLACE FUNCTION test_fail_settlement() RETURNS trigger AS $$
+  DECLARE wanted INT;
+  BEGIN
+    SELECT failures INTO wanted FROM test_fail_settle WHERE user_id = NEW.user_id;
+    IF wanted IS NOT NULL THEN
+      IF nextval('test_settle_failures') <= wanted THEN
+        RAISE EXCEPTION 'injected settlement failure';
+      END IF;
+    END IF;
+    RETURN NEW;
+  END $$ LANGUAGE plpgsql;
+  CREATE OR REPLACE FUNCTION test_fail_log() RETURNS trigger AS $$
+  BEGIN
+    IF EXISTS (SELECT 1 FROM test_fail_log WHERE user_id = NEW.user_id) THEN
+      RAISE EXCEPTION 'injected log failure';
+    END IF;
+    RETURN NEW;
+  END $$ LANGUAGE plpgsql;
+  DROP TRIGGER IF EXISTS test_fail_settlement ON ai_quota_reservations;
+  CREATE TRIGGER test_fail_settlement BEFORE UPDATE ON ai_quota_reservations
+    FOR EACH ROW WHEN (NEW.status IN ('settled', 'released')) EXECUTE FUNCTION test_fail_settlement();
+  DROP TRIGGER IF EXISTS test_fail_log ON token_usage_logs;
+  CREATE TRIGGER test_fail_log BEFORE INSERT ON token_usage_logs FOR EACH ROW EXECUTE FUNCTION test_fail_log();`;
+
+/** Make the next `times` settlements of this user's reservations fail. */
+async function failSettlements(userId: string, times: number) {
+  await query(`DELETE FROM test_fail_settle`);
+  await query(`ALTER SEQUENCE test_settle_failures RESTART`);
+  await query(`INSERT INTO test_fail_settle (user_id, failures) VALUES ($1, $2)`, [userId, times]);
+}
+
 before(async () => {
   if (skip) return;
   const migrations = await import("../../src/services/migrationService.js");
@@ -52,6 +93,7 @@ before(async () => {
   api = routes.default;
   stopBackgroundTasks = routes.stopBackgroundTasks;
   await query(`UPDATE ai_quota_settings SET daily_kredit_limit = NULL, weekly_kredit_limit = NULL`);
+  await query(FAULTS_SQL);
 
   const { groqService } = await import("../../src/services/groqService.js");
   const { GroqProvider } = await import("../../src/services/groqProvider.js");
@@ -84,6 +126,13 @@ after(async () => {
   if (skip) return;
   await query(`DELETE FROM users WHERE id = ANY($1::uuid[])`, [createdUsers]);
   await query(`UPDATE ai_quota_settings SET daily_kredit_limit = NULL, weekly_kredit_limit = NULL, updated_by = NULL`);
+  await query(`
+    DROP TRIGGER IF EXISTS test_fail_settlement ON ai_quota_reservations;
+    DROP TRIGGER IF EXISTS test_fail_log ON token_usage_logs;
+    DROP FUNCTION IF EXISTS test_fail_settlement();
+    DROP FUNCTION IF EXISTS test_fail_log();
+    DROP TABLE IF EXISTS test_fail_settle, test_fail_log;
+    DROP SEQUENCE IF EXISTS test_settle_failures;`);
   stopBackgroundTasks();
   await closeDatabase();
   setTimeout(() => process.exit(0), 100).unref();
@@ -648,3 +697,111 @@ test("with payments enabled, a paid plan sets the weekly quota and extra kredit 
     config.midtransServerKey = saved.key;
   }
 });
+
+// ---------------------------------------------------------------------------
+// Hardening: legacy endpoints, settlement recovery, scheduled expiry
+// ---------------------------------------------------------------------------
+
+test("the legacy reset endpoints are deprecated (410) and never claim a reset", { skip }, async () => {
+  const admin = await createUser({ admin: true });
+  const u = await createUser();
+  await setUsage(u.id, 30, 60);
+  for (const path of ["/admin/usage/reset/weekly", "/admin/usage/reset/monthly"]) {
+    assert.equal((await request("POST", path, { cookie: u.cookie })).status, 403, `${path} stays admin-only`);
+    const res = await request("POST", path, { cookie: admin.cookie });
+    assert.equal(res.status, 410, path);
+    assert.equal(res.body.success, false);
+    assert.equal(res.body.code, "ENDPOINT_DEPRECATED");
+    assert.match(res.body.error, /Nothing was reset.*reset-quota/);
+  }
+  assert.deepEqual(await usage(u.id), { day: 30, week: 60 }, "quotas untouched");
+});
+
+test("a failed settlement stays open, is retried when the request ends, and is charged once", { skip }, async () => {
+  const u = await createUser();
+  await failSettlements(u.id, 1);
+  const res = await explain(u.cookie);
+  assert.equal(res.status, 200, JSON.stringify(res.body));
+  assert.deepEqual(await usage(u.id), { day: CHARGE, week: CHARGE });
+  const [r] = await reservations(u.id);
+  assert.deepEqual([r.status, r.charged], ["settled", CHARGE]);
+  const logs = await query(`SELECT kredit_used::float AS kredit FROM token_usage_logs WHERE user_id = $1`, [u.id]);
+  assert.deepEqual(logs.rows, [{ kredit: CHARGE }], "logged once");
+});
+
+test("a streamed answer whose settlement fails is retried when the stream ends", { skip }, async () => {
+  stream.pieces = ["Jawa", "ban."];
+  stream.delayMs = 0;
+  const u = await createUser();
+  await failSettlements(u.id, 1);
+  const res = await api.fetch(
+    new Request("http://local/explain", {
+      method: "POST",
+      headers: { "content-type": "application/json", cookie: u.cookie },
+      body: JSON.stringify({ materialText: material(), stream: true }),
+    })
+  );
+  assert.match(await res.text(), /event: done/);
+  assert.deepEqual(await usage(u.id), { day: CHARGE, week: CHARGE });
+  assert.equal((await reservations(u.id))[0].status, "settled");
+});
+
+test("if every settlement fails, the reservation stays open and is charged in full on expiry, once", { skip }, async () => {
+  const u = await createUser();
+  await failSettlements(u.id, 2);
+  assert.equal((await explain(u.cookie)).status, 200);
+  const [open] = await reservations(u.id);
+  assert.deepEqual([open.status, open.charged], ["active", 0], "not marked settled when the database refused");
+  assert.deepEqual(await usage(u.id), { day: 0, week: 0 });
+
+  // Let it go stale (only this one: other suites share the database), then sweep twice
+  await query(`UPDATE ai_quota_reservations SET expires_at = NOW() - INTERVAL '1 minute' WHERE user_id = $1`, [u.id]);
+  assert.ok((await quota.expireStale()) >= 1);
+  await quota.expireStale();
+  const [expired] = await reservations(u.id);
+  assert.deepEqual([expired.status, expired.charged], ["expired", expired.reserved]);
+  assert.deepEqual(await usage(u.id), { day: expired.reserved, week: expired.reserved }, "the hold is charged, never lost");
+});
+
+test("a usage-log failure neither undoes nor repeats the settlement", { skip }, async () => {
+  const u = await createUser();
+  await query(`INSERT INTO test_fail_log (user_id) VALUES ($1)`, [u.id]);
+  const res = await explain(u.cookie);
+  assert.equal(res.status, 200);
+  assert.equal(res.headers.get("x-kredit-used"), CHARGE.toFixed(2), "settled normally");
+  assert.deepEqual(await usage(u.id), { day: CHARGE, week: CHARGE });
+  assert.equal((await reservations(u.id))[0].status, "settled");
+  assert.equal((await query(`SELECT 1 FROM token_usage_logs WHERE user_id = $1`, [u.id])).rowCount, 0);
+});
+
+test("parallel expiry sweeps (several instances or scheduler runs) charge each reservation once", { skip }, async () => {
+  const u = await createUser();
+  const started = new Date(Date.now() - quota.RESERVATION_TTL_MS - 60_000);
+  for (let i = 0; i < 3; i++) assert.ok((await quota.reserve(u.id, "explain", 4, started)).ok);
+  const counts = await Promise.all([quota.expireStale(), quota.expireStale(), quota.expireStale()]);
+  assert.ok(counts.reduce((a, b) => a + b, 0) >= 3);
+  assert.deepEqual((await reservations(u.id)).map((r: any) => [r.status, r.charged]), [["expired", 4], ["expired", 4], ["expired", 4]]);
+  assert.deepEqual(await usage(u.id), { day: 12, week: 12 }, "charged once each");
+});
+
+test("npm run quota:expire charges stale reservations and exits 0 (Cloud Run Job)", { skip }, async () => {
+  const u = await createUser();
+  const started = new Date(Date.now() - quota.RESERVATION_TTL_MS - 60_000);
+  assert.ok((await quota.reserve(u.id, "chat", 6, started)).ok);
+  const run = spawnSync(process.execPath, ["--import", "tsx", "scripts/expire-reservations.ts"], {
+    env: { ...process.env, DATABASE_URL: DB_URL, DATABASE_SSL: "false" },
+    encoding: "utf8",
+    timeout: 60_000,
+  });
+  assert.equal(run.status, 0, run.stderr);
+  assert.match(run.stdout, /\[QUOTA\] Expired [1-9]\d* reservation\(s\)/);
+  assert.deepEqual(await usage(u.id), { day: 6, week: 6 });
+
+  const broken = spawnSync(process.execPath, ["--import", "tsx", "scripts/expire-reservations.ts"], {
+    env: { ...process.env, DATABASE_URL: "postgresql://nobody@127.0.0.1:1/none", DATABASE_SSL: "false" },
+    encoding: "utf8",
+    timeout: 60_000,
+  });
+  assert.equal(broken.status, 1, "a failed run is visible to the scheduler");
+});
+

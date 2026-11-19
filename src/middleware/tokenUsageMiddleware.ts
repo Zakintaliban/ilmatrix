@@ -10,8 +10,10 @@
  *    real kredit, even when the handler later fails.
  * 3. After: controllers call updateTokenUsageAfterRequest() to settle the
  *    reservation and log the request. Whatever is still open when the handler
- *    returns (errors, early exits) is settled from the observed cost: 0
- *    releases the reservation. Streams settle themselves when they end.
+ *    returns (errors, early exits, a settlement that failed) is settled then,
+ *    from the larger of the reported and observed cost: 0 releases the
+ *    reservation. Streams settle themselves when they end. If the database
+ *    refuses every attempt, the reservation expires and is charged in full.
  *
  * Guests are limited separately by guestLimitMiddleware.
  */
@@ -31,8 +33,14 @@ const round2 = (n: number) => Math.round(n * 100) / 100;
 export interface QuotaReservation {
   id: string;
   amount: number;
+  /** What the request's completions really cost so far (observed in the provider). */
   cost: CostSink;
+  /** Kredit a controller reported; settlement never charges less than this or `cost`. */
+  charge: number;
+  /** Set only once the database has settled it (or found it already settled). */
   finished: boolean;
+  /** The request is in token_usage_logs (logged once, whatever happens to settlement). */
+  logged: boolean;
 }
 
 /** Tool behind an AI endpoint path. */
@@ -124,37 +132,63 @@ export async function reserveQuota(
     return quotaUnavailable(c, error);
   }
   if (!result.ok) return c.json(quotaExceededBody(result), 429);
-  const reservation: QuotaReservation = { id: result.reservationId, amount: result.amount, cost: { kredit: 0 }, finished: false };
+  const reservation: QuotaReservation = {
+    id: result.reservationId,
+    amount: result.amount,
+    cost: { kredit: 0 },
+    charge: 0,
+    finished: false,
+    logged: false,
+  };
   c.set('quotaReservation', reservation);
   c.set('requestType', tool);
   return reservation;
 }
 
 /**
- * Settle this request's reservation from the observed cost, if a controller
- * hasn't already. Safe to call more than once.
+ * Settle a reservation in the database. `finished` is set only when that
+ * succeeds; on failure it stays open so the end of the request can retry, and
+ * if every attempt fails the reservation expires and is charged in full.
+ * Retrying can't double-charge: quotaService.finish() is idempotent.
+ */
+async function settle(reservation: QuotaReservation): Promise<{ kredit: number; status: quotaService.QuotaStatus | null } | null> {
+  const kredit = round2(Math.max(reservation.charge, reservation.cost.kredit));
+  try {
+    const status = await quotaService.finish(reservation.id, kredit);
+    reservation.finished = true;
+    return { kredit, status };
+  } catch (error) {
+    console.error(`[QUOTA] Could not settle reservation ${reservation.id} (${kredit} kredit); retrying when the request ends, else charged in full on expiry:`, error);
+    return null;
+  }
+}
+
+/** Write the request to token_usage_logs once. A logging failure never affects the quota. */
+async function logOnce(c: Context, reservation: QuotaReservation, entry: Omit<Parameters<typeof tokenUsageService.logTokenUsage>[0], 'userId' | 'sessionId' | 'endpoint'>) {
+  if (reservation.logged) return;
+  try {
+    await tokenUsageService.logTokenUsage({ userId: c.get('user').id, sessionId: null, endpoint: c.req.path, ...entry });
+    reservation.logged = true;
+  } catch (error) {
+    console.error('[QUOTA] Could not log AI usage (the quota is unaffected):', error);
+  }
+}
+
+/**
+ * Settle this request's reservation if it is still open: the controller never
+ * did (errors, early exits) or its settlement failed. Safe to call more than once.
  */
 export async function finishQuota(c: Context): Promise<void> {
   const reservation: QuotaReservation | undefined = c.get('quotaReservation');
   if (!reservation || reservation.finished) return;
-  reservation.finished = true;
-  const kredit = round2(reservation.cost.kredit);
-  try {
-    await quotaService.finish(reservation.id, kredit);
-    if (kredit > 0) {
-      await tokenUsageService.logTokenUsage({
-        userId: c.get('user').id,
-        sessionId: null,
-        tokensUsed: 1,
-        kreditUsed: kredit,
-        endpoint: c.req.path,
-        requestType: c.get('requestType'),
-        metadata: { settled_from: 'observed_cost' },
-      });
-    }
-  } catch (error) {
-    // The reservation stays active and is charged in full when it expires
-    console.error('[QUOTA] Could not settle a reservation; it will be charged in full on expiry:', error);
+  const settled = await settle(reservation);
+  if (settled && settled.kredit > 0) {
+    await logOnce(c, reservation, {
+      tokensUsed: 1,
+      kreditUsed: settled.kredit,
+      requestType: c.get('requestType'),
+      metadata: { settled_from: 'observed_cost' },
+    });
   }
 }
 
@@ -209,24 +243,22 @@ export async function updateTokenUsageAfterRequest(
       typeof metadata.kredit === 'number'
         ? metadata.kredit
         : kreditForUsage(String(metadata.model || ''), Number(metadata.prompt_tokens) || 0, Number(metadata.completion_tokens) || 0);
-    // Never charge less than the completions really cost
-    const kredit = round2(Math.max(reported, reservation.cost.kredit));
+    // Remembered for a retry (finishQuota) if this settlement fails
+    reservation.charge = round2(Math.max(reservation.charge, reported));
 
-    reservation.finished = true;
-    const status = await quotaService.finish(reservation.id, kredit);
-
-    await tokenUsageService.logTokenUsage({
-      userId: user.id,
-      sessionId: null,
+    const settled = await settle(reservation);
+    // The usage happened either way, so it is logged even if settlement must be retried
+    await logOnce(c, reservation, {
       tokensUsed: Math.max(1, Math.round(tokensUsed)),
-      kreditUsed: kredit,
-      endpoint: c.req.path,
+      kreditUsed: settled?.kredit ?? round2(Math.max(reservation.charge, reservation.cost.kredit)),
       modelUsed: metadata.model,
       requestType: c.get('requestType') || getRequestType(c.req.path),
       promptTokens: metadata.prompt_tokens,
       completionTokens: metadata.completion_tokens,
       metadata,
     });
+    if (!settled) return { success: false };
+    const { kredit, status } = settled;
     if (!status) return { success: true };
 
     // Warn about whichever quota is closest to running out
@@ -259,7 +291,7 @@ export async function updateTokenUsageAfterRequest(
 
     return { success: true, quota: quotaService.quotaSummary(status), warning, notification };
   } catch (error) {
-    // The reservation is charged in full when it expires, so nothing goes unbilled
+    // Unexpected: whatever is still open is settled by finishQuota when the request ends
     console.error('[QUOTA] Failed to settle quota:', error);
     return { success: false };
   }

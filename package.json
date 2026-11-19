@@ -22,7 +22,8 @@
     "db:setup": "npm run migrate run",
     "db:status": "npm run migrate status",
     "set-admin": "tsx scripts/set-admin.ts",
-    "groq:check": "tsx scripts/groq-live-check.ts"
+    "groq:check": "tsx scripts/groq-live-check.ts",
+    "quota:expire": "tsx scripts/expire-reservations.ts"
   },
   "keywords": [],
   "author": "",

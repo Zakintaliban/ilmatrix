@@ -469,43 +469,22 @@ export async function grantUserKredit(c: Context) {
 }
 
 /**
- * POST /api/admin/usage/reset/weekly
- * Manually trigger weekly token reset for all users (admin only)
+ * POST /api/admin/usage/reset/weekly and /reset/monthly (deprecated).
+ * They reset the pre-quota token counters, which no longer limit anything, so
+ * reporting success would claim a quota reset that didn't happen. They change
+ * nothing and answer 410 with the replacement.
  */
-export async function adminResetWeekly(c: Context) {
-  try {
-    const resetUserIds = await tokenUsageService.resetWeeklyUsage();
-
-    return c.json({
-      success: true,
-      message: 'Weekly token usage reset completed',
-      users_reset: resetUserIds.length,
-      user_ids: resetUserIds,
-    });
-  } catch (error) {
-    console.error('Error resetting weekly usage:', error);
-    return c.json({ error: 'Failed to reset weekly usage' }, 500);
-  }
-}
-
-/**
- * POST /api/admin/usage/reset/monthly
- * Manually trigger monthly token reset for all users (admin only)
- */
-export async function adminResetMonthly(c: Context) {
-  try {
-    const resetUserIds = await tokenUsageService.resetMonthlyUsage();
-
-    return c.json({
-      success: true,
-      message: 'Monthly token usage reset completed',
-      users_reset: resetUserIds.length,
-      user_ids: resetUserIds,
-    });
-  } catch (error) {
-    console.error('Error resetting monthly usage:', error);
-    return c.json({ error: 'Failed to reset monthly usage' }, 500);
-  }
+export function adminResetDeprecated(c: Context) {
+  return c.json(
+    {
+      success: false,
+      code: 'ENDPOINT_DEPRECATED',
+      error:
+        `Deprecated: quotas reset by themselves (daily at 00:00, weekly on Monday 00:00, ${config.aiQuotaTimezone}). ` +
+        'Nothing was reset. To reset one user, use POST /api/admin/usage/user/:userId/reset-quota {"period":"daily"|"weekly"|"both"}.',
+    },
+    410
+  );
 }
 
 /**

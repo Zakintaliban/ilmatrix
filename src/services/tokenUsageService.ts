@@ -531,34 +531,6 @@ export async function getUsageStats(userId: string): Promise<UsageStats> {
 }
 
 // ============================================================================
-// Reset Functions
-// ============================================================================
-
-/**
- * Reset weekly token usage for users whose reset time has passed
- * Returns list of user IDs that were reset
- */
-export async function resetWeeklyUsage(): Promise<string[]> {
-  const result = await query<{ user_id: string }>(
-    'SELECT * FROM reset_weekly_tokens()'
-  );
-
-  return result.rows.map(row => row.user_id);
-}
-
-/**
- * Reset monthly token usage for users whose reset time has passed
- * Returns list of user IDs that were reset
- */
-export async function resetMonthlyUsage(): Promise<string[]> {
-  const result = await query<{ user_id: string }>(
-    'SELECT * FROM reset_monthly_tokens()'
-  );
-
-  return result.rows.map(row => row.user_id);
-}
-
-// ============================================================================
 // Admin Functions
 // ============================================================================
 
