@@ -7,6 +7,9 @@ import api, { stopBackgroundTasks } from "./routes.js";
 import config from "./config/env.js";
 import { initializeDatabase, testConnection, closeDatabase } from "./services/databaseService.js";
 import { validateDatabaseConfig } from "./config/database.js";
+import { securityHeadersMiddleware } from "./middleware/securityHeaders.js";
+import { pricingPage } from "./controllers/pricingPage.js";
+import { isPaymentsEnabled } from "./services/paymentService.js";
 
 /**
  * ILMATRIX server bootstrap with improved error handling and configuration
@@ -25,6 +28,9 @@ class IlmatrixServer {
    * Setup application routes and middleware
    */
   private setupRoutes(): void {
+    // Security headers (CSP, framing, HSTS, ...) on every response
+    this.app.use("*", securityHeadersMiddleware);
+
     // Health check at root level
     this.app.get("/api/health", async (c) => {
       const { behaviorAnalysisService } = await import(
@@ -63,11 +69,29 @@ class IlmatrixServer {
       "/profile",
       "/verify-email",
       "/email-verified",
+      "/payment",
+      "/checkout",
+      "/syarat-ketentuan",
+      "/kebijakan-pengembalian",
     ];
+
+    // Without payments (no MIDTRANS_SERVER_KEY, e.g. an internal deployment) there are no price, checkout or refund pages
+    const paymentPages = ["/harga", "/checkout", "/payment", "/kebijakan-pengembalian"].flatMap((p) => [p, `${p}.html`]);
+    this.app.use("*", async (c, next) => (!isPaymentsEnabled() && paymentPages.includes(c.req.path) ? c.redirect("/") : next()));
+
+    // Public pricing, rendered from the product catalogue (no JavaScript needed)
+    this.app.get("/harga", pricingPage);
+    this.app.get("/harga.html", pricingPage);
 
     cleanUrls.forEach((path) => {
       this.app.get(path, serveStatic({ path: `${path}.html`, root: "./public" }));
     });
+
+    // KaTeX (math rendering) straight from the pinned npm package: no CDN
+    this.app.use(
+      "/vendor/katex/*",
+      serveStatic({ root: "./node_modules/katex/dist", rewriteRequestPath: (p) => p.replace(/^\/vendor\/katex/, "") })
+    );
 
     // Serve static files from public directory
     this.app.use("/*", serveStatic({ root: "./public" }));
@@ -147,27 +171,26 @@ class IlmatrixServer {
         console.error("[ILMATRIX] Error stopping background tasks:", error);
       }
 
+      // Cloud Run allows 10 s after SIGTERM: stop taking connections and let running
+      // requests finish (and settle their quota) before the database goes away
+      setTimeout(() => {
+        console.log("[ILMATRIX] Force exit after timeout");
+        process.exit(1);
+      }, 9000);
+      await new Promise<void>((resolve) => {
+        if (!this.server?.close) return resolve();
+        this.server.close(() => resolve());
+        this.server.closeIdleConnections?.();
+      });
+      console.log("[ILMATRIX] Server closed");
+
       try {
         await closeDatabase();
         console.log("[ILMATRIX] Database connection closed");
       } catch (error) {
         console.error("[ILMATRIX] Error closing database:", error);
       }
-
-      if (this.server?.close) {
-        this.server.close(() => {
-          console.log("[ILMATRIX] Server closed");
-          process.exit(0);
-        });
-
-        // Force exit after 10 seconds
-        setTimeout(() => {
-          console.log("[ILMATRIX] Force exit after timeout");
-          process.exit(1);
-        }, 10000);
-      } else {
-        process.exit(0);
-      }
+      process.exit(0);
     };
 
     process.on("SIGINT", () => shutdown("SIGINT"));
@@ -198,13 +221,6 @@ class IlmatrixServer {
    */
   async start(): Promise<void> {
     try {
-      // Validate configuration
-      if (config.isProduction && !config.groqApiKey) {
-        console.warn(
-          "[ILMATRIX] Warning: GROQ_API_KEY not set in production environment"
-        );
-      }
-
       // Initialize database if configured
       if (validateDatabaseConfig()) {
         console.log("[ILMATRIX] Initializing database connection...");

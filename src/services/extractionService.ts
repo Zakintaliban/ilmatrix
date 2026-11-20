@@ -26,9 +26,11 @@ export class ExtractionService {
   private readonly extractionLimiter = createLimiter(3); // Limit concurrent extractions
 
   /**
-   * Extract text from uploaded file
+   * Extract text from uploaded file. With `ocr: false`, images are stored for
+   * later visual analysis without calling the (paid) vision model.
    */
-  async extractFromFile(file: any): Promise<ExtractedFile> {
+  async extractFromFile(file: any, options: { ocr?: boolean } = {}): Promise<ExtractedFile> {
+    const ocr = options.ocr !== false;
     const name = sanitizeFileName(file.name || "unknown");
     const type = file.type || "";
     const buffer = Buffer.from(await file.arrayBuffer());
@@ -40,31 +42,31 @@ export class ExtractionService {
         if (this.isPdfFile(name, type)) {
           content = await extractPdfText(buffer);
         } else if (this.isImageFile(name, type)) {
-          // Try to extract text from image
+          // Text in the image (OCR), for tools that can't see images
+          let text = "";
           try {
-            content = await extractImageText(buffer);
+            text = ocr ? (await extractImageText(buffer)).trim() : "";
           } catch (error) {
-            // OCR failed, will use base64 storage below
-            content = "";
+            text = ""; // OCR failed: the image alone is kept
           }
-          
-          // If no text found or minimal text, store image as base64 for later visual analysis
-          if (!content.trim() || content.length < 50 || /no text|nothing|empty/i.test(content)) {
-            const base64 = buffer.toString("base64");
-            const imageType = this.detectImageType(buffer);
-            const mimeType = imageType === "png" ? "image/png" : "image/jpeg";
-            
-            content = `[IMAGE: ${name}]
+          if (/^(no (extractable )?text|there is no text|nothing|empty)\b/i.test(text)) text = "";
+
+          // The image is always kept as well: a diagram, chart or photo loses its meaning as text,
+          // so chat and explanations send the picture itself to the vision model
+          const base64 = buffer.toString("base64");
+          const imageType = this.detectImageType(buffer);
+          const mimeType = imageType === "png" ? "image/png" : "image/jpeg";
+
+          content = `${text ? `${text}\n\n` : ""}[IMAGE: ${name}]
 Type: ${mimeType}
 Size: ${Math.round(buffer.length / 1024)}KB
 Encoding: base64
-Note: This image has no extractable text. Image data is preserved for visual analysis.
+Note: ${text ? "The text above was read from this image." : "This image has no extractable text."} Image data is preserved for visual analysis.
 
 Base64 Data:
 data:${mimeType};base64,${base64}
 
 Vision API can analyze this image when queried.`;
-          }
         } else if (this.isDocxFile(name, type)) {
           content = await extractDocxText(buffer);
         } else if (this.isPptxFile(name, type)) {
@@ -93,7 +95,7 @@ Vision API can analyze this image when queried.`;
   /**
    * Extract text from multiple files
    */
-  async extractFromFiles(files: any[]): Promise<ExtractionResult> {
+  async extractFromFiles(files: any[], options: { ocr?: boolean } = {}): Promise<ExtractionResult> {
     if (!files.length) {
       throw new Error("No files provided for extraction");
     }
@@ -103,7 +105,7 @@ Vision API can analyze this image when queried.`;
 
     // Extract content from each file
     const extractedFiles = await Promise.all(
-      files.map((file) => this.extractFromFile(file))
+      files.map((file) => this.extractFromFile(file, options))
     );
 
     // Calculate total size and create combined content
@@ -163,7 +165,7 @@ Vision API can analyze this image when queried.`;
     return type.includes("pdf") || name.toLowerCase().endsWith(".pdf");
   }
 
-  private isImageFile(name: string, type: string): boolean {
+  isImageFile(name: string, type: string): boolean {
     return type.startsWith("image/") || /\.(png|jpe?g)$/i.test(name);
   }
 

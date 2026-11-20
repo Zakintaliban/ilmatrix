@@ -251,12 +251,12 @@
                 </div>
 
                 <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 border border-gray-200 dark:border-gray-700">
-                    <h3 class="text-sm font-medium text-gray-600 dark:text-gray-400">Weekly Usage</h3>
-                    <p class="text-3xl font-bold text-blue-600 dark:text-blue-400 mt-2 stat-number" id="total-weekly">0</p>
+                    <h3 class="text-sm font-medium text-gray-600 dark:text-gray-400">Kredit Used Today / This Week</h3>
+                    <p class="text-3xl font-bold text-blue-600 dark:text-blue-400 mt-2 stat-number"><span id="total-today">0</span> / <span id="total-weekly">0</span></p>
                 </div>
 
                 <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 border border-gray-200 dark:border-gray-700">
-                    <h3 class="text-sm font-medium text-gray-600 dark:text-gray-400">At Limit</h3>
+                    <h3 class="text-sm font-medium text-gray-600 dark:text-gray-400">At a Limit (daily or weekly)</h3>
                     <p class="text-3xl font-bold text-red-600 dark:text-red-400 mt-2 stat-number" id="users-at-limit">0</p>
                 </div>
 
@@ -266,11 +266,25 @@
                 </div>
             </div>
 
+            <!-- Global AI quotas -->
+            <section class="mb-8 bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 border border-gray-200 dark:border-gray-700" aria-labelledby="quota-settings-title">
+                <h3 id="quota-settings-title" class="text-lg font-semibold text-gray-900 dark:text-white">Default AI Quotas</h3>
+                <p class="text-sm text-gray-600 dark:text-gray-400 mt-1">Every user gets these unless they have an override. Both limits apply at once; a request is refused when either is used up. Admin accounts are metered but never refused.</p>
+                <form id="quota-settings-form" class="mt-4 flex flex-wrap items-end gap-4">
+                    <label class="text-sm text-gray-700 dark:text-gray-300">Daily (kredit)
+                        <input id="quota-daily" type="number" min="0" max="1000000" step="1" required class="mt-1 block w-36 px-3 py-2 rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white">
+                    </label>
+                    <label class="text-sm text-gray-700 dark:text-gray-300">Weekly (kredit)
+                        <input id="quota-weekly" type="number" min="0" max="1000000" step="1" required class="mt-1 block w-36 px-3 py-2 rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white">
+                    </label>
+                    <button type="submit" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg shadow">Save</button>
+                    <button type="button" id="quota-env-reset" class="px-4 py-2 bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-900 dark:text-white rounded-lg">Use environment defaults</button>
+                </form>
+                <p id="quota-settings-info" class="text-xs text-gray-500 dark:text-gray-400 mt-3" role="status"></p>
+            </section>
+
             <!-- Action Buttons -->
             <div class="mb-6 flex gap-4">
-                <button onclick="resetWeekly()" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg shadow">
-                    Reset Weekly Usage
-                </button>
                 <button onclick="exportData()" class="px-4 py-2 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-lg shadow">
                     Export CSV
                 </button>
@@ -296,17 +310,55 @@
                         <thead class="bg-gray-50 dark:bg-gray-900">
                             <tr>
                                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">User</th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Weekly Usage</th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Monthly Usage</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Today</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">This Week</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase" data-payments-col hidden>Plan</th>
                                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Status</th>
                                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Actions</th>
                             </tr>
                         </thead>
                         <tbody id="users-tbody" class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
                             <tr>
-                                <td colspan="5" class="px-6 py-4 text-center text-sm text-gray-500">Loading users...</td>
+                                <td colspan="6" class="px-6 py-4 text-center text-sm text-gray-500">Loading users...</td>
                             </tr>
                         </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Payments (Midtrans) -->
+            <div class="mt-8 bg-white dark:bg-gray-800 rounded-lg shadow-md border border-gray-200 dark:border-gray-700">
+                <div class="p-6 border-b border-gray-200 dark:border-gray-700 flex flex-wrap gap-3 justify-between items-center">
+                    <div>
+                        <h3 class="text-lg font-semibold text-gray-900 dark:text-white">Payments</h3>
+                        <p id="payments-disabled-note" class="hidden text-xs text-gray-500 dark:text-gray-400 mt-1">Payments are disabled (PAYMENTS_ENABLED=false): nothing can be bought, but transactions started earlier still settle here and through the Midtrans webhook.</p>
+                    </div>
+                    <label class="text-sm text-gray-600 dark:text-gray-300">Status
+                        <select id="payments-filter" class="ml-2 px-3 py-1.5 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
+                            <option value="">All</option>
+                            <option value="pending">Pending</option>
+                            <option value="paid">Paid</option>
+                            <option value="failed">Failed</option>
+                            <option value="expired">Expired</option>
+                            <option value="refunded">Refunded</option>
+                        </select>
+                    </label>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700 text-sm">
+                        <thead class="bg-gray-50 dark:bg-gray-900">
+                            <tr>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Order</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">User</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Product</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Amount</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Status</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Created</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Review</th>
+                                <th class="px-4 py-3"></th>
+                            </tr>
+                        </thead>
+                        <tbody id="payments-tbody" class="divide-y divide-gray-200 dark:divide-gray-700 text-gray-900 dark:text-white"></tbody>
                     </table>
                 </div>
             </div>
@@ -333,6 +385,7 @@
     <script>
         const API_BASE = '';
         let allUsers = [];
+        let paymentsEnabled = false;
 
         // Theme management
         (function() {
@@ -520,9 +573,13 @@
 
                 // Update aggregate stats
                 document.getElementById('total-users').textContent = formatNumber(data.aggregate.total_users);
-                document.getElementById('total-weekly').textContent = formatNumber(data.aggregate.total_tokens_used_weekly);
-                document.getElementById('users-at-limit').textContent = formatNumber(data.aggregate.users_at_weekly_limit);
-                document.getElementById('users-near-limit').textContent = formatNumber(data.aggregate.users_near_weekly_limit);
+                document.getElementById('total-today').textContent = formatNumber(Math.round(data.aggregate.total_kredit_used_today));
+                document.getElementById('total-weekly').textContent = formatNumber(Math.round(data.aggregate.total_kredit_used_weekly));
+                document.getElementById('users-at-limit').textContent = formatNumber(data.aggregate.users_at_limit);
+                document.getElementById('users-near-limit').textContent = formatNumber(data.aggregate.users_near_limit);
+                paymentsEnabled = !!data.payments_enabled;
+                document.querySelectorAll('[data-payments-col]').forEach((el) => (el.hidden = !paymentsEnabled));
+                document.getElementById('payments-disabled-note').classList.toggle('hidden', paymentsEnabled);
 
                 // Render users table
                 renderUsersTable(allUsers);
@@ -538,21 +595,27 @@
             const tbody = document.getElementById('users-tbody');
 
             if (users.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="5" class="px-6 py-4 text-center text-sm text-gray-500">No users found</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="6" class="px-6 py-4 text-center text-sm text-gray-500">No users found</td></tr>';
                 return;
             }
 
             tbody.innerHTML = users.map(user => {
-                const weeklyPercentage = user.weekly_percentage.toFixed(1);
+                const peak = Math.max(user.daily_percentage, user.weekly_percentage);
+                const meter = (used, limit, pct, source) => `
+                            <div class="text-sm text-gray-900 dark:text-white stat-number">${formatNumber(Math.round(used))} / ${formatNumber(limit)}${source === 'user' ? ' <span class="text-xs text-purple-600 dark:text-purple-300">(override)</span>' : ''}</div>
+                            <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2 mt-1">
+                                <div class="h-2 rounded-full ${pct >= 100 ? 'bg-red-600' : pct >= 80 ? 'bg-orange-500' : 'bg-green-500'}" style="width: ${Math.min(pct, 100)}%"></div>
+                            </div>
+                            <div class="text-xs text-gray-500 dark:text-gray-400 mt-1">${pct.toFixed(1)}%</div>`;
                 let statusBadge = '';
 
                 if (user.is_admin) {
                     statusBadge = '<span class="px-2 py-1 text-xs font-semibold text-purple-800 dark:text-purple-200 bg-purple-100 dark:bg-purple-900 rounded-full">Admin</span>';
                 } else if (!user.token_access_enabled) {
                     statusBadge = '<span class="px-2 py-1 text-xs font-semibold text-red-800 dark:text-red-200 bg-red-100 dark:bg-red-900 rounded-full">Disabled</span>';
-                } else if (user.weekly_percentage >= 100) {
+                } else if (peak >= 100) {
                     statusBadge = '<span class="px-2 py-1 text-xs font-semibold text-red-800 dark:text-red-200 bg-red-100 dark:bg-red-900 rounded-full">At Limit</span>';
-                } else if (user.weekly_percentage >= 80) {
+                } else if (peak >= 80) {
                     statusBadge = '<span class="px-2 py-1 text-xs font-semibold text-orange-800 dark:text-orange-200 bg-orange-100 dark:bg-orange-900 rounded-full">High Usage</span>';
                 } else {
                     statusBadge = '<span class="px-2 py-1 text-xs font-semibold text-green-800 dark:text-green-200 bg-green-100 dark:bg-green-900 rounded-full">Active</span>';
@@ -561,19 +624,16 @@
                 return `
                     <tr class="hover:bg-gray-50 dark:hover:bg-gray-700">
                         <td class="px-6 py-4 whitespace-nowrap">
-                            <div class="text-sm font-medium text-gray-900 dark:text-white">${user.name}</div>
-                            <div class="text-sm text-gray-500 dark:text-gray-400">${user.email}</div>
+                            <div class="text-sm font-medium text-gray-900 dark:text-white">${escapeHtml(user.name)}</div>
+                            <div class="text-sm text-gray-500 dark:text-gray-400">${escapeHtml(user.email)}</div>
                         </td>
-                        <td class="px-6 py-4 whitespace-nowrap">
-                            <div class="text-sm text-gray-900 dark:text-white stat-number">${formatNumber(user.weekly_tokens_used)} / ${formatNumber(user.weekly_token_limit)}</div>
-                            <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2 mt-1">
-                                <div class="h-2 rounded-full ${user.weekly_percentage >= 100 ? 'bg-red-600' : user.weekly_percentage >= 80 ? 'bg-orange-500' : 'bg-green-500'}" style="width: ${Math.min(user.weekly_percentage, 100)}%"></div>
-                            </div>
-                            <div class="text-xs text-gray-500 dark:text-gray-400 mt-1">${weeklyPercentage}%</div>
+                        <td class="px-6 py-4 whitespace-nowrap">${meter(user.daily_kredit_used, user.daily_kredit_limit, user.daily_percentage, user.daily_limit_source)}</td>
+                        <td class="px-6 py-4 whitespace-nowrap">${meter(user.weekly_kredit_used, user.weekly_kredit_limit, user.weekly_percentage, user.weekly_limit_source)}
+                            <div class="text-xs text-gray-500 dark:text-gray-400">this month: ${formatNumber(Math.round(user.monthly_kredit_used))}</div>
                         </td>
-                        <td class="px-6 py-4 whitespace-nowrap">
-                            <div class="text-sm text-gray-900 dark:text-white stat-number">${formatNumber(user.monthly_tokens_used)} / ${formatNumber(user.monthly_token_limit)}</div>
-                            <div class="text-xs text-gray-500 dark:text-gray-400 mt-1">${user.monthly_percentage.toFixed(1)}%</div>
+                        <td class="px-6 py-4 whitespace-nowrap" ${paymentsEnabled ? '' : 'hidden'}>
+                            <div class="text-sm text-gray-900 dark:text-white">${escapeHtml(user.plan_name)}${user.plan_expires_at ? ' · until ' + new Date(user.plan_expires_at).toLocaleDateString() : ''}</div>
+                            <div class="text-xs text-gray-500 dark:text-gray-400 mt-1">Extra kredit: ${formatNumber(Math.round(user.extra_kredit))}</div>
                         </td>
                         <td class="px-6 py-4 whitespace-nowrap">
                             ${statusBadge}
@@ -598,6 +658,48 @@
             renderUsersTable(filtered);
         }
 
+        // User-provided text (names, emails) must never be inserted as HTML
+        function escapeHtml(value) {
+            return String(value ?? '').replace(/[&<>"']/g, (ch) => ({
+                '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+            })[ch]);
+        }
+
+        async function postAdmin(path, body) {
+            const response = await fetch(`${API_BASE}/api/admin/usage/${path}`, {
+                method: 'POST',
+                credentials: 'include',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body)
+            });
+            const data = await response.json().catch(() => ({}));
+            if (!response.ok) throw new Error(data.error || 'Request failed');
+            return data;
+        }
+
+        // Apply a plan (until payments are integrated, this is how a sale is recorded)
+        async function setPlan(userId, plan) {
+            if (!confirm(`Set plan "${plan}" for this user?`)) return;
+            try {
+                await postAdmin(`user/${userId}/set-plan`, { plan });
+                await viewUser(userId);
+                await loadDashboard();
+            } catch (error) {
+                alert('Failed to set plan: ' + error.message);
+            }
+        }
+
+        async function grantProduct(userId, product) {
+            const reference = prompt('Payment reference (optional):') || undefined;
+            try {
+                await postAdmin(`user/${userId}/grant-kredit`, { product, reference });
+                await viewUser(userId);
+                await loadDashboard();
+            } catch (error) {
+                alert('Failed to grant kredit: ' + error.message);
+            }
+        }
+
         // View user details
         async function viewUser(userId) {
             try {
@@ -616,27 +718,36 @@
                             <div class="grid grid-cols-2 gap-4">
                                 <div>
                                     <p class="text-sm text-gray-600 dark:text-gray-400">Name</p>
-                                    <p class="font-medium text-gray-900 dark:text-white">${data.user.name}</p>
+                                    <p class="font-medium text-gray-900 dark:text-white">${escapeHtml(data.user.name)}</p>
                                 </div>
                                 <div>
                                     <p class="text-sm text-gray-600 dark:text-gray-400">Email</p>
-                                    <p class="font-medium text-gray-900 dark:text-white">${data.user.email}</p>
+                                    <p class="font-medium text-gray-900 dark:text-white">${escapeHtml(data.user.email)}</p>
                                 </div>
                             </div>
                         </div>
 
                         <div>
-                            <h4 class="font-semibold text-gray-900 dark:text-white mb-2">Usage Statistics</h4>
-                            <div class="space-y-2">
-                                <div>
-                                    <p class="text-sm text-gray-600 dark:text-gray-400">Weekly: ${formatNumber(data.usage.weekly.used)} / ${formatNumber(data.usage.weekly.limit)} (${data.usage.weekly.percentage.toFixed(1)}%)</p>
-                                </div>
-                                <div>
-                                    <p class="text-sm text-gray-600 dark:text-gray-400">Monthly: ${formatNumber(data.usage.monthly.used)} / ${formatNumber(data.usage.monthly.limit)} (${data.usage.monthly.percentage.toFixed(1)}%)</p>
-                                </div>
-                                <div>
-                                    <p class="text-sm text-gray-600 dark:text-gray-400">Today: ${formatNumber(data.analytics.today)}</p>
-                                </div>
+                            <h4 class="font-semibold text-gray-900 dark:text-white mb-2">AI Quotas</h4>
+                            <div class="space-y-1 text-sm text-gray-600 dark:text-gray-400">
+                                <p>Today: ${formatNumber(Math.round(data.usage.daily.used + data.usage.daily.reserved))} / ${formatNumber(data.usage.daily.limit)} kredit (${escapeHtml(data.usage.daily.limit_source)}) · resets ${new Date(data.usage.daily.resets_at).toLocaleString()}</p>
+                                <p>This week: ${formatNumber(Math.round(data.usage.weekly.used + data.usage.weekly.reserved))} / ${formatNumber(data.usage.weekly.limit)} kredit (${escapeHtml(data.usage.weekly.limit_source)}) · resets ${new Date(data.usage.weekly.resets_at).toLocaleString()}</p>
+                                ${data.usage.exempt ? '<p class="text-purple-700 dark:text-purple-300">Admin account: metered, never refused for quota.</p>' : ''}
+                                ${data.usage.payments ? `<p>Plan: ${escapeHtml(data.usage.payments.plan.name)} · extra kredit: ${formatNumber(Math.round(data.usage.payments.extra.remaining))}</p>` : ''}
+                            </div>
+                            <form id="limits-form" class="mt-3 flex flex-wrap items-end gap-3">
+                                <label class="text-sm text-gray-700 dark:text-gray-300">Daily override
+                                    <input id="override-daily" type="number" min="0" max="1000000" step="1" placeholder="default" value="${data.overrides.daily ?? ''}" class="mt-1 block w-32 px-3 py-2 rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white">
+                                </label>
+                                <label class="text-sm text-gray-700 dark:text-gray-300">Weekly override
+                                    <input id="override-weekly" type="number" min="0" max="1000000" step="1" placeholder="default" value="${data.overrides.weekly ?? ''}" class="mt-1 block w-32 px-3 py-2 rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white">
+                                </label>
+                                <button type="submit" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded font-medium">Save overrides</button>
+                            </form>
+                            <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">Leave empty to use the default. 0 blocks AI for this user.</p>
+                            <div class="flex flex-wrap gap-2 mt-3">
+                                <button onclick="resetQuota('${userId}', 'daily')" class="px-3 py-1.5 bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 dark:text-white rounded text-sm">Reset today</button>
+                                <button onclick="resetQuota('${userId}', 'weekly')" class="px-3 py-1.5 bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 dark:text-white rounded text-sm">Reset this week</button>
                             </div>
                         </div>
 
@@ -645,13 +756,24 @@
                             <div class="max-h-48 overflow-y-auto space-y-1">
                                 ${data.recent_history.map(log => `
                                     <div class="text-sm text-gray-600 dark:text-gray-400">
-                                        ${new Date(log.created_at).toLocaleString()} - ${log.endpoint} (${formatNumber(log.tokens_used)} tokens)
+                                        ${new Date(log.created_at).toLocaleString()} - ${escapeHtml(log.endpoint)} (${Number(log.kredit_used).toFixed(2)} kredit, ${formatNumber(log.tokens_used)} tokens)
                                     </div>
                                 `).join('')}
                             </div>
                         </div>
 
-                        <div class="flex gap-2 pt-4">
+                        <div class="flex flex-wrap gap-2 pt-4" ${data.payments_enabled ? '' : 'hidden'}>
+                            <select id="plan-select" class="px-3 py-2 rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white">
+                                <option value="free">Gratis</option>
+                                <option value="bulanan">Bulanan (30 days)</option>
+                                <option value="semester">Semester (182 days)</option>
+                            </select>
+                            <button onclick="setPlan('${userId}', document.getElementById('plan-select').value)" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded font-medium">Set Plan</button>
+                            <button onclick="grantProduct('${userId}', 'pass_7d')" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded font-medium">Grant Pass 7 Hari</button>
+                            <button onclick="grantProduct('${userId}', 'topup')" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded font-medium">Grant Top-up</button>
+                        </div>
+
+                        <div class="flex gap-2 pt-2">
                             <button onclick="toggleAdmin('${userId}', ${!data.user.is_admin})" class="px-4 py-2 ${data.user.is_admin ? 'bg-red-600 hover:bg-red-700' : 'bg-purple-600 hover:bg-purple-700'} text-white rounded font-medium">
                                 ${data.user.is_admin ? 'Revoke Admin' : 'Make Admin'}
                             </button>
@@ -663,6 +785,10 @@
                 `;
 
                 document.getElementById('modal-content').innerHTML = modalContent;
+                document.getElementById('limits-form').addEventListener('submit', (event) => {
+                    event.preventDefault();
+                    saveOverrides(userId);
+                });
                 document.getElementById('user-modal').classList.remove('hidden');
 
             } catch (error) {
@@ -724,25 +850,63 @@
             }
         }
 
-        // Reset weekly usage
-        async function resetWeekly() {
-            if (!confirm('Are you sure you want to reset weekly usage for ALL users?')) return;
-
+        // Per-user quota overrides (empty input = back to the default)
+        async function saveOverrides(userId) {
+            const read = (id) => {
+                const raw = document.getElementById(id).value.trim();
+                return raw === '' ? null : Number(raw);
+            };
             try {
-                const response = await fetch(`${API_BASE}/api/admin/usage/reset/weekly`, {
-                    method: 'POST',
-                    credentials: 'include'
-                });
-
-                if (!response.ok) throw new Error('Failed to reset weekly usage');
-
-                const data = await response.json();
-                alert(`Weekly usage reset for ${data.users_reset} users`);
-                loadDashboard();
-
+                await postAdmin(`user/${userId}/update-limits`, { daily_limit: read('override-daily'), weekly_limit: read('override-weekly') });
+                await viewUser(userId);
+                await loadDashboard();
             } catch (error) {
-                console.error('Error resetting weekly usage:', error);
-                alert('Failed to reset weekly usage');
+                alert('Failed to save overrides: ' + error.message);
+            }
+        }
+
+        async function resetQuota(userId, period) {
+            if (!confirm(`Set this user's usage ${period === 'daily' ? 'today' : 'this week'} back to zero?`)) return;
+            try {
+                await postAdmin(`user/${userId}/reset-quota`, { period });
+                await viewUser(userId);
+                await loadDashboard();
+            } catch (error) {
+                alert('Failed to reset quota: ' + error.message);
+            }
+        }
+
+        // Global defaults (stored in the database; the environment values are the fallback)
+        async function loadQuotaSettings() {
+            const response = await fetch(`${API_BASE}/api/admin/quota/settings`, { credentials: 'include' });
+            if (!response.ok) throw new Error('Failed to load quota settings');
+            renderQuotaSettings(await response.json());
+        }
+
+        function renderQuotaSettings(settings) {
+            document.getElementById('quota-daily').value = settings.daily_limit;
+            document.getElementById('quota-weekly').value = settings.weekly_limit;
+            const source = (s) => (s === 'admin' ? 'set here' : 'environment default');
+            document.getElementById('quota-settings-info').textContent =
+                `Daily: ${source(settings.daily_source)}, weekly: ${source(settings.weekly_source)} ` +
+                `(environment: ${settings.env_defaults.daily_limit} / ${settings.env_defaults.weekly_limit}). ` +
+                `Days reset at 00:00 and weeks on Monday 00:00, ${settings.timezone}.`;
+        }
+
+        async function saveQuotaSettings(body) {
+            try {
+                const response = await fetch(`${API_BASE}/api/admin/quota/settings`, {
+                    method: 'PUT',
+                    credentials: 'include',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body)
+                });
+                const data = await response.json().catch(() => ({}));
+                if (!response.ok) throw new Error(data.error || 'Request failed');
+                renderQuotaSettings(data);
+                await loadDashboard();
+            } catch (error) {
+                alert('Failed to save quota defaults: ' + error.message);
             }
         }
 
@@ -790,12 +954,94 @@
             }
         }
 
+        // Payments: built with DOM methods only (order ids and emails are data, not HTML)
+        async function loadPayments() {
+            const tbody = document.getElementById('payments-tbody');
+            const status = document.getElementById('payments-filter').value;
+            const cell = (text, className = 'px-4 py-2 whitespace-nowrap') => {
+                const td = document.createElement('td');
+                td.className = className;
+                td.textContent = text ?? '';
+                return td;
+            };
+            try {
+                const response = await fetch(`${API_BASE}/api/admin/payments?limit=100${status ? `&status=${status}` : ''}`, { credentials: 'include' });
+                if (!response.ok) throw new Error('Failed to load payments');
+                const { payments } = await response.json();
+                if (!payments.length) {
+                    const row = document.createElement('tr');
+                    row.append(cell('No payments yet', 'px-4 py-4 text-center text-gray-500'));
+                    row.firstChild.colSpan = 8;
+                    tbody.replaceChildren(row);
+                    return;
+                }
+                tbody.replaceChildren(...payments.map((p) => {
+                    const row = document.createElement('tr');
+                    row.append(
+                        cell(p.order_id, 'px-4 py-2 whitespace-nowrap font-mono text-xs'),
+                        cell(p.user_email || '(deleted account)'),
+                        cell(p.product),
+                        cell('Rp' + Number(p.amount_idr).toLocaleString('id-ID')),
+                        cell(p.status + (p.provider_status && p.provider_status !== p.status ? ` (${p.provider_status})` : '')),
+                        cell(new Date(p.created_at).toLocaleString('id-ID', { dateStyle: 'short', timeStyle: 'short' })),
+                        cell(p.review_note || '', 'px-4 py-2 text-xs text-red-600 dark:text-red-400 max-w-xs')
+                    );
+                    const actions = cell('');
+                    if (p.status === 'pending' || p.review_note) {
+                        const button = document.createElement('button');
+                        button.type = 'button';
+                        button.className = 'text-xs font-medium text-blue-600 dark:text-blue-400 underline';
+                        button.textContent = 'Re-check';
+                        button.addEventListener('click', () => resyncPayment(p.order_id, button));
+                        actions.append(button);
+                    }
+                    row.append(actions);
+                    return row;
+                }));
+            } catch (error) {
+                const row = document.createElement('tr');
+                row.append(cell(error.message, 'px-4 py-4 text-center text-red-600'));
+                row.firstChild.colSpan = 8;
+                tbody.replaceChildren(row);
+            }
+        }
+
+        async function resyncPayment(orderId, button) {
+            button.disabled = true;
+            button.textContent = 'Checking…';
+            try {
+                const response = await fetch(`${API_BASE}/api/admin/payments/${encodeURIComponent(orderId)}/sync`, { method: 'POST', credentials: 'include' });
+                const data = await response.json().catch(() => ({}));
+                if (!response.ok) throw new Error(data.error || 'Re-check failed');
+            } catch (error) {
+                alert(error.message);
+            }
+            await loadPayments();
+            await loadDashboard();
+        }
+
         // Initialize
         async function init() {
             const isAdmin = await checkAdminAuth();
             if (!isAdmin) return;
 
+            document.getElementById('quota-settings-form').addEventListener('submit', (event) => {
+                event.preventDefault();
+                saveQuotaSettings({
+                    daily_limit: Number(document.getElementById('quota-daily').value),
+                    weekly_limit: Number(document.getElementById('quota-weekly').value),
+                });
+            });
+            document.getElementById('quota-env-reset').addEventListener('click', () => {
+                if (confirm('Go back to the environment defaults (AI_DAILY_KREDIT_LIMIT / AI_WEEKLY_KREDIT_LIMIT)?')) {
+                    saveQuotaSettings({ daily_limit: null, weekly_limit: null });
+                }
+            });
+
             await loadDashboard();
+            await loadQuotaSettings().catch((error) => console.error(error));
+            await loadPayments();
+            document.getElementById('payments-filter').addEventListener('change', loadPayments);
 
             document.getElementById('loading-state').classList.add('hidden');
             document.getElementById('content-container').classList.remove('hidden');

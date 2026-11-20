@@ -2,6 +2,31 @@ import { Context, Next } from 'hono';
 import { guestSessionService } from '../services/guestSessionService.js';
 import { getUserBySessionToken } from '../services/authService.js';
 import { behaviorAnalysisService } from '../services/behaviorAnalysisService.js';
+import { guestIpLimiter } from '../services/guestIpLimiter.js';
+import { isTurnstileEnabled, getTurnstileSiteKey } from '../services/turnstileService.js';
+import { getClientIp } from '../utils/security.js';
+
+/** 401 body asking the browser to pass Turnstile, then retry (see app.html). */
+export function guestVerificationRequired() {
+  const message = 'Verifikasi singkat dulu sebelum mencoba ILMATRIX sebagai tamu.';
+  return {
+    error: message,
+    answer: message,
+    code: 'GUEST_VERIFICATION_REQUIRED',
+    requiresAuth: false,
+    turnstile_site_key: getTurnstileSiteKey(),
+  };
+}
+
+/** Body for a network that has used up its guest allowance today. */
+export function guestIpLimitReached() {
+  return {
+    error: 'Batas penggunaan tamu dari jaringan ini sudah tercapai hari ini. Daftar gratis untuk lanjut belajar.',
+    code: 'GUEST_IP_LIMIT',
+    requiresAuth: true,
+    loginUrl: '/login.html',
+  };
+}
 
 /**
  * Get current user from session token in request
@@ -44,87 +69,99 @@ function getSessionFromRequest(c: Context): string | null {
  */
 export async function guestLimitMiddleware(c: Context, next: Next) {
   const endpoint = c.req.path;
-  let deviceId: string | undefined;
 
+  // First check if user is authenticated. A failed lookup is treated as a
+  // guest (previously any error here let the request through with no limits).
+  let user = null;
   try {
-    // First check if user is authenticated
-    const user = await getCurrentUser(c);
-
-    if (user) {
-      // Authenticated user: unlimited access
-      console.log(`Authenticated user ${user.email} accessing AI feature`);
-
-      // Add auth status headers for frontend
-      c.header('X-Auth-Status', 'authenticated');
-      c.header('X-User-ID', user.id);
-
-      return next();
-    }
-
-    // Guest user: check usage limits
-    const fingerprint = guestSessionService.generateFingerprint(c);
-    deviceId = fingerprint; // Store for behavioral tracking
-
-    // Check if device is flagged as suspicious
-    if (behaviorAnalysisService.isSuspicious(deviceId)) {
-      console.warn(`⚠️  Suspicious device ${deviceId.substring(0, 8)}... attempting access`);
-      c.header('X-Suspicious-Activity', 'true');
-    }
-
-    // Check if already at limit
-    if (guestSessionService.isLimitReached(fingerprint)) {
-      console.log(`Guest ${fingerprint} reached usage limit`);
-
-      // Track limit exceeded (401 response)
-      behaviorAnalysisService.trackRequest(deviceId, c, endpoint, 401);
-
-      return c.json({
-        error: 'Trial limit reached! Create a free account to continue using ILMATRIX.',
-        code: 'GUEST_LIMIT_EXCEEDED',
-        requiresAuth: true,
-        usageLimits: {
-          current: 5,
-          max: 5,
-          remaining: 0
-        },
-        loginUrl: '/login.html'
-      }, 401);
-    }
-
-    // Increment usage for this request
-    const usageResult = guestSessionService.incrementUsage(c);
-
-    console.log(`Guest ${fingerprint} usage: ${usageResult.newCount}/5 (${usageResult.remaining} remaining)`);
-
-    // Add usage headers for frontend
-    c.header('X-Auth-Status', 'guest');
-    c.header('X-Guest-Usage-Current', usageResult.newCount.toString());
-    c.header('X-Guest-Usage-Max', '5');
-    c.header('X-Guest-Usage-Remaining', usageResult.remaining.toString());
-    c.header('X-Guest-Fingerprint', fingerprint);
-
-    // Show warning when approaching limit
-    if (usageResult.remaining <= 1) {
-      c.header('X-Guest-Warning', 'true');
-    }
-
-    // Track successful request for behavioral analysis
-    behaviorAnalysisService.trackRequest(deviceId, c, endpoint, 200);
-
-    return next();
-
+    user = await getCurrentUser(c);
   } catch (error) {
-    console.error('Guest limit middleware error:', error);
+    console.error('Guest limit middleware: session lookup failed, treating as guest:', error);
+  }
 
-    // Track error for behavioral analysis
-    if (deviceId) {
-      behaviorAnalysisService.trackRequest(deviceId, c, endpoint, 500);
-    }
-
-    // On error, allow the request but log it
-    c.header('X-Auth-Status', 'error');
+  if (user) {
+    // Authenticated user: limited by kredit instead
+    c.header('X-Auth-Status', 'authenticated');
+    c.header('X-User-ID', user.id);
     return next();
   }
+
+  // Guest user: device = random HttpOnly cookie, ip = trusted client IP
+  const fingerprint = guestSessionService.generateFingerprint(c);
+  const deviceId = fingerprint; // Store for behavioral tracking
+  const ip = getClientIp(c);
+
+  // Check if device is flagged as suspicious
+  if (behaviorAnalysisService.isSuspicious(deviceId)) {
+    console.warn(`⚠️  Suspicious device ${deviceId.substring(0, 8)}... attempting access`);
+    c.header('X-Suspicious-Activity', 'true');
+  }
+
+  // A new device (e.g. cookies cleared) must pass Turnstile before using AI
+  if (isTurnstileEnabled() && !guestSessionService.isVerified(fingerprint)) {
+    behaviorAnalysisService.trackRequest(deviceId, c, endpoint, 401);
+    return c.json(guestVerificationRequired(), 401);
+  }
+
+  // Per-network daily cap (shared by every device behind the same IP)
+  if (!guestIpLimiter.canRequest(ip)) {
+    behaviorAnalysisService.trackRequest(deviceId, c, endpoint, 401);
+    return c.json(guestIpLimitReached(), 401);
+  }
+
+  // Check if already at limit
+  if (guestSessionService.isLimitReached(fingerprint)) {
+    // Track limit exceeded (401 response)
+    behaviorAnalysisService.trackRequest(deviceId, c, endpoint, 401);
+
+    return c.json({
+      error: 'Trial limit reached! Create a free account to continue using ILMATRIX.',
+      code: 'GUEST_LIMIT_EXCEEDED',
+      requiresAuth: true,
+      usageLimits: {
+        current: 5,
+        max: 5,
+        remaining: 0
+      },
+      loginUrl: '/login.html'
+    }, 401);
+  }
+
+  // Increment usage for this request
+  const usageResult = guestSessionService.incrementUsage(c);
+  guestIpLimiter.recordRequest(ip);
+
+  // Add usage headers for frontend
+  c.header('X-Auth-Status', 'guest');
+  c.header('X-Guest-Usage-Current', usageResult.newCount.toString());
+  c.header('X-Guest-Usage-Max', '5');
+  c.header('X-Guest-Usage-Remaining', usageResult.remaining.toString());
+  c.header('X-Guest-Fingerprint', fingerprint);
+
+  // Show warning when approaching limit
+  if (usageResult.remaining <= 1) {
+    c.header('X-Guest-Warning', 'true');
+  }
+
+  // Track successful request for behavioral analysis
+  behaviorAnalysisService.trackRequest(deviceId, c, endpoint, 200);
+
+  return next();
+}
+
+/**
+ * Guests must pass Turnstile before endpoints that cost money without using
+ * a trial credit (image OCR on upload). Signed-in users pass through.
+ */
+export async function guestVerificationMiddleware(c: Context, next: Next) {
+  if (c.get('user') || !isTurnstileEnabled()) {
+    return next();
+  }
+  const fingerprint = guestSessionService.generateFingerprint(c);
+  if (guestSessionService.isVerified(fingerprint)) {
+    return next();
+  }
+  return c.json(guestVerificationRequired(), 401);
 }
 
 /**

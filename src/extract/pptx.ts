@@ -1,4 +1,4 @@
-import JSZip from "jszip";
+import { BoundedZipReader, OfficeFileTooLargeError, decodeXmlEntities } from "./zip.js";
 
 function xmlToPlain(xml: string): string {
   // Extract text nodes inside a:t tags (PowerPoint text runs)
@@ -6,20 +6,16 @@ function xmlToPlain(xml: string): string {
     (m) => m[1]
   );
   const joined = matches.join(" ");
-  // Basic entity decode and whitespace normalize
-  return joined
-    .replace(/</g, "<")
-    .replace(/>/g, ">")
-    .replace(/&/g, "&")
-    .replace(/\s+/g, " ")
-    .trim();
+  // Whitespace normalize, then decode entities
+  return decodeXmlEntities(joined.replace(/\s+/g, " ").trim());
 }
 
 export async function extractPptxText(buffer: Buffer): Promise<string> {
-  const zip = await JSZip.loadAsync(buffer);
+  const zip = await BoundedZipReader.open(buffer);
 
   // Collect slide files
-  const slideFiles = Object.keys(zip.files)
+  const slideFiles = zip
+    .names()
     .filter((k) => /^ppt\/slides\/slide\d+\.xml$/.test(k))
     .sort((a, b) => {
       const na = Number(a.match(/slide(\d+)\.xml/)?.[1] || 0);
@@ -30,10 +26,11 @@ export async function extractPptxText(buffer: Buffer): Promise<string> {
   const slides: string[] = [];
   for (const f of slideFiles) {
     try {
-      const xml = await zip.file(f)!.async("string");
-      const text = xmlToPlain(xml);
+      const xml = await zip.readText(f);
+      const text = xml ? xmlToPlain(xml) : "";
       if (text) slides.push(text);
-    } catch {
+    } catch (error) {
+      if (error instanceof OfficeFileTooLargeError) throw error;
       // ignore broken slide
     }
   }

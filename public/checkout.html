@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" type="image/svg+xml" href="./logo.svg" />
+    <title>Checkout - ILMATRIX</title>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;700&display=swap" rel="stylesheet">
+
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: { sans: ['Plus Jakarta Sans', 'system-ui', 'sans-serif'] },
+                    colors: { primary: "#0f0e85", secondary: "#e44c99", tertiary: "#1b612f" },
+                },
+            },
+        };
+        (function () {
+            let saved = null;
+            try { saved = localStorage.getItem('theme'); } catch {}
+            const dark = saved ? saved === 'dark' : window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+            if (dark) document.documentElement.classList.add('dark');
+        })();
+    </script>
+</head>
+<body class="min-h-screen bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-white">
+    <header class="border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-800">
+        <div class="mx-auto max-w-3xl px-4 py-4 flex items-center justify-between">
+            <a href="/" class="text-lg font-bold text-primary dark:text-blue-300">ILMATRIX</a>
+            <nav class="flex gap-4 text-sm text-gray-600 dark:text-gray-300">
+                <a href="/harga.html" class="hover:underline">Harga</a>
+                <a href="/dashboard.html" class="hover:underline">Dashboard</a>
+            </nav>
+        </div>
+    </header>
+
+    <main class="mx-auto max-w-3xl px-4 py-10">
+        <h1 class="text-2xl font-bold">Checkout</h1>
+
+        <section id="order" class="mt-6 rounded-2xl bg-white dark:bg-gray-800 shadow p-6" aria-labelledby="order-title">
+            <h2 id="order-title" class="text-sm font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Ringkasan pesanan</h2>
+            <div id="order-loading" class="mt-4 text-sm text-gray-600 dark:text-gray-300">Memuat produk…</div>
+            <div id="order-details" class="hidden mt-4">
+                <p id="product-kind" class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400"></p>
+                <p id="product-name" class="mt-1 text-xl font-semibold"></p>
+                <p id="product-description" class="mt-1 text-sm text-gray-600 dark:text-gray-300"></p>
+                <dl class="mt-6 flex items-baseline justify-between border-t border-gray-200 dark:border-gray-700 pt-4">
+                    <dt class="text-sm text-gray-600 dark:text-gray-300">Total pembayaran</dt>
+                    <dd id="product-price" class="text-2xl font-bold"></dd>
+                </dl>
+                <p class="mt-4 text-xs text-gray-600 dark:text-gray-400">
+                    Pembayaran diproses oleh Midtrans (QRIS, e-wallet, atau metode lain yang tersedia). Kredit atau paket
+                    aktif otomatis setelah pembayaran diterima.
+                </p>
+                <p class="mt-2 text-xs text-gray-600 dark:text-gray-400">
+                    Dengan menekan <strong>Bayar</strong>, kamu menyetujui
+                    <a href="/syarat-ketentuan.html" class="underline">Syarat &amp; Ketentuan</a> dan
+                    <a href="/kebijakan-pengembalian.html" class="underline">Kebijakan Pengembalian Dana</a> ILMATRIX.
+                </p>
+                <button id="pay-button" type="button" class="mt-6 w-full rounded-md bg-primary px-4 py-3 font-semibold text-white hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50">
+                    Bayar
+                </button>
+                <div id="fallback" class="hidden mt-4 text-sm"></div>
+            </div>
+            <p id="status" class="mt-4 text-sm" role="status" aria-live="polite"></p>
+        </section>
+    </main>
+
+    <footer class="border-t border-gray-200 dark:border-gray-800">
+        <div class="mx-auto max-w-3xl px-4 py-6 text-xs text-gray-600 dark:text-gray-400 flex flex-wrap gap-x-4 gap-y-2">
+            <a href="/harga.html" class="hover:underline">Harga</a>
+            <a href="/syarat-ketentuan.html" class="hover:underline">Syarat &amp; Ketentuan</a>
+            <a href="/kebijakan-pengembalian.html" class="hover:underline">Kebijakan Pengembalian Dana</a>
+            <span>Kontak: <a href="mailto:hasbizakin0804@gmail.com" class="hover:underline">hasbizakin0804@gmail.com</a></span>
+        </div>
+    </footer>
+
+    <script>
+        (function () {
+            // Snap.js only from Midtrans' own hosts
+            const SNAP_HOSTS = ['app.midtrans.com', 'app.sandbox.midtrans.com'];
+            const KIND = { plan: 'Paket langganan', kredit: 'Kredit tambahan' };
+
+            const params = new URLSearchParams(window.location.search);
+            const productCode = params.get('product');
+            const status = document.getElementById('status');
+            const payButton = document.getElementById('pay-button');
+            const fallback = document.getElementById('fallback');
+            let product = null;
+
+            const rupiah = (n) => 'Rp' + Number(n).toLocaleString('id-ID');
+
+            function say(message, kind) {
+                status.textContent = message;
+                status.className = 'mt-4 text-sm ' + (kind === 'error' ? 'text-red-600 dark:text-red-400' : 'text-gray-700 dark:text-gray-300');
+            }
+
+            function link(text, href) {
+                const a = document.createElement('a');
+                a.href = href;
+                a.textContent = text;
+                a.className = 'font-semibold text-primary dark:text-blue-300 underline';
+                return a;
+            }
+
+            async function loadProduct() {
+                try {
+                    const res = await fetch('/api/payments/products');
+                    const data = await res.json();
+                    product = (data.products || []).find((p) => p.code === productCode);
+                    document.getElementById('order-loading').classList.add('hidden');
+                    if (!product) {
+                        say('Produk tidak ditemukan.', 'error');
+                        status.append(' ', link('Lihat daftar harga', '/harga.html'));
+                        return;
+                    }
+                    document.getElementById('product-kind').textContent = KIND[product.kind] || '';
+                    document.getElementById('product-name').textContent = product.name;
+                    document.getElementById('product-description').textContent = product.description;
+                    document.getElementById('product-price').textContent = rupiah(product.price_idr);
+                    payButton.textContent = 'Bayar ' + rupiah(product.price_idr);
+                    document.getElementById('order-details').classList.remove('hidden');
+                    if (!data.enabled) {
+                        payButton.disabled = true;
+                        say('Pembayaran online belum tersedia. Hubungi kami di hasbizakin0804@gmail.com.');
+                    }
+                } catch {
+                    say('Gagal memuat produk. Muat ulang halaman ini.', 'error');
+                }
+            }
+
+            function loadSnap(url, clientKey) {
+                if (window.snap) return Promise.resolve(window.snap);
+                const parsed = new URL(url);
+                if (parsed.protocol !== 'https:' || !SNAP_HOSTS.includes(parsed.hostname)) {
+                    return Promise.reject(new Error('Snap URL tidak valid'));
+                }
+                return new Promise((resolve, reject) => {
+                    const script = document.createElement('script');
+                    script.src = parsed.href;
+                    script.setAttribute('data-client-key', clientKey);
+                    script.onload = () => (window.snap ? resolve(window.snap) : reject(new Error('Snap tidak tersedia')));
+                    script.onerror = () => reject(new Error('Snap gagal dimuat'));
+                    document.head.appendChild(script);
+                });
+            }
+
+            function showFallback(redirectUrl) {
+                // Only if the popup can't open: an explicit, user-initiated link to Midtrans' page
+                fallback.replaceChildren(
+                    document.createTextNode('Jendela pembayaran tidak bisa dibuka di browser ini. '),
+                    link('Lanjutkan di halaman pembayaran Midtrans', redirectUrl)
+                );
+                fallback.classList.remove('hidden');
+            }
+
+            async function pay() {
+                payButton.disabled = true;
+                fallback.classList.add('hidden');
+                say('Menyiapkan pembayaran…');
+                let data;
+                try {
+                    const res = await fetch('/api/payments/checkout', {
+                        method: 'POST',
+                        credentials: 'include',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ product: productCode }),
+                    });
+                    data = await res.json().catch(() => ({}));
+                    if (res.status === 401) {
+                        say('Masuk dulu untuk membeli. ');
+                        status.append(link('Masuk', '/login.html?next=' + encodeURIComponent(location.pathname + location.search)));
+                        payButton.disabled = false;
+                        return;
+                    }
+                    if (!res.ok) throw new Error(data.error || 'Pembayaran gagal dibuat. Coba lagi.');
+                } catch (error) {
+                    say(error.message, 'error');
+                    payButton.disabled = false;
+                    return;
+                }
+
+                const statusUrl = '/payment.html?order_id=' + encodeURIComponent(data.order_id);
+                if (!data.snap_token || !data.snap_js_url) {
+                    say('');
+                    showFallback(data.redirect_url);
+                    payButton.disabled = false;
+                    return;
+                }
+                try {
+                    const snap = await loadSnap(data.snap_js_url, data.client_key);
+                    say('Selesaikan pembayaran di jendela Midtrans.');
+                    snap.pay(data.snap_token, {
+                        onSuccess: () => location.assign(statusUrl),
+                        onPending: () => location.assign(statusUrl),
+                        onError: () => {
+                            say('Pembayaran gagal. Coba lagi atau pilih metode lain.', 'error');
+                            payButton.disabled = false;
+                        },
+                        onClose: () => {
+                            say('Jendela pembayaran ditutup sebelum selesai. Tekan Bayar untuk melanjutkan.');
+                            payButton.disabled = false;
+                        },
+                    });
+                } catch {
+                    say('');
+                    showFallback(data.redirect_url);
+                    payButton.disabled = false;
+                }
+            }
+
+            payButton.addEventListener('click', pay);
+            if (!productCode) {
+                document.getElementById('order-loading').classList.add('hidden');
+                say('Pilih produk dulu. ');
+                status.append(link('Lihat daftar harga', '/harga.html'));
+            } else {
+                loadProduct();
+            }
+        })();
+    </script>
+</body>
+</html>

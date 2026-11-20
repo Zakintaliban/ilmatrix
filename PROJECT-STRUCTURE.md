@@ -11,7 +11,8 @@ src/
 ├── services/
 │   ├── materialService.ts        # Material CRUD operations and file management
 │   ├── extractionService.ts      # File content extraction coordination
-│   ├── groqService.ts           # AI/LLM service integration
+│   ├── groqService.ts           # Study-tool prompts (explain, quiz, chat, MCQ, flashcards, dialogue, OCR)
+│   ├── groqProvider.ts          # Groq access: model routing, fallback, structured outputs, usage capture
 │   ├── mcqScoringService.ts     # Deterministic quiz scoring (no LLM)
 │   └── backgroundTaskService.ts  # Background cleanup tasks
 ├── controllers/
@@ -89,7 +90,7 @@ routes.ts
 
 ## Legacy Compatibility
 
-- All original files preserved in `backup/legacy/`
+- `backup/legacy/` is no longer in the repository (the `*:legacy` npm scripts reference it and will not run)
 - API contracts remain unchanged
 - Environment variables fully compatible
 - Frontend requires no modifications

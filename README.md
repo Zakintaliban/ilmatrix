@@ -1,31 +1,358 @@
-# ILMATRIX (Hono + Groq + Meta Llama)
+# ILMATRIX (Hono + Groq)
+
+> **2026 modernization:** Groq retired Llama 4 Maverick on 2026-03-09. ILMATRIX now runs on
+> `openai/gpt-oss-120b` (fallback `openai/gpt-oss-20b`, vision `qwen/qwen3.8-27b`). See
+> [docs/AUDIT_AND_STRATEGY_2026.md](docs/AUDIT_AND_STRATEGY_2026.md) for the full audit, model
+> research, product positioning, pricing and roadmap.
 
 An AI study companion for university students with **multimodal AI capabilities**. Core features:
 
 - Upload course materials (PDF/DOCX/PPTX/TXT/Images) with **Vision API support**
-- **Image Analysis**: Query visual content using Groq Vision API (Llama 4)
+- **Image Analysis**: Query visual content using a Groq vision model (configurable via `GROQ_VISION_MODEL`)
 - **Smart Text Extraction**: OCR for images, preserve visual content for analysis## Storage & Retention
 
 ### What's Stored
 
-- The app extracts text from uploaded files (PDF/DOCX/PPTX/Images/TXT) and stores only the extracted text as `uploads/<materialId>.txt`
+- The app extracts text from uploaded files (PDF/DOCX/PPTX/Images/TXT) and stores only the extracted text in the Postgres
+  `materials` table (or `uploads/<materialId>.txt` when no database is configured)
 - **Original files are never saved** - only the extracted text content
+- Signed-in users' materials are private to them; guest materials are reachable only by their (unguessable) ID.
+  A signed-in user who uses a guest upload (e.g. right after logging in) takes ownership of it
 
 ### Size Limits
 
 - **10 MB total** per material (enforced at upload/append)
 - Individual file size limits handled by extraction services
 
-### Auto-Delete (TTL)
+### Retention
 
-- Background cleaner deletes material files older than `MATERIAL_TTL_MINUTES` (default: 60 minutes)
-- Runs at intervals with proper resource management (`unref()` timers for graceful shutdown)
-- Implemented in [backgroundTaskService](src/services/backgroundTaskService.ts)
+| Material | Kept for | Setting |
+|---|---|---|
+| Guest upload | 60 minutes after last use | `MATERIAL_TTL_MINUTES` |
+| Signed-in upload | 180 days after last use | `MATERIAL_USER_RETENTION_DAYS` |
+| Saved to the library | until the user deletes it (or their account) | — |
 
-### PaaS Deployment
+- Signed-in users can store up to `MATERIAL_USER_QUOTA_MB` (default 200 MB) of extracted text
+- A background cleaner deletes expired materials ([backgroundTaskService](src/services/backgroundTaskService.ts)); deleting
+  an account deletes its materials
 
-- On platforms with ephemeral disks, data may vanish on redeploy
-- Use persistent volume/path for durability, or rely on TTL cleaner to prevent storage growth) and get help:
+### AI quotas (daily and weekly)
+
+AI use by signed-in users is metered in **kredit**, a provider-neutral unit of AI cost (US$1 = 4,500 kredit, so
+1 kredit ≈ Rp4). Each completion is priced by the model that served it ([inferenceCost](src/config/inferenceCost.ts);
+`AI_MODEL_PRICES` adds prices for a new host without a code change). A grounded answer costs ~9 kredit on gpt-oss-120b,
+~20 on Llama 4 Maverick (Vertex AI).
+
+Every user has a **daily** and a **weekly** quota, both hard limits, always on whether or not payments are enabled
+([quotaService](src/services/quotaService.ts)):
+
+- Every AI operation (the eight study tools, chat, image OCR on upload) counts against both. A request is refused
+  when either quota lacks room: `429` with `code: "QUOTA_EXCEEDED"`, `limit: "daily" | "weekly"` (the one that lifts
+  last), `exhausted`, `required`, `resets_at`, both meters in `quota`, and a message (`answer`) the tools show in the
+  chat. Image uploads still work but keep images as images
+- Days start at 00:00 and weeks on Monday 00:00 in `AI_QUOTA_TIMEZONE` (Asia/Jakarta), computed by Postgres. Usage is
+  stored per period (`ai_quota_usage`), so resets need no job and past days are history
+- Limits: per-user override → global default (set by admins on `/admin-usage.html`, stored in `ai_quota_settings`) →
+  `AI_DAILY_KREDIT_LIMIT` / `AI_WEEKLY_KREDIT_LIMIT`. Admins raise one student's quota only through an explicit
+  override; nothing else bypasses the quotas while payments are disabled
+- **Reservations** (`ai_quota_reservations`): before the model is called, one transaction locks the user's row and
+  admits the request only if both quotas have room for a conservative estimate of its cost, then holds that amount.
+  Parallel requests can't pass the same check. Afterwards the hold is replaced by the real cost (0 releases it);
+  settling twice is a no-op. The cost lands in the day and week the request started in, even if it ends after a reset
+- Estimates ([quotaEstimates](src/services/quotaEstimates.ts)) price a per-tool token budget with the configured
+  model, using the exact output cap the provider is sent ([OUTPUT_CAPS](src/services/groqService.ts)). **They can't
+  guarantee zero overshoot**: a request whose real cost exceeds its reservation (a much longer material than budgeted,
+  an image answered by a pricier vision model) can take a quota over its limit by that difference, never more
+- Image OCR reserves per image: about 43 kredit on qwen/qwen3.8-27b at the 2,000-token output cap (~8,000 characters,
+  about two dense pages per photo), about 14 on Llama 4 Maverick (Vertex). An upload whose images don't all fit in the
+  remaining quota gets no OCR (the images are kept as images); the upload itself always works
+- Settlement: a reservation is marked settled only once the database confirms it. A failed settlement is retried once
+  when the request (or stream) ends, from the larger of the reported and observed cost; settlement is idempotent, so a
+  retry never charges twice. If that fails too, the reservation stays open. A usage-log failure never affects the quota
+- Streams settle when they end (an estimate if the student leaves early, released if nothing was generated). A
+  reservation the server never finishes (crash, or every settlement failed) expires after 15 minutes and is **charged
+  in full**, never dropped; a late settlement corrects it to the real cost
+- Expiry runs at request time: each user's stale reservations are charged at their next AI request or status read,
+  so enforcement never depends on a scheduler. A sweep for users who don't come back runs in the process every few
+  minutes and, where that isn't reliable (Cloud Run), as `npm run quota:expire` on a schedule (see the Google Cloud
+  guide). Sweeps can run in parallel: each reservation is expired once
+- Provider errors: whatever the completions really cost is charged (observed per request), nothing if nothing ran
+- **Fail closed**: if the quota can't be checked (database error), AI requests get `503 QUOTA_UNAVAILABLE`; they never
+  run unmetered
+- **Admin exemption**: admin accounts are reserved and charged like everyone (their use shows up) but never refused
+  for quota. Disabling a user's AI access (`set-access`) always refuses, admins included. **Risk:** AI spend by
+  admins is unbounded; a misused or compromised admin account (or a script using an admin session) can run up the AI
+  bill until someone notices. Keep admins few, give staff who only need more AI a per-user override instead of admin,
+  watch admin rows on the admin page, and set a billing budget/alert at the AI provider (GCP billing budgets, Groq
+  spend limits). The per-minute AI rate limit still applies to admins
+- Guests are unchanged: Turnstile, per-device and per-IP caps ([guestLimit](src/middleware/guestLimit.ts)); the AI
+  rate limiter and abuse detection still apply to everyone
+
+Students see both meters, reset times (WIB), 14 days of history and the per-tool estimates on the dashboard
+(`GET /api/usage/stats`). Admin API:
+
+| Endpoint | |
+|---|---|
+| `GET` / `PUT /api/admin/quota/settings` `{"daily_limit":100,"weekly_limit":500}` | global defaults (`null` = env) |
+| `POST /api/admin/usage/user/:id/update-limits` `{"daily_limit":150,"weekly_limit":null}` | per-user overrides (`null` = default, `0` blocks AI) |
+| `POST /api/admin/usage/user/:id/reset-quota` `{"period":"daily"\|"weekly"\|"both"}` | zero today's / this week's usage |
+| `POST /api/admin/usage/user/:id/set-access` `{"enabled":false}` | turn AI off for a user |
+
+`POST /api/admin/usage/reset/weekly` and `/reset/monthly` are **deprecated**: they reset the pre-quota token counters
+on `users` (`weekly_kredit_used` and friends), which no longer limit anything, so they now change nothing and answer
+`410 ENDPOINT_DEPRECATED`. Quotas reset by themselves; use `reset-quota` for one user.
+
+### Plans and paid kredit (only with payments enabled)
+
+Kept as they were for when monetization returns; not yet rebalanced for daily/weekly quotas
+([plans](src/config/plans.ts)):
+
+| Plan / product | Price | Kredit |
+|---|---|---|
+| Bulanan | Rp29.000 / 30 days | weekly quota 900 |
+| Semester | Rp99.000 / 182 days | weekly quota 700 |
+| Pass 7 Hari | Rp9.900 | 1.000, valid 7 days |
+| Top-up | Rp5.000 | 600, valid 90 days |
+
+While `PAYMENTS_ENABLED=true`: an active paid plan sets the weekly quota (a per-user override still wins), and
+passes, top-ups and bonus kredit pay for requests the quotas would refuse, soonest-expiring first. While payments are
+disabled, existing plans and grants stay in the database untouched and have no effect; admins can't sell plans or grant
+kredit (`404 PAYMENTS_DISABLED`). Manual sales: `POST /api/admin/usage/user/:id/set-plan {"plan":"semester"}` and
+`POST /api/admin/usage/user/:id/grant-kredit {"product":"pass_7d","reference":"QRIS-..."}`.
+
+### Pages for Midtrans' merchant review
+
+Midtrans checks the website before activating a merchant. What it asks for and where it is:
+
+| Requirement | Where |
+|---|---|
+| Accessible, describes the products, can be ordered | [`/harga`](src/controllers/pricingPage.ts) (server-rendered from the catalogue, visible without JavaScript) → `/checkout.html` |
+| Terms & conditions and refund policy | [`/syarat-ketentuan.html`](public/syarat-ketentuan.html) (from Midtrans' digital-goods template, adapted), [`/kebijakan-pengembalian.html`](public/kebijakan-pengembalian.html); linked from the footer of public pages, the checkout page and sign-up |
+| Business contact | hasbizakin0804@gmail.com on the pricing, checkout, terms and refund pages and public footers (`CONTACT_EMAIL` in [pricingPage](src/controllers/pricingPage.ts)) |
+| Prices in Rupiah | All prices are IDR; the landing page's structured data uses `IDR`. A test fails on `$` prices or non-IDR offers |
+| Payment page not redirected to another website | Snap popup on `/checkout.html` |
+
+`tests/services/merchantPages.test.ts` keeps these in place. The terms and refund policy are a starting point:
+have them reviewed, and add the business's legal name and address if Midtrans asks for them.
+
+### Math
+
+Answers can contain LaTeX math (`$…$` inline, `$$…$$` display), rendered with KaTeX (served from the pinned `katex`
+package at `/vendor/katex`, no CDN). [markdown-math.js](public/js/markdown-math.js) takes math out before Markdown
+parsing and renders it after sanitizing, only in text (never in attributes); `$5 and $10` stays text; KaTeX runs with
+`trust: false` and expansion limits. The study prompt asks for LaTeX and never `$` for money; MCQ (plain text) keeps
+Unicode math.
+
+### Streaming
+
+Chat and the Explain/Quiz/Forum/Exam answers stream token by token (Server-Sent Events,
+[aiController](src/controllers/aiController.ts), [GroqProvider.stream](src/services/groqProvider.ts)):
+
+- The fallback model is used only if the primary fails before any text was sent; after that a failure ends the stream
+  with an `error` event (the app keeps the partial answer and notes that it broke off)
+- Reasoning is never streamed (`include_reasoning: false`, and only `delta.content` is forwarded)
+- Kredit is charged when the stream ends, from the usage Groq sends in its final chunk (`x_groq.usage`). If the student
+  closes the page, the Groq request is aborted and the tokens used are estimated (~4 characters per token); a stream
+  that ends without usage is estimated too (a warning is logged). `npm run groq:check` verifies against the live API
+  that usage arrives in the stream
+- The AI rate-limit slot and the Groq concurrency slot are held until the stream ends. A stream that sends nothing
+  for `GROQ_TIMEOUT_MS` times out
+- Proxies: responses carry `Cache-Control: no-cache` and `X-Accel-Buffering: no`, and a keep-alive comment is sent
+  every 15 s while the model is thinking
+
+### Payments (Midtrans)
+
+**Feature flag `PAYMENTS_ENABLED` (default `false`).** Payments are on only with `PAYMENTS_ENABLED=true` *and*
+`MIDTRANS_SERVER_KEY`. While off (e.g. an internal campus deployment):
+
+- New purchases are closed server-side: `/api/payments/products`, `/api/payments/checkout`, `/api/payments`,
+  `/api/payments/:orderId` and the admin plan/kredit sales answer `404 {"code":"PAYMENTS_DISABLED"}`
+- The pricing, checkout, payment and refund pages redirect to `/` (direct URLs included), their links are hidden, the
+  dashboard has no **Tambah Kredit** section or plan/extra-kredit box, and quota messages have no buy link
+- **Settlement still works** when the server key is set: the Midtrans webhook (signature check, Get Status as the
+  source of truth, exactly-once fulfilment) and the admin re-check settle transactions started before payments were
+  turned off. Their plan or kredit is stored but only counts once payments are on again
+- Nothing is deleted: the Midtrans integration, checkout, migrations 014/015, plans and payment records stay as they
+  are. `PAYMENTS_ENABLED=true` turns everything back on
+
+Students buy passes, top-ups and plans from the public pricing page (`/harga`) or the dashboard (**Tambah Kredit**)
+with Midtrans Snap: QRIS, e-wallets, whatever is active on the merchant account (narrow it with
+`MIDTRANS_ENABLED_PAYMENTS`). Payment happens on our own checkout page (`/checkout.html?product=…`) in the **Snap
+popup**, so the student never leaves the site (a Midtrans merchant requirement), then `/payment.html` shows the result.
+Snap.js is loaded only on the checkout page, which is the only page whose CSP allows Midtrans' hosts. If the popup
+can't load (no `MIDTRANS_CLIENT_KEY`, script blocked), the page offers Midtrans' hosted page as an explicit link.
+Code: [paymentService](src/services/paymentService.ts), [midtransClient](src/services/midtransClient.ts),
+[checkout page](public/checkout.html).
+
+- **Checkout** `POST /api/payments/checkout {"product":"pass_7d"}` (signed in) creates a pending payment with the
+  catalogue price and returns the Snap token (popup), the Snap.js URL and client key, and `redirect_url` (fallback). A
+  pending checkout of the same product from the last hour is reused, with the same token; at most 5 checkouts per user
+  per hour
+- **Webhook** `POST /api/payments/midtrans/notification`: the SHA-512 `signature_key` is checked, then the real status
+  is fetched from Midtrans' Get Status API (the signature doesn't cover `transaction_status`). If Midtrans can't be
+  reached the webhook answers `503`, so Midtrans retries
+- **Return page** polls `GET /api/payments/:orderId`, which re-checks a pending payment with Midtrans (at most every
+  10 s). A sale is completed even if the webhook never arrives
+- **Fulfilment** happens exactly once (row lock), only when the amount matches exactly: `settlement`, or `capture` with
+  fraud status `accept`. Pass/Top-up add kredit; a plan starts or, if it's the same plan, extends. A different paid
+  plan can't be bought while one is active (passes and top-ups can)
+- **Refunds/chargebacks** after fulfilment mark the payment `refunded` and add a review note; the plan or kredit is not
+  revoked automatically. Amount mismatches are never fulfilled and also get a review note. Both show on the admin
+  page (**Payments**), which can re-check any payment with Midtrans
+- Payments are kept when an account is deleted (`user_id` set to NULL); every received or fetched status is stored in
+  `payment_events`
+
+Setup:
+
+1. Run `npm run migrate run` (migrations 014 and 015 create `payments`, `payment_events` and the Snap token column)
+2. Set `MIDTRANS_SERVER_KEY` and `MIDTRANS_CLIENT_KEY` (sandbox keys first) and `MIDTRANS_IS_PRODUCTION=false`; the
+   server warns if the server key and the environment don't match
+3. Webhook: with an `https://` `BASE_URL`, each transaction tells Midtrans to notify
+   `${BASE_URL}/api/payments/midtrans/notification`. Otherwise set that URL as the Notification URL in the Midtrans
+   dashboard (Settings > Payment). For local testing a tunnel is needed; without one the return page still completes
+   payments by polling
+4. Test in sandbox with Midtrans' simulator, then switch to production keys and `MIDTRANS_IS_PRODUCTION=true`
+5. Consider `MIDTRANS_ENABLED_PAYMENTS=other_qris,gopay,shopeepay`: bank virtual accounts usually carry a flat fee per
+   transaction (often Rp2–5k), too much for a Rp5.000 top-up. Confirm current rates with Midtrans
+
+### Guest access & bot protection
+
+Guests (no account) get 5 AI uses per device. Because a device is just a cookie, three more checks bound what a script
+can take without signing up ([guestLimit](src/middleware/guestLimit.ts)):
+
+- **Turnstile** (when `TURNSTILE_SITE_KEY` and `TURNSTILE_SECRET_KEY` are set): a new guest device must pass a
+  Cloudflare Turnstile check before its first AI request or image upload. The app does this automatically
+  ([public/js/guest-verify.js](public/js/guest-verify.js)): the API answers `401` with
+  `code: "GUEST_VERIFICATION_REQUIRED"`, the browser runs the (usually invisible) challenge, posts the token to
+  `POST /api/guest/verify` and retries. Tokens are validated server-side and never trusted from the client
+- **Per-IP daily caps**: `GUEST_IP_DAILY_REQUESTS` AI requests (default 100) and `GUEST_IP_DAILY_VERIFICATIONS`
+  device verifications (default 20) per IP per 24 hours, across all devices. Hitting a cap asks the student to sign up
+  (`code: "GUEST_IP_LIMIT"`)
+- **Trusted client IP**: the IP comes from the header named by `CLIENT_IP_HEADER`, never from the client-controlled
+  first `X-Forwarded-For` entry
+- Signed-in users skip all of this and are limited by kredit. Counters are in memory, so they reset on restart and are
+  per instance
+
+### Deployment
+
+- Run `npm run migrate run` after deploying so the `materials` table exists (PostgreSQL 12+). Until then the app logs a
+  warning and falls back to local files, which do not survive a redeploy
+- Without a database (local development), materials use `uploads/<id>.txt` files with the guest TTL
+- Migration 013 hashes existing session tokens in place, so users stay signed in. When an email service is configured,
+  accounts that never verified their email must verify before their next password sign-in
+- After deploying, open `GET /api/admin/client-ip` as an admin and check that `detected_ip` is your real IP. If it is
+  a proxy address, set `CLIENT_IP_HEADER` (`cf-connecting-ip` when the domain is proxied through Cloudflare; the server
+  logs a `[CLIENT_IP]` warning when it sees Cloudflare headers without that setting)
+- Create a Turnstile widget for your domain (Managed mode) and set `TURNSTILE_SITE_KEY` / `TURNSTILE_SECRET_KEY`
+
+### Deploy to Google Cloud (Cloud Run + Cloud SQL, Llama 4 Maverick on Vertex AI)
+
+The app runs on Cloud Run from the [Dockerfile](Dockerfile), Postgres on Cloud SQL, and the model is Llama 4
+Maverick as a managed API (MaaS) from Vertex AI Model Garden. On Vertex there is no API key: the app uses the Cloud
+Run service account's token (`GROQ_API_KEY` stays empty). Replace `PROJECT_ID` and the password below.
+
+1. Project and APIs:
+   ```bash
+   gcloud config set project PROJECT_ID
+   gcloud services enable run.googleapis.com sqladmin.googleapis.com aiplatform.googleapis.com \
+     secretmanager.googleapis.com cloudbuild.googleapis.com artifactregistry.googleapis.com
+   ```
+2. In the console: Vertex AI → Model Garden → **Llama 4 Maverick** → **Enable** (accept Meta's license). It is served
+   in `us-east5`.
+3. Database (Jakarta region):
+   ```bash
+   gcloud sql instances create ilmatrix-db --database-version=POSTGRES_16 --edition=enterprise \
+     --tier=db-f1-micro --region=asia-southeast2
+   gcloud sql databases create ilmatrix --instance=ilmatrix-db
+   gcloud sql users create ilmatrix --instance=ilmatrix-db --password='CHANGE_ME'   # letters and digits, or URL-encode it below
+   printf '%s' 'postgresql://ilmatrix:CHANGE_ME@/ilmatrix?host=/cloudsql/PROJECT_ID:asia-southeast2:ilmatrix-db' \
+     | gcloud secrets create DATABASE_URL --data-file=-
+   ```
+4. A service account that may call Vertex AI, connect to Cloud SQL and read secrets:
+   ```bash
+   gcloud iam service-accounts create ilmatrix-run
+   SA=ilmatrix-run@PROJECT_ID.iam.gserviceaccount.com
+   for role in roles/aiplatform.user roles/cloudsql.client roles/secretmanager.secretAccessor; do
+     gcloud projects add-iam-policy-binding PROJECT_ID --member=serviceAccount:$SA --role=$role
+   done
+   ```
+5. `env.yaml` (not committed):
+   ```yaml
+   NODE_ENV: production
+   DATABASE_SSL: "false"            # Cloud SQL socket; the connector encrypts
+   CLIENT_IP_HEADER: x-forwarded-for
+   AI_BASE_URL: https://us-east5-aiplatform.googleapis.com/v1/projects/PROJECT_ID/locations/us-east5/endpoints/openapi
+   GROQ_MODEL: meta/llama-4-maverick-17b-128e-instruct-maas
+   GROQ_VISION_MODEL: meta/llama-4-maverick-17b-128e-instruct-maas
+   GROQ_FALLBACK_MODEL: ""
+   ```
+6. Deploy, then set `BASE_URL` to the URL it prints:
+   ```bash
+   gcloud run deploy ilmatrix --source . --region=asia-southeast2 --service-account=$SA \
+     --add-cloudsql-instances=PROJECT_ID:asia-southeast2:ilmatrix-db \
+     --set-secrets=DATABASE_URL=DATABASE_URL:latest --env-vars-file=env.yaml \
+     --allow-unauthenticated --max-instances=2
+   gcloud run services update ilmatrix --region=asia-southeast2 --update-env-vars=BASE_URL=https://ilmatrix-....run.app
+   ```
+7. Create the tables (migrations up to 016) with a one-off job from the same image:
+   ```bash
+   IMAGE=$(gcloud run services describe ilmatrix --region=asia-southeast2 \
+     --format='value(spec.template.spec.containers[0].image)')
+   gcloud run jobs create ilmatrix-migrate --image=$IMAGE --region=asia-southeast2 --service-account=$SA \
+     --set-cloudsql-instances=PROJECT_ID:asia-southeast2:ilmatrix-db --set-secrets=DATABASE_URL=DATABASE_URL:latest \
+     --set-env-vars=DATABASE_SSL=false --command=npm --args=run,migrate,run --execute-now --wait
+   ```
+   After a deploy with new migrations: `gcloud run jobs update ilmatrix-migrate --image=$IMAGE ... --execute-now`.
+8. Expire stale quota reservations on a schedule. Cloud Run throttles CPU between requests and stops idle instances,
+   so the in-process sweep isn't reliable there; quotas are still enforced at request time either way. A Cloud Run Job
+   started by Cloud Scheduler through the Jobs API with IAM, so nothing is exposed over HTTP:
+   ```bash
+   gcloud run jobs create ilmatrix-quota-expire --image=$IMAGE --region=asia-southeast2 --service-account=$SA \
+     --set-cloudsql-instances=PROJECT_ID:asia-southeast2:ilmatrix-db --set-secrets=DATABASE_URL=DATABASE_URL:latest \
+     --set-env-vars=DATABASE_SSL=false --command=npm --args=run,quota:expire
+   gcloud iam service-accounts create ilmatrix-scheduler
+   gcloud run jobs add-iam-policy-binding ilmatrix-quota-expire --region=asia-southeast2 \
+     --member=serviceAccount:ilmatrix-scheduler@PROJECT_ID.iam.gserviceaccount.com --role=roles/run.invoker
+   gcloud scheduler jobs create http ilmatrix-quota-expire --location=asia-southeast2 --schedule="*/10 * * * *" \
+     --uri=https://run.googleapis.com/v2/projects/PROJECT_ID/locations/asia-southeast2/jobs/ilmatrix-quota-expire:run \
+     --http-method=POST --oauth-service-account-email=ilmatrix-scheduler@PROJECT_ID.iam.gserviceaccount.com
+   ```
+   Update its image with each deploy like the migrate job (`gcloud run jobs update ilmatrix-quota-expire --image=$IMAGE`).
+   A failed run exits non-zero and shows in the job's executions.
+9. Check the model from your machine: `GROQ_API_KEY=$(gcloud auth print-access-token)` plus the `env.yaml` model
+   settings, then `npm run groq:check`. If Vertex answers 404, try `v1beta1` instead of `v1` in `AI_BASE_URL`.
+10. Optional secrets the same way (`--set-secrets`): `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` (add
+   `BASE_URL/api/auth/google/callback` as a redirect URI), `RESEND_API_KEY`, `TURNSTILE_SECRET_KEY`.
+
+Notes: rate limits and guest caps are counted in memory per instance, so keep `--max-instances` low. Materials sent
+to the model are processed in the US (`us-east5`).
+
+**Development preview** (e.g. the `claude/charming-lamport-f8gwv8` branch): the same steps with a separate service,
+checked out from that branch, and these differences:
+
+- Service name `ilmatrix-dev` and `--max-instances=1` (rate limits are per instance, and `db-f1-micro` allows about
+  25 connections while each instance may open up to 20). Steps 8 to 10 can wait
+- Private by default: deploy with `--no-allow-unauthenticated` instead of `--allow-unauthenticated`, then open it only
+  for yourself with `gcloud run services proxy ilmatrix-dev --region=asia-southeast2 --port=8080` (older gcloud:
+  `gcloud beta run services proxy`) and browse `http://localhost:8080`. A public preview (`--allow-unauthenticated`)
+  lets guests use AI on your key, limited only by the per-IP caps unless Turnstile keys are set
+- AI: Vertex as above, or a Groq key instead: `printf '%s' 'gsk_...' | gcloud secrets create GROQ_API_KEY --data-file=-`,
+  add `GROQ_API_KEY=GROQ_API_KEY:latest` to `--set-secrets` and drop the `AI_BASE_URL` / `GROQ_*_MODEL` lines from
+  `env.yaml` (gpt-oss defaults). Without either, the app runs but AI tools answer that AI isn't configured
+- Without `RESEND_API_KEY` no verification email is sent and new accounts can sign in right away
+- Make yourself admin after registering on the site:
+  ```bash
+  gcloud run jobs create ilmatrix-set-admin --image=$IMAGE --region=asia-southeast2 --service-account=$SA \
+    --set-cloudsql-instances=PROJECT_ID:asia-southeast2:ilmatrix-db --set-secrets=DATABASE_URL=DATABASE_URL:latest \
+    --set-env-vars=DATABASE_SSL=false --command=npm --args=run,set-admin,you@example.com --execute-now --wait
+  ```
+
+The container runs `node` directly (no npm or shell in between), so Cloud Run's SIGTERM reaches the graceful
+shutdown: the server stops taking connections, lets running requests finish within Cloud Run's 10-second grace
+period, then closes the database. Rehearsed locally from the built image: migrations 001-016 on an empty database,
+sign-up, login, quotas, admin, the expiry job, and an upload that was still running when the instance was stopped.
+
+Students upload their materials and get help:
   - **Explain** material (concise + short citations)
   - **MCQ Quiz** (generate, answer with simple "1 a" format, deterministic grading, per-question feedback for wrong answers only)
   - **Flashcards** (auto‑generated flip cards from your materials)
@@ -37,7 +364,7 @@ An AI study companion for university students with **multimodal AI capabilities*
 Tech stack:
 
 - **Hono.js** (Node adapter) for API and static hosting
-- **Groq SDK** with Meta Llama models (including Vision API for images)
+- **Groq SDK** with OpenAI gpt-oss models (text) and a configurable vision model for images
 - **TypeScript** (ESM, NodeNext) with clean architecture
 - **Extraction**: pdfjs-dist (PDF), Groq Vision API (OCR for images), JSZip (DOCX/PPTX)
 - **Tailwind CSS** (CDN)
@@ -73,14 +400,22 @@ The project uses a comprehensive test suite with proper resource management:
 Run tests:
 
 ```bash
-npm test              # Full test suite (services + integration)
+npm test              # Full test suite (services + AI tools + integration)
 npm run test:services # Service layer only (fast, no API calls)
+npm run test:ai       # AI layer + every study tool endpoint, with a fake Groq client
+npm run test:db       # Postgres material storage (needs TEST_DATABASE_URL to a disposable database; skipped otherwise)
 npm run test:smoke    # Integration tests (API endpoints)
+npm run groq:check    # Live check of every study tool against the real Groq API (needs GROQ_API_KEY)
 ```
+
+Run `npm run groq:check` before deploying any model or SDK change: the automated tests use a fake Groq
+client and cannot detect a model being retired or rejecting a parameter.
 
 Test files:
 
 - `tests/services/` - Service layer unit tests
+- `tests/ai/` - AI provider unit tests, the study-tool regression suite, streaming (SSE), guest protection (Turnstile, IP caps, client IP) and the AI rate limiter
+- `tests/db/` - Tests against a real Postgres (`TEST_DATABASE_URL=postgresql://... npm run test:db`; the database is migrated and receives test rows)
 - `tests/smoke.test.ts` - API integration tests
 
 ## Development & Troubleshooting
@@ -116,7 +451,7 @@ Test files:
 Tech stack:
 
 - Hono.js (Node adapter) for API and static hosting
-- Groq SDK with Meta Llama models (including Vision API for images)
+- Groq SDK with OpenAI gpt-oss models (text) and a configurable vision model for images
 - TypeScript (ESM, NodeNext) with clean architecture
 - Extraction: pdfjs-dist (PDF), Groq Vision API (OCR for images), JSZip (DOCX/PPTX)
 - Tailwind CSS (CDN)
@@ -137,7 +472,7 @@ cp .env.example .env
 # Edit .env and set your Groq key
 # GROQ_API_KEY=sk_...
 # Optional:
-# GROQ_MODEL=meta-llama/llama-4-maverick-17b-128e-instruct
+# GROQ_MODEL=openai/gpt-oss-120b
 ```
 
 3. Run in development:
@@ -156,47 +491,89 @@ Server (default): <http://localhost:8787>
 ## Environment variables
 
 - GROQ_API_KEY: Your Groq API key (required)
-- GROQ_MODEL: Groq model id (default set in code)
+- GROQ_MODEL: Primary text model (default `openai/gpt-oss-120b`). Retired model IDs (e.g. Llama 4 Maverick) are remapped to Groq's recommended replacement with a warning.
+- GROQ_FALLBACK_MODEL: Used when the primary model is rate limited, down or decommissioned (default `openai/gpt-oss-20b`; empty disables).
+- GROQ_VISION_MODEL: Model for images (OCR and image questions in chat). Default `qwen/qwen3.8-27b`, a **Preview** model on Groq; empty disables vision and chat falls back to text-only.
+- GROQ_REASONING_EFFORT: Reasoning effort for free-form answers (`low` | `medium` | `high`, default `medium`). JSON tools always use `low`.
+- GROQ_STRUCTURED_OUTPUTS: Use strict JSON-schema outputs for quiz/flashcard/dialogue tools (default `true`). Rejected schemas automatically fall back to JSON mode.
 - PORT: Server port (default: 8787)
 - MATERIAL_CLAMP: Max characters of materials included per request (default 100000). Increase for better recall (higher cost), decrease to save tokens.
-- MATERIAL_TTL_MINUTES: Minutes to keep uploaded materials before auto-deletion (default 60). A background cleaner periodically removes old .txt material files from the uploads folder. See [src/routes.ts](src/routes.ts:735).
+- MATERIAL_TTL_MINUTES: Minutes to keep guest materials after their last use (default 60). Also the TTL of file-based storage when no database is configured.
+- MATERIAL_USER_RETENTION_DAYS: Days to keep signed-in users' materials after their last use (default 180). Materials saved to the library are kept until deleted.
+- MATERIAL_USER_QUOTA_MB: Maximum extracted text stored per signed-in user (default 200).
+- KREDIT_FREE_WEEKLY: Weekly kredit on the free plan (default 150). Paid plans and products are defined in [src/config/plans.ts](src/config/plans.ts).
+- DATABASE_SSL: `true`/`false` to override database SSL (default: on when NODE_ENV=production). Note that npm runs every script with NODE_ENV=production because `.npmrc` sets `omit=dev`, so set `DATABASE_SSL=false` for a local Postgres without SSL.
 - RATE_LIMIT_MAX: Requests per minute per IP (default 120). Lightweight token bucket applied to all /api routes. See [middleware](src/routes.ts:70).
+- AI_DAILY_KREDIT_LIMIT / AI_WEEKLY_KREDIT_LIMIT: default daily and weekly AI quotas in kredit (100 and 500) when admins haven't set them on the admin page. See [quotaService](src/services/quotaService.ts).
+- AI_QUOTA_TIMEZONE: IANA zone for quota days (reset 00:00) and weeks (Monday 00:00). Default `Asia/Jakarta`.
+- AI_MODEL_PRICES: optional JSON of US$ per million tokens per model, added to or replacing the built-in prices, e.g. `{"meta/llama-4-maverick-17b-128e-instruct-maas":{"input":0.35,"output":1.15}}`. Unknown models are charged at the highest known rate.
+- AI_RATE_LIMIT_PER_MINUTE / AI_RATE_LIMIT_PER_HOUR: AI requests per user (guests: per device) in sliding 1-minute and 1-hour windows (defaults 12 and 150). See [aiRateLimit](src/middleware/aiRateLimit.ts).
+- AI_MAX_CONCURRENT: AI requests one user/device may have in flight (default 2); more get an immediate `429` instead of queueing for the shared Groq slots.
 - PDF_MAX_PAGES: Max PDF pages extracted per file (default 200). See [extractPdfTextImpl()](src/extract/pdf.ts:50).
-- OCR_CONCURRENCY: Max concurrent OCR workers for images (default 1). See [extractImageText()](src/extract/image.ts:1).
-- OCR_TIMEOUT_MS: Per-image OCR timeout in ms (default 30000).
-- GROQ_CONCURRENCY: Concurrent LLM requests (default 4). See [groqService](src/services/groqService.ts).
-- GROQ_TIMEOUT_MS: Per-request LLM timeout in ms (default 45000). See [concurrency utils](src/utils/concurrency.ts).
+- GROQ_CONCURRENCY: Concurrent LLM requests per process, including image OCR (default 4). See [groqProvider](src/services/groqProvider.ts).
+- GROQ_TIMEOUT_MS: Per-request LLM timeout in ms, enforced by the Groq SDK (default 45000). See [groqProvider](src/services/groqProvider.ts).
+- AI_BASE_URL: Use another OpenAI-compatible host instead of Groq; `GROQ_API_KEY` is then that host's key and the `GROQ_*` model settings name its models. Groq no longer serves Llama 4 Maverick (shut down 2026-03-09); to run Maverick only, e.g. on DeepInfra: `AI_BASE_URL=https://api.deepinfra.com/v1/openai`, `GROQ_MODEL` and `GROQ_VISION_MODEL` = `meta-llama/Llama-4-Maverick-17B-128E-Instruct-FP8`, `GROQ_FALLBACK_MODEL=` (empty). Check it with `npm run groq:check`.
 - EXTRACTION_CONCURRENCY: Max concurrent file extraction operations (default 2). See [extractionService](src/services/extractionService.ts).
+- CLIENT_IP_HEADER: Header holding the real client IP: `x-real-ip` (default, Railway), `cf-connecting-ip` (behind Cloudflare), `x-forwarded-for` (rightmost entry) or `none` (socket address). Used by every per-IP limit.
+- TURNSTILE_SITE_KEY / TURNSTILE_SECRET_KEY: Cloudflare Turnstile keys for the guest bot check. Both must be set to enable it.
+- GUEST_IP_DAILY_REQUESTS: Guest AI requests per IP per 24 hours (default 100).
+- GUEST_IP_DAILY_VERIFICATIONS: Guest device verifications per IP per 24 hours (default 20).
+- PAYMENTS_ENABLED: `true` to sell plans and kredit (also needs MIDTRANS_SERVER_KEY). Default `false`: no purchases; earlier transactions still settle.
+- MIDTRANS_SERVER_KEY: Midtrans server key, needed for payments and for settling earlier transactions. Never sent to the browser.
+- MIDTRANS_CLIENT_KEY: Midtrans client key for the Snap popup on the checkout page (public by design). Without it, checkout offers Midtrans' hosted page instead.
+- MIDTRANS_IS_PRODUCTION: `true` for real payments (default `false`, sandbox).
+- MIDTRANS_ENABLED_PAYMENTS: Comma-separated Snap payment methods to offer (default: all active on the account).
+- MIDTRANS_NOTIFICATION_URL: Webhook URL sent per transaction (default: `${BASE_URL}/api/payments/midtrans/notification` when BASE_URL is https).
 
 ## Storage & retention
 
 - What’s stored:
-  - The app extracts text from your uploaded files (PDF/DOCX/PPTX/Images/TXT) and stores only the extracted text as uploads/&lt;materialId&gt;.txt. Originals are not saved.
+  - The app extracts text from your uploaded files (PDF/DOCX/PPTX/Images/TXT) and stores only the extracted text in Postgres (`materials` table). Originals are not saved.
 - Size limits:
-  - 10 MB total per material (enforced at upload/append).
-- Auto delete (TTL):
-  - A background cleaner deletes material .txt files older than MATERIAL_TTL_MINUTES (default 60). This runs at intervals and is designed to be resilient. Implemented in [src/routes.ts](src/routes.ts).
-- Persistence on PaaS:
-  - If you deploy to platforms with ephemeral disks, data may vanish on redeploy. Use a persistent volume/path if you need durability, or rely on the default TTL cleaner to avoid storage growth.
+  - 10 MB of extracted text per upload; `MATERIAL_USER_QUOTA_MB` (default 200) per signed-in user.
+- Retention:
+  - Guest materials: `MATERIAL_TTL_MINUTES` after last use. Signed-in: `MATERIAL_USER_RETENTION_DAYS` after last use. Saved to the library: until deleted. See the retention table at the top of this README.
+- Without a database:
+  - Materials fall back to `uploads/<materialId>.txt` files with the guest TTL; on platforms with ephemeral disks they vanish on redeploy.
 
 ## Security & accessibility
 
 - Security hardening:
   - Path traversal protection for materials I/O; only UUID v4-like ids are accepted and paths are validated inside uploads/ (see [security utils](src/utils/security.ts)).
   - Global per-IP rate limiting (default 120 req/min) via a lightweight token bucket (see [rate limit middleware](src/middleware/rateLimit.ts)). Tune with RATE_LIMIT_MAX.
-  - CSP applied to static pages to restrict sources (see [app](public/app.html), [index](public/index.html), [about](public/about.html)).
-  - Best-effort Content-Length guard on uploads to quickly reject oversized requests (see [upload controller](src/controllers/uploadController.ts)).
+  - AI rate limiting per user or guest device on every AI endpoint: 12/min and 150/hour (sliding windows), at most 2 in flight. Rejected requests return `429` with `code: "AI_RATE_LIMITED"` or `"AI_CONCURRENCY_LIMIT"`, a message in `error`/`answer` and `Retry-After`; they are not charged kredit and do not use a guest trial (see [aiRateLimit](src/middleware/aiRateLimit.ts)). In memory, per instance.
+  - Security headers on every response ([securityHeaders](src/middleware/securityHeaders.ts)): a site-wide Content-Security-Policy (script origins pinned, no plugins, no `<base>` hijacking, forms only to this site, `frame-ancestors 'none'`), `X-Frame-Options: DENY`, HSTS, `nosniff`, a strict referrer policy and a Permissions-Policy. Pages with a `<meta>` CSP ([app](public/app.html), [index](public/index.html), [about](public/about.html)) narrow it further. `'unsafe-inline'` remains until inline scripts move to files.
+  - CDN scripts are pinned to exact versions with Subresource Integrity (`integrity` + `crossorigin`), checked by a test. Exception: the Tailwind Play CDN, which generates its script per request (replace with compiled CSS, P1-13).
+  - Guest bot protection: Turnstile device verification and per-IP daily caps (see [Guest access & bot protection](#guest-access--bot-protection)).
+  - Request body limits while streaming: 2 MB for JSON, the upload limit (+1 MB) for `/upload`; `413 BODY_TOO_LARGE`.
+  - DOCX/PPTX are read with a decompression budget (50 MB of XML per document), so a zip bomb fails the upload instead of exhausting memory ([zip](src/extract/zip.ts)).
+- Accounts:
+  - Password sign-in requires a verified email whenever verification emails can be sent (`RESEND_API_KEY` set); the login page offers to resend the link. Without an email service nobody could verify, so the check is off.
+  - Google sign-in into an existing **unverified** account takes it over: its password and sessions are removed (stops account pre-hijacking). The profile API can't change the email.
+  - Google OAuth uses a `state` parameter bound to an HttpOnly cookie (login CSRF).
+  - Failed sign-ins: 10 per email or 30 per IP within 15 minutes, then `429 LOGIN_THROTTLED` (Google sign-in still works). Changing the password signs out other sessions.
+  - Session tokens are stored as SHA-256 hashes (migration 013); the cookie value never reaches the database.
+  - User-supplied names are HTML-escaped in emails.
 - Accessibility:
   - Live regions announce new chat and dialogue messages for screen readers (see [app live regions](public/app.html)).
   - Tool trigger buttons include aria-label/controls/expanded for improved navigation.
-
-Note on SRI (Subresource Integrity): in production, pin CDN versions and add integrity/crossorigin attributes for Tailwind, marked, and DOMPurify.
 
 ## API
 
 Base: /api
 
 - GET /api/health → { "ok": true, "uptime": number }
+
+- Payments: `GET /api/payments/products` (public), `POST /api/payments/checkout`, `GET /api/payments`,
+  `GET /api/payments/:orderId` (signed in), `POST /api/payments/midtrans/notification` (Midtrans),
+  `GET /api/admin/payments?status=`, `POST /api/admin/payments/:orderId/sync` (admin). See [Payments](#payments-midtrans).
+
+- POST /api/guest/verify (application/json)
+
+  - Body: { token: string } // Turnstile widget token
+  - Response: { "ok": true } and the device is verified; 403 `TURNSTILE_FAILED`; 429 `GUEST_IP_LIMIT`; { "ok": true, "verification": "disabled" } when Turnstile is not configured
+
+- GET /api/admin/client-ip (admin) → { detected_ip, client_ip_header, headers } // check CLIENT_IP_HEADER after deploying
 
 - POST /api/upload (multipart/form-data)
 
@@ -206,8 +583,21 @@ Base: /api
 
 - POST /api/explain (application/json)
 
-  - Body: { materialId?: string, materialText?: string, prompt?: string }
-  - Response: { "answer": string }
+  - Body: { materialId?: string, materialText?: string, prompt?: string, stream?: boolean }
+  - Response: { "answer": string }, or with `"stream": true` a Server-Sent Events stream (see [Streaming](#streaming))
+
+- Streaming: `/api/explain`, `/api/quiz`, `/api/forum`, `/api/exam` and `/api/chat` accept `"stream": true` and answer
+  as `text/event-stream`:
+
+  ```
+  event: start   data: {}
+  event: delta   data: {"text": "..."}                                   (repeated)
+  event: done    data: {"answer": "...", "token_usage": {...}, "usage_warning": "..."}
+  event: error   data: {"error": "...", "code": "timeout|unavailable|..."}   (instead of done)
+  ```
+
+  Validation, auth, kredit and rate limits answer with normal JSON errors before the stream opens. The app uses
+  streaming for chat and the Explain/Forum/Exam panels
 
 - POST /api/quiz (application/json)
 
@@ -339,7 +729,7 @@ curl -H "Content-Type: application/json" \
 ## Extraction
 
 - pdfjs-dist for PDFs (fonts/CMaps wired)
-- Groq Vision API for images (multimodal LLM with context understanding)
+- Groq vision model for images (`GROQ_VISION_MODEL`); if vision is unavailable the image is kept for later analysis
 - JSZip for DOCX/PPTX (extracts text from XML)
 - Plain text files read directly
 
@@ -348,19 +738,19 @@ curl -H "Content-Type: application/json" \
 - npm run dev → start with hot reload
 - npm run start → start without nodemon
 - npm run build → type-check and emit
-- npm test → run complete test suite (services + smoke tests)
+- npm test → run complete test suite (services + AI tools + smoke tests)
 - npm run test:services → run service layer unit tests
+- npm run test:ai → run AI layer and study-tool regression tests (fake Groq client)
 - npm run test:smoke → run API integration tests
+- npm run groq:check → live check of every study tool against Groq (needs GROQ_API_KEY)
+- npm run quota:expire → charge stale AI quota reservations once and exit (for a scheduled job; needs DATABASE_URL)
 
 ## Notes and next steps
 
 - Current MVP uses upload-only materials (no LMS integration yet)
 - Consider:
-  - Authentication + per-user storage/history
   - Vector search for large materials
-  - Rate limiting and quotas
-  - More UI polish (markdown rendering, persistence)
-  - SSE streaming for faster perceived latency
+  - Streaming for the JSON tools (quiz trainer, flashcards, dialogue) once the UI can show partial results
 
 ## Troubleshooting
 

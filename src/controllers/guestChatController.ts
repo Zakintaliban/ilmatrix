@@ -73,7 +73,7 @@ export async function createGuestChatSession(c: Context) {
 export async function getGuestChatMessages(c: Context) {
   try {
     const guestFingerprint = getGuestFingerprint(c);
-    const sessionId = c.req.param('sessionId');
+    const sessionId = c.req.param('sessionId')!;
     const limit = parseInt(c.req.query('limit') || '50');
     const offset = parseInt(c.req.query('offset') || '0');
 
@@ -98,7 +98,7 @@ export async function getGuestChatMessages(c: Context) {
 export async function addGuestChatMessage(c: Context) {
   try {
     const guestFingerprint = getGuestFingerprint(c);
-    const sessionId = c.req.param('sessionId');
+    const sessionId = c.req.param('sessionId')!;
     const { role, content, materialId, endpoint, tokensUsed } = await c.req.json();
 
     if (!role || !content) {
@@ -151,7 +151,7 @@ export async function addGuestChatMessage(c: Context) {
 export async function updateGuestChatSession(c: Context) {
   try {
     const guestFingerprint = getGuestFingerprint(c);
-    const sessionId = c.req.param('sessionId');
+    const sessionId = c.req.param('sessionId')!;
     const updates = await c.req.json();
 
     const session = await guestChatService.updateGuestSession(sessionId, guestFingerprint, updates);
@@ -172,7 +172,7 @@ export async function updateGuestChatSession(c: Context) {
 export async function deleteGuestChatSession(c: Context) {
   try {
     const guestFingerprint = getGuestFingerprint(c);
-    const sessionId = c.req.param('sessionId');
+    const sessionId = c.req.param('sessionId')!;
 
     const deleted = await guestChatService.deleteGuestSession(sessionId, guestFingerprint);
     if (!deleted) {
@@ -192,7 +192,7 @@ export async function deleteGuestChatSession(c: Context) {
 export async function generateGuestSessionTitle(c: Context) {
   try {
     const guestFingerprint = getGuestFingerprint(c);
-    const sessionId = c.req.param('sessionId');
+    const sessionId = c.req.param('sessionId')!;
 
     const title = await guestChatService.generateGuestSessionTitle(sessionId, guestFingerprint);
 

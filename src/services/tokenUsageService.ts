@@ -11,6 +11,11 @@
  */
 
 import { query, transaction } from './databaseService.js';
+import config from '../config/env.js';
+import { PLANS } from '../config/plans.js';
+import * as quotaService from './quotaService.js';
+import { activePlan } from './kreditService.js';
+import { isPaymentsEnabled } from './paymentService.js';
 import type { PoolClient } from 'pg';
 
 // ============================================================================
@@ -364,6 +369,7 @@ export async function logTokenUsage(params: {
   userId: string;
   sessionId: string | null;
   tokensUsed: number;
+  kreditUsed?: number;
   endpoint: string;
   modelUsed?: string;
   requestType: string;
@@ -376,6 +382,7 @@ export async function logTokenUsage(params: {
     userId,
     sessionId,
     tokensUsed,
+    kreditUsed = 0,
     endpoint,
     modelUsed = null,
     requestType,
@@ -396,8 +403,9 @@ export async function logTokenUsage(params: {
       material_id,
       prompt_tokens,
       completion_tokens,
-      metadata
-    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+      metadata,
+      kredit_used
+    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
     RETURNING *`,
     [
       userId,
@@ -410,6 +418,7 @@ export async function logTokenUsage(params: {
       promptTokens,
       completionTokens,
       JSON.stringify(metadata),
+      kreditUsed,
     ]
   );
 
@@ -443,36 +452,38 @@ export async function getUserUsageHistory(
  * Get aggregated usage statistics for a user
  */
 export async function getUsageStats(userId: string): Promise<UsageStats> {
+  // All figures are in kredit; days, weeks (from Monday) and months follow the quota timezone
+
   // Today's usage
   const todayResult = await query<{ total: string }>(
-    `SELECT COALESCE(SUM(tokens_used), 0) as total
+    `SELECT COALESCE(SUM(kredit_used), 0) as total
      FROM token_usage_logs
      WHERE user_id = $1
-     AND created_at >= CURRENT_DATE`,
-    [userId]
+     AND created_at >= DATE_TRUNC('day', NOW() AT TIME ZONE $2) AT TIME ZONE $2`,
+    [userId, config.aiQuotaTimezone]
   );
 
   // This week's usage
   const weekResult = await query<{ total: string }>(
-    `SELECT COALESCE(SUM(tokens_used), 0) as total
+    `SELECT COALESCE(SUM(kredit_used), 0) as total
      FROM token_usage_logs
      WHERE user_id = $1
-     AND created_at >= DATE_TRUNC('week', CURRENT_DATE)`,
-    [userId]
+     AND created_at >= DATE_TRUNC('week', NOW() AT TIME ZONE $2) AT TIME ZONE $2`,
+    [userId, config.aiQuotaTimezone]
   );
 
   // This month's usage
   const monthResult = await query<{ total: string }>(
-    `SELECT COALESCE(SUM(tokens_used), 0) as total
+    `SELECT COALESCE(SUM(kredit_used), 0) as total
      FROM token_usage_logs
      WHERE user_id = $1
-     AND created_at >= DATE_TRUNC('month', CURRENT_DATE)`,
-    [userId]
+     AND created_at >= DATE_TRUNC('month', NOW() AT TIME ZONE $2) AT TIME ZONE $2`,
+    [userId, config.aiQuotaTimezone]
   );
 
   // Total usage
   const totalResult = await query<{ total: string }>(
-    `SELECT COALESCE(SUM(tokens_used), 0) as total
+    `SELECT COALESCE(SUM(kredit_used), 0) as total
      FROM token_usage_logs
      WHERE user_id = $1`,
     [userId]
@@ -480,7 +491,7 @@ export async function getUsageStats(userId: string): Promise<UsageStats> {
 
   // By endpoint
   const endpointResult = await query<{ endpoint: string; total: string }>(
-    `SELECT endpoint, COALESCE(SUM(tokens_used), 0) as total
+    `SELECT endpoint, COALESCE(SUM(kredit_used), 0) as total
      FROM token_usage_logs
      WHERE user_id = $1
      GROUP BY endpoint
@@ -490,7 +501,7 @@ export async function getUsageStats(userId: string): Promise<UsageStats> {
 
   // By model
   const modelResult = await query<{ model_used: string; total: string }>(
-    `SELECT model_used, COALESCE(SUM(tokens_used), 0) as total
+    `SELECT model_used, COALESCE(SUM(kredit_used), 0) as total
      FROM token_usage_logs
      WHERE user_id = $1
      AND model_used IS NOT NULL
@@ -501,167 +512,122 @@ export async function getUsageStats(userId: string): Promise<UsageStats> {
 
   const byEndpoint: Record<string, number> = {};
   for (const row of endpointResult.rows) {
-    byEndpoint[row.endpoint] = parseInt(row.total, 10);
+    byEndpoint[row.endpoint] = Number(row.total);
   }
 
   const byModel: Record<string, number> = {};
   for (const row of modelResult.rows) {
-    byModel[row.model_used] = parseInt(row.total, 10);
+    byModel[row.model_used] = Number(row.total);
   }
 
   return {
-    today: parseInt(todayResult.rows[0]?.total || '0', 10),
-    this_week: parseInt(weekResult.rows[0]?.total || '0', 10),
-    this_month: parseInt(monthResult.rows[0]?.total || '0', 10),
-    total: parseInt(totalResult.rows[0]?.total || '0', 10),
+    today: Number(todayResult.rows[0]?.total || '0'),
+    this_week: Number(weekResult.rows[0]?.total || '0'),
+    this_month: Number(monthResult.rows[0]?.total || '0'),
+    total: Number(totalResult.rows[0]?.total || '0'),
     by_endpoint: byEndpoint,
     by_model: byModel,
   };
 }
 
 // ============================================================================
-// Reset Functions
-// ============================================================================
-
-/**
- * Reset weekly token usage for users whose reset time has passed
- * Returns list of user IDs that were reset
- */
-export async function resetWeeklyUsage(): Promise<string[]> {
-  const result = await query<{ user_id: string }>(
-    'SELECT * FROM reset_weekly_tokens()'
-  );
-
-  return result.rows.map(row => row.user_id);
-}
-
-/**
- * Reset monthly token usage for users whose reset time has passed
- * Returns list of user IDs that were reset
- */
-export async function resetMonthlyUsage(): Promise<string[]> {
-  const result = await query<{ user_id: string }>(
-    'SELECT * FROM reset_monthly_tokens()'
-  );
-
-  return result.rows.map(row => row.user_id);
-}
-
-/**
- * Check and perform any needed resets for a specific user
- * This is called lazily when user makes a request
- */
-export async function checkAndResetUserUsage(userId: string): Promise<void> {
-  await query(
-    `DO $$
-     BEGIN
-       -- Reset weekly if needed
-       IF EXISTS (
-         SELECT 1 FROM users
-         WHERE id = $1
-         AND weekly_usage_reset_at <= NOW()
-       ) THEN
-         PERFORM reset_weekly_tokens();
-       END IF;
-
-       -- Reset monthly if needed
-       IF EXISTS (
-         SELECT 1 FROM users
-         WHERE id = $1
-         AND monthly_usage_reset_at <= NOW()
-       ) THEN
-         PERFORM reset_monthly_tokens();
-       END IF;
-     END $$`,
-    [userId]
-  );
-}
-
-// ============================================================================
 // Admin Functions
 // ============================================================================
 
+export interface AdminUserUsage {
+  user_id: string;
+  email: string;
+  name: string;
+  daily_kredit_used: number;
+  daily_kredit_limit: number;
+  daily_percentage: number;
+  daily_limit_source: string;
+  weekly_kredit_used: number;
+  weekly_kredit_limit: number;
+  weekly_percentage: number;
+  weekly_limit_source: string;
+  monthly_kredit_used: number;
+  requests_today: number;
+  requests_this_week: number;
+  is_admin: boolean;
+  token_access_enabled: boolean;
+  /** Payment entitlements: only take part in quotas while payments are enabled. */
+  plan: string;
+  plan_name: string;
+  plan_expires_at: Date | null;
+  extra_kredit: number;
+}
+
 /**
- * Get all users' token usage (admin only)
+ * Every user's quota use in the current day, week and month (admin only).
+ * Running requests' reservations count as used, like in the quota check.
  */
-export async function getAllUsersUsage(
-  limit: number = 100,
-  offset: number = 0
-): Promise<UserTokenUsage[]> {
+export async function getAllUsersUsage(limit: number = 100, offset: number = 0): Promise<AdminUserUsage[]> {
   const result = await query<any>(
-    `SELECT
-      u.id as user_id,
-      u.email,
-      u.name,
-      u.monthly_token_limit,
-      u.monthly_tokens_used,
-      u.monthly_usage_reset_at,
-      u.weekly_token_limit,
-      u.weekly_tokens_used,
-      u.weekly_usage_reset_at,
-      u.is_admin,
-      u.token_access_enabled,
-      s.id as session_id,
-      COALESCE(s.session_tokens_used, 0) as session_tokens_used,
-      COALESCE(s.session_token_limit, 25000) as session_token_limit,
-      s.session_expires_at
+    `WITH p AS (
+       SELECT l::date AS day, date_trunc('week', l)::date AS week, date_trunc('month', l)::date AS month
+       FROM (SELECT NOW() AT TIME ZONE $3 AS l) t
+     )
+     SELECT u.id AS user_id, u.email, u.name, u.plan, u.plan_expires_at, u.is_admin, u.token_access_enabled,
+            u.daily_kredit_override, u.weekly_kredit_override,
+            COALESCE(d.kredit_used, 0) + COALESCE(r.day, 0) AS daily_used, COALESCE(d.request_count, 0) AS daily_requests,
+            COALESCE(w.kredit_used, 0) + COALESCE(r.week, 0) AS weekly_used, COALESCE(w.request_count, 0) AS weekly_requests,
+            COALESCE(m.kredit, 0) AS monthly_used,
+            COALESCE(g.remaining, 0) AS extra_kredit
      FROM users u
+     CROSS JOIN p
+     LEFT JOIN ai_quota_usage d ON d.user_id = u.id AND d.period_type = 'day' AND d.period_start = p.day
+     LEFT JOIN ai_quota_usage w ON w.user_id = u.id AND w.period_type = 'week' AND w.period_start = p.week
      LEFT JOIN LATERAL (
-       SELECT * FROM token_usage_sessions
-       WHERE user_id = u.id
-       AND is_active = TRUE
-       AND session_expires_at > NOW()
-       ORDER BY session_started_at DESC
-       LIMIT 1
-     ) s ON true
-     ORDER BY u.weekly_tokens_used DESC
+       SELECT SUM(kredit_used) AS kredit FROM ai_quota_usage
+       WHERE user_id = u.id AND period_type = 'day' AND period_start >= p.month
+     ) m ON true
+     LEFT JOIN LATERAL (
+       SELECT SUM(reserved_kredit) FILTER (WHERE day_start = p.day) AS day,
+              SUM(reserved_kredit) FILTER (WHERE week_start = p.week) AS week
+       FROM ai_quota_reservations WHERE user_id = u.id AND status = 'active'
+     ) r ON true
+     LEFT JOIN LATERAL (
+       SELECT SUM(kredit_total - kredit_used) AS remaining
+       FROM kredit_grants
+       WHERE user_id = u.id AND kredit_used < kredit_total AND (expires_at IS NULL OR expires_at > NOW())
+     ) g ON true
+     ORDER BY weekly_used DESC, u.created_at DESC
      LIMIT $1 OFFSET $2`,
-    [limit, offset]
+    [limit, offset, config.aiQuotaTimezone]
   );
 
-  return result.rows.map(row => {
-    const monthlyRemaining = row.monthly_token_limit - row.monthly_tokens_used;
-    const weeklyRemaining = row.weekly_token_limit - row.weekly_tokens_used;
-    const sessionRemaining = row.session_token_limit - row.session_tokens_used;
+  const defaults = await quotaService.getDefaults();
+  const payments = isPaymentsEnabled();
+  const round2 = (n: number) => Math.round(n * 100) / 100;
+  const pct = (used: number, max: number) => (max > 0 ? round2((used / max) * 100) : used > 0 ? 100 : 0);
 
-    const monthlyPercentage = (row.monthly_tokens_used / row.monthly_token_limit) * 100;
-    const weeklyPercentage = (row.weekly_tokens_used / row.weekly_token_limit) * 100;
-    const sessionPercentage = (row.session_tokens_used / row.session_token_limit) * 100;
-
-    let sessionTimeRemaining: number | null = null;
-    if (row.session_expires_at) {
-      const expiresAt = new Date(row.session_expires_at);
-      const now = new Date();
-      sessionTimeRemaining = Math.max(0, Math.floor((expiresAt.getTime() - now.getTime()) / (1000 * 60)));
-    }
-
+  return result.rows.map((row) => {
+    const plan = activePlan(row);
+    const limits = quotaService.resolveLimits(row, defaults, payments ? { weeklyLimit: plan === 'free' ? null : PLANS[plan].weeklyKredit } : null);
+    const daily = round2(Number(row.daily_used));
+    const weekly = round2(Number(row.weekly_used));
     return {
       user_id: row.user_id,
       email: row.email,
       name: row.name,
-
-      monthly_token_limit: row.monthly_token_limit,
-      monthly_tokens_used: row.monthly_tokens_used,
-      monthly_usage_reset_at: row.monthly_usage_reset_at,
-      monthly_remaining: monthlyRemaining,
-      monthly_percentage: Math.round(monthlyPercentage * 100) / 100,
-
-      weekly_token_limit: row.weekly_token_limit,
-      weekly_tokens_used: row.weekly_tokens_used,
-      weekly_usage_reset_at: row.weekly_usage_reset_at,
-      weekly_remaining: weeklyRemaining,
-      weekly_percentage: Math.round(weeklyPercentage * 100) / 100,
-
-      session_id: row.session_id,
-      session_tokens_used: row.session_tokens_used,
-      session_token_limit: row.session_token_limit,
-      session_remaining: sessionRemaining,
-      session_percentage: Math.round(sessionPercentage * 100) / 100,
-      session_expires_at: row.session_expires_at,
-      session_time_remaining_minutes: sessionTimeRemaining,
-
-      is_admin: row.is_admin,
-      token_access_enabled: row.token_access_enabled,
+      daily_kredit_used: daily,
+      daily_kredit_limit: limits.daily,
+      daily_percentage: pct(daily, limits.daily),
+      daily_limit_source: limits.dailySource,
+      weekly_kredit_used: weekly,
+      weekly_kredit_limit: limits.weekly,
+      weekly_percentage: pct(weekly, limits.weekly),
+      weekly_limit_source: limits.weeklySource,
+      monthly_kredit_used: round2(Number(row.monthly_used)),
+      requests_today: Number(row.daily_requests),
+      requests_this_week: Number(row.weekly_requests),
+      is_admin: !!row.is_admin,
+      token_access_enabled: row.token_access_enabled !== false,
+      plan,
+      plan_name: PLANS[plan].name,
+      plan_expires_at: plan === 'free' ? null : row.plan_expires_at,
+      extra_kredit: round2(Number(row.extra_kredit)),
     };
   });
 }

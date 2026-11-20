@@ -1,187 +1,158 @@
 import type { Context, Next } from "hono";
+import { getCookie } from "hono/cookie";
+import config from "../config/env.js";
 import { getClientIp } from "../utils/security.js";
 
-interface AIRateLimitBucket {
-  requests: number;
-  tokensUsed: number;
-  lastRequest: number;
-  resetAt: number;
+/**
+ * Rate limiting for AI endpoints, per user (guests: per device cookie, or per
+ * IP without one).
+ *
+ * Kredit already bounds what a user can spend; this keeps one client from
+ * flooding the shared Groq queue (GROQ_CONCURRENCY slots per process) and the
+ * org-wide Groq rate limits that every student depends on:
+ * - requests in flight (AI_MAX_CONCURRENT, default 2): extra requests are
+ *   rejected instead of queueing behind everyone else
+ * - sliding windows of AI_RATE_LIMIT_PER_MINUTE (12) and AI_RATE_LIMIT_PER_HOUR (150)
+ *
+ * Admitted requests count whether or not they succeed; rejected ones don't, so
+ * a client retrying after a 429 is not locked out. In memory, per instance.
+ */
+
+const MINUTE_MS = 60_000;
+const HOUR_MS = 60 * MINUTE_MS;
+const DEVICE_ID = /^[0-9a-f-]{36}$/i;
+
+export type AILimitReason = "concurrency" | "minute" | "hour";
+
+export type AIRateDecision =
+  | { allowed: true }
+  | { allowed: false; reason: AILimitReason; retryAfterSeconds: number };
+
+interface Entry {
+  /** Admission times within the last hour, oldest first */
+  requests: number[];
+  inFlight: number;
 }
 
-/**
- * Enhanced rate limiting specifically for AI endpoints
- * Prevents token limit abuse and DDoS attacks
- */
 class AIRateLimiter {
-  private buckets = new Map<string, AIRateLimitBucket>();
-  
-  // Rate limits per user/IP per hour
-  private readonly maxRequestsPerHour = 100;  // Max AI requests per hour
-  private readonly maxTokensPerHour = 50000;  // Max tokens consumed per hour
-  private readonly burstLimit = 10;           // Max requests per minute (burst protection)
-  private readonly windowMs = 60 * 60 * 1000; // 1 hour
-  private readonly burstWindowMs = 60 * 1000;  // 1 minute
-  
-  constructor() {
-    // Cleanup expired buckets every hour
-    setInterval(() => this.cleanup(), this.windowMs);
-  }
+  private entries = new Map<string, Entry>();
 
-  private cleanup(): void {
-    const now = Date.now();
-    for (const [key, bucket] of this.buckets.entries()) {
-      if (bucket.resetAt < now) {
-        this.buckets.delete(key);
-      }
-    }
-  }
+  /** Admit a request (counted and marked in flight) or say why not. */
+  acquire(key: string, now = Date.now()): AIRateDecision {
+    const entry = this.entries.get(key) ?? { requests: [], inFlight: 0 };
+    this.prune(entry, now);
 
-  private getBucket(identifier: string): AIRateLimitBucket {
-    const now = Date.now();
-    let bucket = this.buckets.get(identifier);
-    
-    if (!bucket || bucket.resetAt < now) {
-      bucket = {
-        requests: 0,
-        tokensUsed: 0,
-        lastRequest: now,
-        resetAt: now + this.windowMs
-      };
-      this.buckets.set(identifier, bucket);
+    if (entry.inFlight >= config.aiMaxConcurrent) {
+      return { allowed: false, reason: "concurrency", retryAfterSeconds: 5 };
     }
-    
-    return bucket;
-  }
 
-  /**
-   * Check if request is allowed (before AI call)
-   */
-  checkRequest(identifier: string): { allowed: boolean; error?: string } {
-    const bucket = this.getBucket(identifier);
-    const now = Date.now();
-    
-    // Check hourly limits
-    if (bucket.requests >= this.maxRequestsPerHour) {
-      return { 
-        allowed: false, 
-        error: `Request limit exceeded. Maximum ${this.maxRequestsPerHour} AI requests per hour.` 
-      };
+    const { requests } = entry;
+    let lastMinute = 0;
+    for (let i = requests.length - 1; i >= 0 && requests[i] > now - MINUTE_MS; i--) lastMinute++;
+    if (lastMinute >= config.aiRateLimitPerMinute) {
+      // The request that has to leave the window before another fits
+      const oldest = requests[requests.length - config.aiRateLimitPerMinute];
+      return { allowed: false, reason: "minute", retryAfterSeconds: secondsUntil(oldest + MINUTE_MS, now) };
     }
-    
-    if (bucket.tokensUsed >= this.maxTokensPerHour) {
-      return { 
-        allowed: false, 
-        error: `Token limit exceeded. Maximum ${this.maxTokensPerHour} tokens per hour.` 
-      };
+    if (requests.length >= config.aiRateLimitPerHour) {
+      const oldest = requests[requests.length - config.aiRateLimitPerHour];
+      return { allowed: false, reason: "hour", retryAfterSeconds: secondsUntil(oldest + HOUR_MS, now) };
     }
-    
-    // Check burst protection (requests per minute)
-    const recentRequests = this.getRecentRequestCount(identifier);
-    if (recentRequests >= this.burstLimit) {
-      return { 
-        allowed: false, 
-        error: `Too many requests. Maximum ${this.burstLimit} requests per minute.` 
-      };
-    }
-    
+
+    requests.push(now);
+    entry.inFlight++;
+    this.entries.set(key, entry);
     return { allowed: true };
   }
 
-  /**
-   * Record successful AI request with token usage
-   */
-  recordRequest(identifier: string, tokensUsed: number): void {
-    const bucket = this.getBucket(identifier);
-    bucket.requests++;
-    bucket.tokensUsed += tokensUsed;
-    bucket.lastRequest = Date.now();
+  /** Mark an admitted request as finished. */
+  release(key: string): void {
+    const entry = this.entries.get(key);
+    if (entry && entry.inFlight > 0) entry.inFlight--;
   }
 
-  /**
-   * Get recent request count for burst protection
-   */
-  private getRecentRequestCount(identifier: string): number {
-    const bucket = this.buckets.get(identifier);
-    if (!bucket) return 0;
-    
-    const now = Date.now();
-    const minuteAgo = now - this.burstWindowMs;
-    
-    // For simplicity, approximate recent requests
-    // In production, you'd want more precise tracking
-    if (bucket.lastRequest > minuteAgo) {
-      return Math.min(bucket.requests, this.burstLimit);
+  /** Drop idle entries; returns how many were removed. */
+  cleanup(now = Date.now()): number {
+    let removed = 0;
+    for (const [key, entry] of this.entries) {
+      this.prune(entry, now);
+      if (entry.inFlight === 0 && entry.requests.length === 0) {
+        this.entries.delete(key);
+        removed++;
+      }
     }
-    
-    return 0;
+    return removed;
   }
 
-  /**
-   * Get current limits for user
-   */
-  getCurrentLimits(identifier: string): {
-    requestsRemaining: number;
-    tokensRemaining: number;
-    resetAt: number;
-  } {
-    const bucket = this.getBucket(identifier);
-    return {
-      requestsRemaining: Math.max(0, this.maxRequestsPerHour - bucket.requests),
-      tokensRemaining: Math.max(0, this.maxTokensPerHour - bucket.tokensUsed),
-      resetAt: bucket.resetAt
-    };
+  reset(): void {
+    this.entries.clear();
+  }
+
+  private prune(entry: Entry, now: number): void {
+    const cutoff = now - HOUR_MS;
+    let drop = 0;
+    while (drop < entry.requests.length && entry.requests[drop] <= cutoff) drop++;
+    if (drop) entry.requests.splice(0, drop);
   }
 }
 
-// Global AI rate limiter instance
-const aiRateLimiter = new AIRateLimiter();
+function secondsUntil(time: number, now: number): number {
+  return Math.max(1, Math.ceil((time - now) / 1000));
+}
+
+export const aiRateLimiter = new AIRateLimiter();
+
+/** Who a request counts against: the user, else the guest device, else the IP. */
+export function aiRateLimitKey(c: Context): string {
+  const user = c.get("user");
+  if (user?.id) return `user:${user.id}`;
+  const deviceId = getCookie(c, "device_id");
+  if (deviceId && DEVICE_ID.test(deviceId)) return `device:${deviceId}`;
+  return `ip:${getClientIp(c)}`;
+}
+
+function limitMessage(reason: AILimitReason, retryAfterSeconds: number): string {
+  if (reason === "concurrency") {
+    return "Permintaan AI sebelumnya masih diproses. Tunggu sampai selesai, lalu coba lagi.";
+  }
+  const wait = retryAfterSeconds < 60 ? `${retryAfterSeconds} detik` : `${Math.ceil(retryAfterSeconds / 60)} menit`;
+  return `Terlalu banyak permintaan AI dalam waktu singkat. Coba lagi dalam ${wait}.`;
+}
 
 /**
- * Middleware to protect AI endpoints from abuse
+ * Protects AI endpoints. Runs after auth (so signed-in users are keyed by
+ * account) and before the guest limit (so a rejected request doesn't use up a
+ * guest's trial).
  */
 export async function aiRateLimitMiddleware(c: Context, next: Next) {
+  const key = aiRateLimitKey(c);
+  const decision = aiRateLimiter.acquire(key);
+
+  if (!decision.allowed) {
+    const message = limitMessage(decision.reason, decision.retryAfterSeconds);
+    c.header("Retry-After", String(decision.retryAfterSeconds));
+    return c.json(
+      {
+        error: message,
+        // Text tools render `answer`, so the student sees the reason in the chat
+        answer: message,
+        code: decision.reason === "concurrency" ? "AI_CONCURRENCY_LIMIT" : "AI_RATE_LIMITED",
+        retryAfter: decision.retryAfterSeconds,
+      },
+      429
+    );
+  }
+
+  // A streamed answer keeps its slot until the stream ends, not when the response starts
+  let releaseLater = false;
   try {
-    const clientIp = getClientIp(c);
-    const user = c.get('user');
-    
-    // Use user ID if authenticated, otherwise IP
-    const identifier = user?.id || `ip:${clientIp}`;
-    
-    // Check if request is allowed
-    const { allowed, error } = aiRateLimiter.checkRequest(identifier);
-    
-    if (!allowed) {
-      const limits = aiRateLimiter.getCurrentLimits(identifier);
-      return c.json({ 
-        error,
-        limits: {
-          requestsRemaining: limits.requestsRemaining,
-          tokensRemaining: limits.tokensRemaining,
-          resetAt: new Date(limits.resetAt).toISOString()
-        }
-      }, 429);
+    await next();
+    const streamDone = c.get("streamDone") as Promise<void> | undefined;
+    if (streamDone) {
+      releaseLater = true;
+      void streamDone.finally(() => aiRateLimiter.release(key));
     }
-    
-    // Store identifier for post-request recording
-    c.set('aiRateLimitId', identifier);
-    
-    await next();
-    
-  } catch (error) {
-    console.error('AI rate limit middleware error:', error);
-    // Don't block request on middleware error
-    await next();
+  } finally {
+    if (!releaseLater) aiRateLimiter.release(key);
   }
 }
-
-/**
- * Record token usage after AI request completes
- */
-export function recordAITokenUsage(c: Context, tokensUsed: number): void {
-  const identifier = c.get('aiRateLimitId');
-  if (identifier) {
-    aiRateLimiter.recordRequest(identifier, tokensUsed);
-  }
-}
-
-export { aiRateLimiter };

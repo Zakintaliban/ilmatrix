@@ -4,6 +4,39 @@ import { config } from '../config/env.js';
 // Initialize Resend
 const resend = config.resendApiKey ? new Resend(config.resendApiKey) : null;
 
+export interface EmailMessage {
+  from: string;
+  to: string[];
+  subject: string;
+  html: string;
+  text?: string;
+}
+
+type EmailSender = (message: EmailMessage) => Promise<unknown>;
+
+const resendSender: EmailSender | null = resend ? (message) => resend.emails.send(message) : null;
+let sender: EmailSender | null = resendSender;
+
+/** Replace the email transport (tests). */
+export function setEmailSender(fn: EmailSender | null): void {
+  sender = fn || resendSender;
+}
+
+/** User-supplied text (e.g. the name) is escaped so it can't inject links or markup into our emails. */
+function escapeHtml(value: string): string {
+  return String(value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+/** Single line, no control characters, for the plain-text part. */
+function plainText(value: string): string {
+  return String(value).replace(/[\u0000-\u001f\u007f]+/g, ' ').trim();
+}
+
 export interface EmailVerificationData {
   email: string;
   name: string;
@@ -19,14 +52,14 @@ export interface WelcomeEmailData {
  * Send email verification email
  */
 export async function sendVerificationEmail(data: EmailVerificationData): Promise<boolean> {
-  if (!resend || !config.emailFromAddress) {
+  if (!sender || !config.emailFromAddress) {
     console.warn('Email verification disabled: Missing RESEND_API_KEY or EMAIL_FROM_ADDRESS');
     return false;
   }
 
-  const verificationUrl = `${config.baseUrl}/api/auth/verify-email?token=${data.token}`;
+  const verificationUrl = `${config.baseUrl}/api/auth/verify-email?token=${encodeURIComponent(data.token)}`;
   
-  const emailData = {
+  const emailData: EmailMessage = {
     from: `ILMATRIX <${config.emailFromAddress}>`,
     to: [data.email],
     subject: 'Verify Your ILMATRIX Account',
@@ -51,7 +84,7 @@ export async function sendVerificationEmail(data: EmailVerificationData): Promis
               <p>Your AI Study Companion</p>
             </div>
             <div class="content">
-              <h2>Hi ${data.name}!</h2>
+              <h2>Hi ${escapeHtml(data.name)}!</h2>
               <p>Thank you for joining ILMATRIX. To complete your registration, please verify your email address by clicking the button below:</p>
               
               <p style="text-align: center; margin: 30px 0;">
@@ -79,7 +112,7 @@ export async function sendVerificationEmail(data: EmailVerificationData): Promis
     text: `
       Welcome to ILMATRIX!
       
-      Hi ${data.name}!
+      Hi ${plainText(data.name)}!
       
       Thank you for joining ILMATRIX. To complete your registration, please verify your email address by visiting this link:
       
@@ -95,7 +128,7 @@ export async function sendVerificationEmail(data: EmailVerificationData): Promis
   };
 
   try {
-    await resend.emails.send(emailData);
+    await sender(emailData);
     console.log(`Verification email sent to ${data.email}`);
     return true;
   } catch (error) {
@@ -108,11 +141,11 @@ export async function sendVerificationEmail(data: EmailVerificationData): Promis
  * Send welcome email after verification
  */
 export async function sendWelcomeEmail(data: WelcomeEmailData): Promise<boolean> {
-  if (!resend || !config.emailFromAddress) {
+  if (!sender || !config.emailFromAddress) {
     return false;
   }
 
-  const emailData = {
+  const emailData: EmailMessage = {
     from: `ILMATRIX <${config.emailFromAddress}>`,
     to: [data.email],
     subject: 'Welcome to ILMATRIX - Your Account is Ready!',
@@ -138,7 +171,7 @@ export async function sendWelcomeEmail(data: WelcomeEmailData): Promise<boolean>
               <p>Welcome to ILMATRIX</p>
             </div>
             <div class="content">
-              <h2>Hi ${data.name}!</h2>
+              <h2>Hi ${escapeHtml(data.name)}!</h2>
               <p>Your email has been verified successfully! Your ILMATRIX account is now ready to use.</p>
               
               <h3>What you can do now:</h3>
@@ -181,7 +214,7 @@ export async function sendWelcomeEmail(data: WelcomeEmailData): Promise<boolean>
   };
 
   try {
-    await resend.emails.send(emailData);
+    await sender(emailData);
     console.log(`Welcome email sent to ${data.email}`);
     return true;
   } catch (error) {

@@ -1,36 +1,51 @@
 /**
- * Token Usage Middleware
- * Enforces Claude Code-style token limits for registered users
+ * Daily/weekly AI quotas for signed-in users (see quotaService.ts).
  *
- * Flow:
- * 1. Pre-request: Check if user has tokens available (weekly + session limits)
- * 2. Create/get active session
- * 3. Store session ID in context for controllers to use
- * 4. After request: Controllers are responsible for updating usage via tokenUsageService
+ * Flow per AI request:
+ * 1. Before: reserve a conservative estimate for the tool. Refused when
+ *    either quota lacks room (429 QUOTA_EXCEEDED) or AI access is disabled;
+ *    if the database can't answer, the request is refused (503), never run
+ *    unmetered.
+ * 2. The handler runs inside observeCost(), which adds up every completion's
+ *    real kredit, even when the handler later fails.
+ * 3. After: controllers call updateTokenUsageAfterRequest() to settle the
+ *    reservation and log the request. Whatever is still open when the handler
+ *    returns (errors, early exits, a settlement that failed) is settled then,
+ *    from the larger of the reported and observed cost: 0 releases the
+ *    reservation. Streams settle themselves when they end. If the database
+ *    refuses every attempt, the reservation expires and is charged in full.
+ *
+ * Guests are limited separately by guestLimitMiddleware.
  */
 
 import type { Context, Next } from 'hono';
 import * as tokenUsageService from '../services/tokenUsageService.js';
+import * as quotaService from '../services/quotaService.js';
+import { reservationKredit } from '../services/quotaEstimates.js';
+import { observeCost, type CostSink } from '../services/groqProvider.js';
+import { kreditForUsage } from '../config/inferenceCost.js';
+import { isPaymentsEnabled } from '../services/paymentService.js';
 
-/**
- * Estimated tokens needed for different request types
- * Used for pre-flight checks before knowing actual usage
- */
-const ESTIMATED_TOKENS = {
-  explain: 3000,
-  quiz: 5000,
-  chat: 2000,
-  flashcards: 4000,
-  dialogue: 3000,
-  exam: 5000,
-  forum: 3000,
-  default: 2000,
-};
+const UPGRADE_URL = '/dashboard.html#upgrade';
+const round2 = (n: number) => Math.round(n * 100) / 100;
 
-/**
- * Extract request type from endpoint path
- */
-function getRequestType(path: string): string {
+/** Reservation of the current request (stored on the context). */
+export interface QuotaReservation {
+  id: string;
+  amount: number;
+  /** What the request's completions really cost so far (observed in the provider). */
+  cost: CostSink;
+  /** Kredit a controller reported; settlement never charges less than this or `cost`. */
+  charge: number;
+  /** Set only once the database has settled it (or found it already settled). */
+  finished: boolean;
+  /** The request is in token_usage_logs (logged once, whatever happens to settlement). */
+  logged: boolean;
+}
+
+/** Tool behind an AI endpoint path. */
+export function getRequestType(path: string): quotaService.QuotaTool {
+  if (path.includes('/mcq')) return 'mcq';
   if (path.includes('/explain')) return 'explain';
   if (path.includes('/quiz')) return 'quiz';
   if (path.includes('/chat')) return 'chat';
@@ -38,257 +53,246 @@ function getRequestType(path: string): string {
   if (path.includes('/dialogue')) return 'dialogue';
   if (path.includes('/exam')) return 'exam';
   if (path.includes('/forum')) return 'forum';
-  return 'default';
+  if (path.includes('/upload')) return 'ocr';
+  return 'explain';
+}
+
+/** "Senin, 12 Oktober pukul 00.00 WIB" */
+export function formatResetTime(date: Date): string {
+  const text = date.toLocaleString('id-ID', {
+    timeZone: 'Asia/Jakarta',
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+  return `${text} WIB`;
+}
+
+/** 429 body for a refused request: which quota, how much is left and when it resets. */
+export function quotaExceededBody(result: Extract<quotaService.ReserveResult, { ok: false }>) {
+  if (result.reason === 'access_disabled') {
+    const message = 'Akses AI untuk akunmu sedang dinonaktifkan. Hubungi admin ILMATRIX.';
+    return { error: message, answer: message, code: 'AI_ACCESS_DISABLED', quota: quotaService.quotaSummary(result.status) };
+  }
+  const window = result.status[result.period];
+  const label = result.period === 'daily' ? 'harian' : 'mingguan';
+  const left =
+    window.remaining > 0
+      ? ` Sisa ${Math.floor(window.remaining)} kredit belum cukup untuk permintaan ini (perlu sekitar ${Math.ceil(result.required)}).`
+      : '';
+  let message = `Batas pemakaian AI ${label}-mu sudah tercapai.${left} Terisi lagi ${formatResetTime(result.resetsAt)}.`;
+  const canBuy = isPaymentsEnabled();
+  if (canBuy) message += ' Atau tambah kredit di Dashboard.';
+  return {
+    error: message,
+    // Text tools render `answer` as Markdown, so the student sees the reason in the chat
+    answer: canBuy ? `${message} [Tambah kredit](${UPGRADE_URL}).` : message,
+    code: 'QUOTA_EXCEEDED',
+    limit: result.period,
+    exhausted: result.exhausted,
+    required: result.required,
+    resets_at: result.resetsAt,
+    quota: quotaService.quotaSummary(result.status),
+    ...(canBuy ? { upgrade_url: UPGRADE_URL } : {}),
+  };
+}
+
+/** 503 when the quota can't be checked: AI requests are never run unmetered. */
+export function quotaUnavailable(c: Context, error: unknown) {
+  console.error('[QUOTA] Quota check failed; refusing the AI request:', error);
+  const message = 'Pemakaian AI tidak bisa diperiksa saat ini. Coba lagi sebentar lagi.';
+  return c.json({ error: message, answer: message, code: 'QUOTA_UNAVAILABLE' }, 503);
+}
+
+/** Kredit to reserve for this request (reads the cached JSON body for counts). */
+async function estimateFor(c: Context, tool: quotaService.QuotaTool): Promise<number> {
+  if (tool !== 'mcq' && tool !== 'flashcards') return reservationKredit(tool);
+  const body: any = await c.req.json().catch(() => ({}));
+  const raw = Math.floor(Number(tool === 'mcq' ? body?.numQuestions : body?.numCards));
+  const count = Number.isFinite(raw) ? Math.min(50, Math.max(1, raw)) : undefined;
+  return reservationKredit(tool, { count });
 }
 
 /**
- * Get estimated tokens for a request type
+ * Reserve quota for an AI request by `userId`. Returns the reservation, or a
+ * Response to send instead (429 refused, 503 quota unavailable).
  */
-function getEstimatedTokens(requestType: string): number {
-  return ESTIMATED_TOKENS[requestType as keyof typeof ESTIMATED_TOKENS] || ESTIMATED_TOKENS.default;
-}
-
-/**
- * Main token usage middleware for AI endpoints
- * Only applies to authenticated users (registered users)
- */
-export async function tokenUsageMiddleware(c: Context, next: Next) {
+export async function reserveQuota(
+  c: Context,
+  userId: string,
+  tool: quotaService.QuotaTool,
+  amount?: number
+): Promise<QuotaReservation | Response> {
+  let result: quotaService.ReserveResult;
   try {
-    // Get user from context (set by authMiddleware or optionalAuthMiddleware)
-    const user = c.get('user');
-
-    // Skip token check for unauthenticated users (guest users)
-    // Guest users are handled separately by guestLimitMiddleware
-    if (!user) {
-      await next();
-      return;
-    }
-
-    const userId = user.id;
-    const requestPath = c.req.path;
-    const requestType = getRequestType(requestPath);
-    const estimatedTokens = getEstimatedTokens(requestType);
-
-    // Check and reset usage if needed (lazy reset on request)
-    await tokenUsageService.checkAndResetUserUsage(userId);
-
-    // Check token availability
-    const availability = await tokenUsageService.checkTokenAvailability(userId, estimatedTokens);
-
-    if (!availability.allowed) {
-      // Get full stats for detailed error message
-      const stats = await tokenUsageService.getUserUsageStats(userId);
-
-      // Determine which limit was hit
-      let errorMessage = 'Token limit exceeded';
-      let resetTime: Date | null = null;
-
-      if (availability.reason.includes('Weekly')) {
-        errorMessage = `Weekly token limit reached. You've used ${stats.weekly_tokens_used.toLocaleString()} of ${stats.weekly_token_limit.toLocaleString()} tokens this week.`;
-        resetTime = stats.weekly_usage_reset_at;
-      } else if (availability.reason.includes('Session')) {
-        errorMessage = `Session token limit reached. You've used ${stats.session_tokens_used.toLocaleString()} of ${stats.session_token_limit.toLocaleString()} tokens in this session.`;
-        resetTime = stats.session_expires_at;
-      } else if (availability.reason.includes('disabled')) {
-        errorMessage = 'Token access has been disabled for your account. Please contact support.';
-      }
-
-      return c.json(
-        {
-          error: errorMessage,
-          reason: availability.reason,
-          usage: {
-            weekly: {
-              used: stats.weekly_tokens_used,
-              limit: stats.weekly_token_limit,
-              remaining: stats.weekly_remaining,
-              percentage: stats.weekly_percentage,
-              resets_at: stats.weekly_usage_reset_at,
-            },
-            session: {
-              used: stats.session_tokens_used,
-              limit: stats.session_token_limit,
-              remaining: stats.session_remaining,
-              percentage: stats.session_percentage,
-              expires_at: stats.session_expires_at,
-              time_remaining_minutes: stats.session_time_remaining_minutes,
-            },
-            monthly: {
-              used: stats.monthly_tokens_used,
-              limit: stats.monthly_token_limit,
-              remaining: stats.monthly_remaining,
-              percentage: stats.monthly_percentage,
-            },
-          },
-          reset_time: resetTime,
-        },
-        429 // Too Many Requests
-      );
-    }
-
-    // Get or create active session
-    const session = await tokenUsageService.getOrCreateSession(userId);
-
-    // Store session and user info in context for controllers to use
-    c.set('tokenUsageSession', session);
-    c.set('tokenUsageEstimate', estimatedTokens);
-    c.set('requestType', requestType);
-
-    // Proceed with request
-    await next();
-
-    // Note: Token usage update happens in the controller/service after getting actual usage from Groq
-    // This is because we don't know exact token count until Groq responds
-
+    result = await quotaService.reserve(userId, tool, amount ?? (await estimateFor(c, tool)));
   } catch (error) {
-    console.error('Token usage middleware error:', error);
-    // Don't block request on middleware error - fail open for better UX
-    // Admin users also bypass on error
-    await next();
+    return quotaUnavailable(c, error);
+  }
+  if (!result.ok) return c.json(quotaExceededBody(result), 429);
+  const reservation: QuotaReservation = {
+    id: result.reservationId,
+    amount: result.amount,
+    cost: { kredit: 0 },
+    charge: 0,
+    finished: false,
+    logged: false,
+  };
+  c.set('quotaReservation', reservation);
+  c.set('requestType', tool);
+  return reservation;
+}
+
+/**
+ * Settle a reservation in the database. `finished` is set only when that
+ * succeeds; on failure it stays open so the end of the request can retry, and
+ * if every attempt fails the reservation expires and is charged in full.
+ * Retrying can't double-charge: quotaService.finish() is idempotent.
+ */
+async function settle(reservation: QuotaReservation): Promise<{ kredit: number; status: quotaService.QuotaStatus | null } | null> {
+  const kredit = round2(Math.max(reservation.charge, reservation.cost.kredit));
+  try {
+    const status = await quotaService.finish(reservation.id, kredit);
+    reservation.finished = true;
+    return { kredit, status };
+  } catch (error) {
+    console.error(`[QUOTA] Could not settle reservation ${reservation.id} (${kredit} kredit); retrying when the request ends, else charged in full on expiry:`, error);
+    return null;
+  }
+}
+
+/** Write the request to token_usage_logs once. A logging failure never affects the quota. */
+async function logOnce(c: Context, reservation: QuotaReservation, entry: Omit<Parameters<typeof tokenUsageService.logTokenUsage>[0], 'userId' | 'sessionId' | 'endpoint'>) {
+  if (reservation.logged) return;
+  try {
+    await tokenUsageService.logTokenUsage({ userId: c.get('user').id, sessionId: null, endpoint: c.req.path, ...entry });
+    reservation.logged = true;
+  } catch (error) {
+    console.error('[QUOTA] Could not log AI usage (the quota is unaffected):', error);
   }
 }
 
 /**
- * Helper function to update token usage after AI request
- * Call this from controllers after getting Groq response
+ * Settle this request's reservation if it is still open: the controller never
+ * did (errors, early exits) or its settlement failed. Safe to call more than once.
+ */
+export async function finishQuota(c: Context): Promise<void> {
+  const reservation: QuotaReservation | undefined = c.get('quotaReservation');
+  if (!reservation || reservation.finished) return;
+  const settled = await settle(reservation);
+  if (settled && settled.kredit > 0) {
+    await logOnce(c, reservation, {
+      tokensUsed: 1,
+      kreditUsed: settled.kredit,
+      requestType: c.get('requestType'),
+      metadata: { settled_from: 'observed_cost' },
+    });
+  }
+}
+
+/** Main quota middleware for AI endpoints (signed-in users only). */
+export async function tokenUsageMiddleware(c: Context, next: Next) {
+  const user = c.get('user');
+  if (!user) {
+    await next();
+    return;
+  }
+
+  const reservation = await reserveQuota(c, user.id, getRequestType(c.req.path));
+  if (reservation instanceof Response) return reservation;
+
+  try {
+    await observeCost(reservation.cost, () => next());
+  } finally {
+    // A stream is still running: it settles when it ends (aiController.streamAnswer)
+    if (!c.res.headers.get('content-type')?.startsWith('text/event-stream')) await finishQuota(c);
+  }
+}
+
+/**
+ * Settle the quota reservation and log usage after an AI request.
+ * Call this from controllers after getting the model's response.
  *
  * @param c - Hono context
- * @param tokensUsed - Actual tokens consumed (from Groq response)
- * @param metadata - Additional metadata to log (optional)
- * @returns Updated usage stats with warnings if needed
+ * @param tokensUsed - Total tokens consumed
+ * @param metadata - model, prompt_tokens, completion_tokens, kredit (from
+ *   groqService.track) and any extra context to log
  */
 export async function updateTokenUsageAfterRequest(
   c: Context,
   tokensUsed: number,
-  metadata: Record<string, any> = {}
+  metadata: Record<string, any> = {},
+  options: { setHeaders?: boolean } = {}
 ): Promise<{
   success: boolean;
-  usage: tokenUsageService.TokenUpdateResult;
+  quota?: ReturnType<typeof quotaService.quotaSummary>;
   warning?: string;
   notification?: 'low' | 'critical' | 'exceeded';
 }> {
+  const user = c.get('user');
+  const reservation: QuotaReservation | undefined = c.get('quotaReservation');
+  if (!user || !reservation || reservation.finished) {
+    // Guests are not metered in kredit
+    return { success: false };
+  }
+
   try {
-    const user = c.get('user');
-    if (!user) {
-      // No user, skip tracking (guest user)
-      return {
-        success: false,
-        usage: {
-          success: false,
-          new_weekly_used: 0,
-          new_monthly_used: 0,
-          new_session_used: 0,
-          weekly_remaining: 0,
-          session_remaining: 0,
-        },
-      };
-    }
+    const reported =
+      typeof metadata.kredit === 'number'
+        ? metadata.kredit
+        : kreditForUsage(String(metadata.model || ''), Number(metadata.prompt_tokens) || 0, Number(metadata.completion_tokens) || 0);
+    // Remembered for a retry (finishQuota) if this settlement fails
+    reservation.charge = round2(Math.max(reservation.charge, reported));
 
-    const session = c.get('tokenUsageSession');
-    const requestType = c.get('requestType') || 'unknown';
-    const endpoint = c.req.path;
-
-    if (!session) {
-      console.error('No token usage session found in context');
-      return {
-        success: false,
-        usage: {
-          success: false,
-          new_weekly_used: 0,
-          new_monthly_used: 0,
-          new_session_used: 0,
-          weekly_remaining: 0,
-          session_remaining: 0,
-        },
-      };
-    }
-
-    // Update usage in database
-    const usage = await tokenUsageService.updateTokenUsage(user.id, session.id, tokensUsed);
-
-    // Log detailed usage
-    await tokenUsageService.logTokenUsage({
-      userId: user.id,
-      sessionId: session.id,
-      tokensUsed,
-      endpoint,
-      requestType,
+    const settled = await settle(reservation);
+    // The usage happened either way, so it is logged even if settlement must be retried
+    await logOnce(c, reservation, {
+      tokensUsed: Math.max(1, Math.round(tokensUsed)),
+      kreditUsed: settled?.kredit ?? round2(Math.max(reservation.charge, reservation.cost.kredit)),
+      modelUsed: metadata.model,
+      requestType: c.get('requestType') || getRequestType(c.req.path),
+      promptTokens: metadata.prompt_tokens,
+      completionTokens: metadata.completion_tokens,
       metadata,
     });
+    if (!settled) return { success: false };
+    const { kredit, status } = settled;
+    if (!status) return { success: true };
 
-    // Calculate usage percentage to determine warnings
-    const stats = await tokenUsageService.getUserUsageStats(user.id);
-    const weeklyPercentage = stats.weekly_percentage;
-
+    // Warn about whichever quota is closest to running out
+    const share = (w: quotaService.QuotaWindow) => (w.limit > 0 ? w.remaining / w.limit : 0);
+    const [window, label] =
+      share(status.daily) <= share(status.weekly) ? [status.daily, 'hari ini'] : [status.weekly, 'minggu ini'];
     let warning: string | undefined;
     let notification: 'low' | 'critical' | 'exceeded' | undefined;
-
-    if (weeklyPercentage >= 100) {
-      warning = 'Weekly token limit reached. Please wait for reset.';
-      notification = 'exceeded';
-    } else if (weeklyPercentage >= 90) {
-      warning = `You've used ${weeklyPercentage.toFixed(1)}% of your weekly token limit. Only ${stats.weekly_remaining.toLocaleString()} tokens remaining.`;
-      notification = 'critical';
-    } else if (weeklyPercentage >= 80) {
-      warning = `You've used ${weeklyPercentage.toFixed(1)}% of your weekly token limit.`;
-      notification = 'low';
+    if (!status.exempt) {
+      if (window.remaining <= 0) {
+        warning = `Kuota AI ${label} sudah habis. Terisi lagi ${formatResetTime(window.resetsAt)}.`;
+        notification = 'exceeded';
+      } else if (share(window) <= 0.1) {
+        warning = `Sisa kuota AI ${label} tinggal ${Math.floor(window.remaining)} kredit.`;
+        notification = 'critical';
+      } else if (share(window) <= 0.2) {
+        warning = `Kuota AI ${label} hampir habis (sisa ${Math.floor(window.remaining)} kredit).`;
+        notification = 'low';
+      }
     }
 
-    // Add usage headers to response
-    c.header('X-Token-Usage', tokensUsed.toString());
-    c.header('X-Token-Weekly-Used', stats.weekly_tokens_used.toString());
-    c.header('X-Token-Weekly-Remaining', stats.weekly_remaining.toString());
-    c.header('X-Token-Session-Used', stats.session_tokens_used.toString());
-    c.header('X-Token-Session-Remaining', stats.session_remaining.toString());
-    c.header('X-Token-Weekly-Percentage', weeklyPercentage.toFixed(2));
-
-    if (notification) {
-      c.header('X-Token-Warning', notification);
+    // A streamed response has already sent its headers (the done event carries the warning)
+    if (options.setHeaders !== false) {
+      c.header('X-Kredit-Used', kredit.toFixed(2));
+      c.header('X-Kredit-Remaining', Math.min(status.daily.remaining, status.weekly.remaining).toFixed(2));
+      c.header('X-Quota-Daily-Remaining', status.daily.remaining.toFixed(2));
+      c.header('X-Quota-Weekly-Remaining', status.weekly.remaining.toFixed(2));
+      if (notification) c.header('X-Kredit-Warning', notification);
     }
 
-    return {
-      success: true,
-      usage,
-      warning,
-      notification,
-    };
+    return { success: true, quota: quotaService.quotaSummary(status), warning, notification };
   } catch (error) {
-    console.error('Error updating token usage:', error);
-    return {
-      success: false,
-      usage: {
-        success: false,
-        new_weekly_used: 0,
-        new_monthly_used: 0,
-        new_session_used: 0,
-        weekly_remaining: 0,
-        session_remaining: 0,
-      },
-    };
-  }
-}
-
-/**
- * Middleware that adds token usage stats to response for authenticated users
- * Use this on any endpoint to include usage stats in response
- */
-export async function injectUsageStatsMiddleware(c: Context, next: Next) {
-  await next();
-
-  try {
-    const user = c.get('user');
-    if (!user) return;
-
-    const stats = await tokenUsageService.getUserUsageStats(user.id);
-
-    // Add usage stats to response headers
-    c.header('X-Token-Weekly-Used', stats.weekly_tokens_used.toString());
-    c.header('X-Token-Weekly-Remaining', stats.weekly_remaining.toString());
-    c.header('X-Token-Weekly-Percentage', stats.weekly_percentage.toFixed(2));
-    c.header('X-Token-Session-Remaining', stats.session_remaining.toString());
-    c.header('X-Token-Session-Expires-In', (stats.session_time_remaining_minutes || 0).toString());
-  } catch (error) {
-    console.error('Error injecting usage stats:', error);
-    // Don't fail the request
+    // Unexpected: whatever is still open is settled by finishQuota when the request ends
+    console.error('[QUOTA] Failed to settle quota:', error);
+    return { success: false };
   }
 }
