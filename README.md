@@ -327,6 +327,31 @@ Run service account's token (`GROQ_API_KEY` stays empty). Replace `PROJECT_ID` a
 Notes: rate limits and guest caps are counted in memory per instance, so keep `--max-instances` low. Materials sent
 to the model are processed in the US (`us-east5`).
 
+**Development preview** (e.g. the `claude/charming-lamport-f8gwv8` branch): the same steps with a separate service,
+checked out from that branch, and these differences:
+
+- Service name `ilmatrix-dev` and `--max-instances=1` (rate limits are per instance, and `db-f1-micro` allows about
+  25 connections while each instance may open up to 20). Steps 8 to 10 can wait
+- Private by default: deploy with `--no-allow-unauthenticated` instead of `--allow-unauthenticated`, then open it only
+  for yourself with `gcloud run services proxy ilmatrix-dev --region=asia-southeast2 --port=8080` (older gcloud:
+  `gcloud beta run services proxy`) and browse `http://localhost:8080`. A public preview (`--allow-unauthenticated`)
+  lets guests use AI on your key, limited only by the per-IP caps unless Turnstile keys are set
+- AI: Vertex as above, or a Groq key instead: `printf '%s' 'gsk_...' | gcloud secrets create GROQ_API_KEY --data-file=-`,
+  add `GROQ_API_KEY=GROQ_API_KEY:latest` to `--set-secrets` and drop the `AI_BASE_URL` / `GROQ_*_MODEL` lines from
+  `env.yaml` (gpt-oss defaults). Without either, the app runs but AI tools answer that AI isn't configured
+- Without `RESEND_API_KEY` no verification email is sent and new accounts can sign in right away
+- Make yourself admin after registering on the site:
+  ```bash
+  gcloud run jobs create ilmatrix-set-admin --image=$IMAGE --region=asia-southeast2 --service-account=$SA \
+    --set-cloudsql-instances=PROJECT_ID:asia-southeast2:ilmatrix-db --set-secrets=DATABASE_URL=DATABASE_URL:latest \
+    --set-env-vars=DATABASE_SSL=false --command=npm --args=run,set-admin,you@example.com --execute-now --wait
+  ```
+
+The container runs `node` directly (no npm or shell in between), so Cloud Run's SIGTERM reaches the graceful
+shutdown: the server stops taking connections, lets running requests finish within Cloud Run's 10-second grace
+period, then closes the database. Rehearsed locally from the built image: migrations 001-016 on an empty database,
+sign-up, login, quotas, admin, the expiry job, and an upload that was still running when the instance was stopped.
+
 Students upload their materials and get help:
   - **Explain** material (concise + short citations)
   - **MCQ Quiz** (generate, answer with simple "1 a" format, deterministic grading, per-question feedback for wrong answers only)

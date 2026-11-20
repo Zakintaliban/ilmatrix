@@ -6,4 +6,5 @@ COPY package.json package-lock.json .npmrc ./
 RUN npm ci
 COPY . .
 ENV NODE_ENV=production
-CMD ["npm", "start"]
+# node itself is PID 1 (not npm or a shell), so Cloud Run's SIGTERM reaches the graceful shutdown
+CMD ["node", "--import", "tsx", "src/server.ts"]

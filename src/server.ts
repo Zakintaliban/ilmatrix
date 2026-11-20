@@ -171,27 +171,26 @@ class IlmatrixServer {
         console.error("[ILMATRIX] Error stopping background tasks:", error);
       }
 
+      // Cloud Run allows 10 s after SIGTERM: stop taking connections and let running
+      // requests finish (and settle their quota) before the database goes away
+      setTimeout(() => {
+        console.log("[ILMATRIX] Force exit after timeout");
+        process.exit(1);
+      }, 9000);
+      await new Promise<void>((resolve) => {
+        if (!this.server?.close) return resolve();
+        this.server.close(() => resolve());
+        this.server.closeIdleConnections?.();
+      });
+      console.log("[ILMATRIX] Server closed");
+
       try {
         await closeDatabase();
         console.log("[ILMATRIX] Database connection closed");
       } catch (error) {
         console.error("[ILMATRIX] Error closing database:", error);
       }
-
-      if (this.server?.close) {
-        this.server.close(() => {
-          console.log("[ILMATRIX] Server closed");
-          process.exit(0);
-        });
-
-        // Force exit after 10 seconds
-        setTimeout(() => {
-          console.log("[ILMATRIX] Force exit after timeout");
-          process.exit(1);
-        }, 10000);
-      } else {
-        process.exit(0);
-      }
+      process.exit(0);
     };
 
     process.on("SIGINT", () => shutdown("SIGINT"));
