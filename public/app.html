@@ -399,8 +399,22 @@
         margin: 0.5rem 1.25rem;
         padding-left: 1rem;
       }
+      /* Tailwind's reset removes list markers */
+      .markdown ul {
+        list-style: disc;
+      }
+      .markdown ol {
+        list-style: decimal;
+      }
+      .markdown ul ul {
+        list-style: circle;
+      }
+      .markdown li {
+        margin: 0.15rem 0;
+      }
+      /* Translucent so inline code stays readable in light and dark themes */
       .markdown code {
-        background: #f3f4f6;
+        background: rgba(127, 127, 127, 0.18);
         padding: 0.15rem 0.35rem;
         border-radius: 0.25rem;
         font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
@@ -412,6 +426,10 @@
         padding: 0.75rem;
         border-radius: 0.5rem;
         overflow: auto;
+      }
+      .markdown pre code {
+        background: transparent;
+        padding: 0;
       }
       .markdown blockquote {
         border-left: 4px solid #e5e7eb;

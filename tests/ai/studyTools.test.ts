@@ -256,6 +256,45 @@ test("upload: extracts text files and OCRs images through the vision model", asy
   assert.equal(del.status, 200);
 });
 
+test("an uploaded image keeps its picture as well as its text: chat sees the picture, quizzes use the text", async () => {
+  // OCR of a labelled diagram returns its labels (over 50 characters, which used to drop the picture)
+  const ocrText = "TEKS DARI GAMBAR: Region Jakarta, VPC, Availability Zone A dan B, Public subnet, Private subnet";
+  useGroq((params, i, options) =>
+    params.messages.some((m: any) => Array.isArray(m.content) && m.content.some((p: any) => p.text?.startsWith("Extract ALL text")))
+      ? completion(ocrText, undefined, params.model)
+      : defaultHandler(params, i, options)
+  );
+  const png = Buffer.from(
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
+    "base64"
+  );
+  const form = new FormData();
+  form.append("file", new File([png], "diagram-aws.png", { type: "image/png" }));
+  const upload = await api.fetch(new Request("http://local/upload", { method: "POST", body: form }));
+  const { materialId } = await upload.json();
+  assert.equal(upload.status, 200);
+  assert.equal(fake.calls.length, 1, "OCR once on upload");
+
+  // Chat: the vision model gets the picture, with the OCR text alongside
+  const chat = await post("/chat", { materialId, messages: [{ role: "user", content: "Apakah diagram ini sesuai best practice?" }] });
+  assert.equal(chat.status, 200, JSON.stringify(chat.body));
+  const chatCall = fake.calls[1].params;
+  assert.equal(chatCall.model, TEST_PROVIDER_CONFIG.visionModel);
+  const parts = chatCall.messages.flatMap((m: any) => (Array.isArray(m.content) ? m.content : []));
+  assert.ok(parts.some((p: any) => p.type === "image_url" && p.image_url.url.startsWith("data:image/png;base64,")), "the picture is sent");
+  assert.ok(parts.some((p: any) => p.type === "text" && p.text.includes("TEKS DARI GAMBAR")), "and the text read from it");
+
+  // Quiz (text-only): the OCR text and a placeholder, never the image data
+  const quiz = await post("/quiz/trainer/mcq/start", { materialId, numQuestions: 1 });
+  assert.equal(quiz.status, 200, JSON.stringify(quiz.body));
+  const quizPrompt = JSON.stringify(fake.calls[2].params.messages);
+  assert.match(quizPrompt, /TEKS DARI GAMBAR/);
+  assert.match(quizPrompt, /diagram-aws\.png — visual content not included/);
+  assert.doesNotMatch(quizPrompt, /base64,/);
+
+  await api.fetch(new Request(`http://local/material/${materialId}`, { method: "DELETE" }));
+});
+
 // ---------------------------------------------------------------------------
 // Failure handling
 // ---------------------------------------------------------------------------
